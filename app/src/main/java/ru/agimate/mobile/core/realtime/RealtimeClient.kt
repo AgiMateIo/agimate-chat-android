@@ -262,7 +262,7 @@ class RealtimeClient @Inject constructor(
                         // Имя канала строится на клиенте, а грант выписан на канал из ответа:
                         // разойдись они — Centrifugo ответит «нет прав», и чат замолчит.
                         if (issued.channel != channel.name) {
-                            Log.w(TAG, "${channel.name}: токен выписан на ${issued.channel}")
+                            warn { "${channel.name}: токен выписан на ${issued.channel}" }
                         }
                         issued.subscriptionToken
                     }
@@ -275,26 +275,26 @@ class RealtimeClient @Inject constructor(
                 val payload = decode<WebchatMessagePayload>(event, RealtimeEventType.MESSAGE)
                 if (payload == null) {
                     // Не разобралось или это не webchat_message — иначе сообщение пропадёт молча.
-                    Log.w(TAG, "${channel.name}: публикация не разобрана — ${describe(event)}")
+                    warn { "${channel.name}: публикация не разобрана — ${describe(event)}" }
                     return
                 }
-                trace("${channel.name}: ${payload.stream} ${payload.messageId}")
+                trace { "${channel.name}: ${payload.stream} ${payload.messageId}" }
                 channel.messages.tryEmit(payload)
             }
 
             override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
-                trace("${channel.name}: подписан, recovered=${event.recovered}")
+                trace { "${channel.name}: подписан, recovered=${event.recovered}" }
                 channel.failedAttempts = 0
                 channel.status.value = RealtimeStatus.Connected
             }
 
             override fun onSubscribing(sub: Subscription, event: SubscribingEvent) {
-                trace("${channel.name}: подписывается (${event.code}) ${event.reason}")
+                trace { "${channel.name}: подписывается (${event.code}) ${event.reason}" }
                 channel.status.value = RealtimeStatus.Connecting
             }
 
             override fun onError(sub: Subscription, event: SubscriptionErrorEvent) {
-                Log.w(TAG, "${channel.name}: ошибка подписки", event.error)
+                warn(event.error) { "${channel.name}: ошибка подписки" }
             }
 
             /**
@@ -304,12 +304,12 @@ class RealtimeClient @Inject constructor(
              */
             override fun onUnsubscribed(sub: Subscription, event: UnsubscribedEvent) {
                 channel.status.value = RealtimeStatus.Disconnected
-                Log.w(TAG, "${channel.name}: подписка снята (${event.code}) ${event.reason}")
+                warn { "${channel.name}: подписка снята (${event.code}) ${event.reason}" }
                 scheduleResubscribe(channel)
             }
         }
 
-        trace("${channel.name}: завожу подписку")
+        trace { "${channel.name}: завожу подписку" }
         val subscription = runCatching { client.newSubscription(channel.name, options, listener) }
             .getOrElse {
                 // В реестре осталась подписка от прошлой жизни канала. Своей рядом не завести, а
@@ -323,7 +323,7 @@ class RealtimeClient @Inject constructor(
         channel.subscription = subscription
         if (subscription == null) {
             channel.status.value = RealtimeStatus.Disconnected
-            Log.w(TAG, "${channel.name}: подписку завести не удалось")
+            warn { "${channel.name}: подписку завести не удалось" }
             // Без повтора канал остался бы в реестре с мёртвой подпиской: `onUnsubscribed` уже не
             // придёт — некому, — и поднять его было бы нечем.
             scheduleResubscribe(channel)
@@ -371,7 +371,7 @@ class RealtimeClient @Inject constructor(
 
         // Первый токен нужен до создания клиента: из этого же ответа берётся адрес WebSocket.
         val bootstrap = runCatching { repository.userChannelToken() }.getOrElse {
-            Log.w(TAG, "токен личного канала: не получен", it)
+            warn(it) { "токен личного канала: не получен" }
             _status.value = RealtimeStatus.Disconnected
             return null
         }
@@ -388,7 +388,7 @@ class RealtimeClient @Inject constructor(
         }
 
         val wsUrl = urls.resolve(bootstrap.wsUrl)
-        trace("подключаюсь к $wsUrl (сервер отдал ${bootstrap.wsUrl})")
+        trace { "подключаюсь к $wsUrl (сервер отдал ${bootstrap.wsUrl})" }
         val created = Client(wsUrl, options, connectionListener())
         // Присвоить до connect: слушатель сверяется с этим полем и отбросил бы как чужие
         // собственные события, пришедшие раньше присваивания.
@@ -412,20 +412,20 @@ class RealtimeClient @Inject constructor(
             override fun onPublication(sub: Subscription, event: PublicationEvent) {
                 val payload = decode<WebchatActivityPayload>(event, RealtimeEventType.ACTIVITY)
                 if (payload == null) return
-                trace("${bootstrap.channel}: активность ${payload.stream} ${payload.messageId}")
+                trace { "${bootstrap.channel}: активность ${payload.stream} ${payload.messageId}" }
                 _activity.tryEmit(payload)
             }
 
             override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
-                trace("${bootstrap.channel}: подписан")
+                trace { "${bootstrap.channel}: подписан" }
             }
 
             override fun onError(sub: Subscription, event: SubscriptionErrorEvent) {
-                Log.w(TAG, "${bootstrap.channel}: ошибка подписки", event.error)
+                warn(event.error) { "${bootstrap.channel}: ошибка подписки" }
             }
 
             override fun onUnsubscribed(sub: Subscription, event: UnsubscribedEvent) {
-                Log.w(TAG, "${bootstrap.channel}: подписка снята (${event.code}) ${event.reason}")
+                warn { "${bootstrap.channel}: подписка снята (${event.code}) ${event.reason}" }
             }
         }
 
@@ -440,7 +440,7 @@ class RealtimeClient @Inject constructor(
     private fun connectionListener() = object : EventListener() {
         override fun onConnected(client: Client, event: ConnectedEvent) {
             if (!isCurrent(client)) return
-            trace("соединение установлено")
+            trace { "соединение установлено" }
             _status.value = RealtimeStatus.Connected
         }
 
@@ -448,13 +448,13 @@ class RealtimeClient @Inject constructor(
             if (!isCurrent(client)) return
             // Сюда же приходит бесконечный повтор при недоступном WebSocket: адрес взят из ответа
             // сервера, и промахнуться в нём можно, ничего не сломав в остальном API.
-            trace("подключаюсь (${event.code}) ${event.reason}")
+            trace { "подключаюсь (${event.code}) ${event.reason}" }
             _status.value = RealtimeStatus.Connecting
         }
 
         override fun onDisconnected(client: Client, event: DisconnectedEvent) {
             if (!isCurrent(client)) return
-            Log.w(TAG, "соединение потеряно (${event.code}) ${event.reason}")
+            warn { "соединение потеряно (${event.code}) ${event.reason}" }
             _status.value = RealtimeStatus.Disconnected
         }
     }
@@ -476,7 +476,7 @@ class RealtimeClient @Inject constructor(
                 .onFailure {
                     // Библиотека молча уходит в повтор с backoff — без этой строки не видно,
                     // что подписка стоит именно на добыче токена.
-                    Log.w(TAG, "$what: не получен", it)
+                    warn(it) { "$what: не получен" }
                     cb.Done(it, null)
                 }
         }
@@ -500,12 +500,23 @@ class RealtimeClient @Inject constructor(
     }
 
     /**
-     * Ход событий real-time — только для отладочной сборки. В релизе это строка на каждое
-     * сообщение, и в ней идентификаторы сессии: logcat читает кто угодно, а поводов туда смотреть
-     * у пользователя нет. Настоящие поломки идут через [Log.w] и остаются всегда.
+     * Ход событий real-time — только для отладочной сборки.
+     *
+     * В релизе этих строк нет вовсе: они несут идентификаторы сессий и пользователя, logcat читает
+     * кто угодно, а поводов туда смотреть у пользователя нет. Разбирать поломку по ним всё равно
+     * может только тот, кто собирает debug.
+     *
+     * Сообщение приходит лямбдой, а функция `inline`: в релизе не тратится даже склейка строки.
      */
-    private fun trace(message: String) {
-        if (BuildConfig.DEBUG) Log.i(TAG, message)
+    private inline fun trace(message: () -> String) {
+        if (BuildConfig.DEBUG) Log.i(TAG, message())
+    }
+
+    /** То же для поломок: в релизе молчит по той же причине. */
+    private inline fun warn(error: Throwable? = null, message: () -> String) {
+        if (!BuildConfig.DEBUG) return
+        val text = message()
+        if (error != null) Log.w(TAG, text, error) else Log.w(TAG, text)
     }
 
     private inline fun <reified T> decode(event: PublicationEvent, expectedType: String): T? =
