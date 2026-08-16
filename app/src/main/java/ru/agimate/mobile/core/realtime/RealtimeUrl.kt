@@ -18,8 +18,12 @@ import javax.inject.Singleton
  * У настоящего сервера Centrifugo стоит на своём хосте (`centrifugo.…`), а `/connection/websocket`
  * на хосте API отдаёт 404. Переписать адрес там значит увести WebSocket в никуда — и это не видно:
  * библиотека повторяет подключение молча и бесконечно, HTTP при этом работает, а живые сообщения
- * просто не приходят. Поэтому подмена включается не по флагу сборки, а по адресу: только когда
- * приложение смотрит на локальный или LAN-адрес.
+ * просто не приходят.
+ *
+ * Поэтому решает не флаг сборки, а адреса, и локальными должны быть **оба**: и origin, по которому
+ * приложение ходит, и хост, который назвал сервер. Хост из ответа — прямой признак: именно его
+ * устройство не может разрезолвить. Origin — подтверждение, что подменять есть на что.
+ * Флаг сборки остался внешней страховкой: в релизе origin и так прибит к `BuildConfig.API_ORIGIN`.
  */
 @Singleton
 class RealtimeUrl @Inject constructor(
@@ -39,6 +43,9 @@ class RealtimeUrl @Inject constructor(
 internal fun resolveAgainst(serverWsUrl: String, origin: String): String {
     val parsed = origin.toHttpUrlOrNull() ?: return serverWsUrl
     if (!isLocalStand(parsed.host)) return serverWsUrl
+    if (!isLocalStand(serverWsUrl.substringAfter("://", "").substringBefore('/').substringBefore(':'))) {
+        return serverWsUrl
+    }
 
     val path = serverWsUrl.substringAfter("://", "").substringAfter('/', "connection/websocket")
     val scheme = if (parsed.isHttps) "wss" else "ws"
@@ -51,11 +58,13 @@ internal fun resolveAgainst(serverWsUrl: String, origin: String): String {
 }
 
 /**
- * Локальный стенд: петля, адрес хост-машины из эмулятора, LAN или служебный домен разработчика.
+ * Локальный стенд: петля, адрес хост-машины из эмулятора, LAN или служебное имя разработчика.
  * Всё остальное считается настоящим сервером, и его адрес трогать нельзя.
  */
 internal fun isLocalStand(host: String): Boolean {
-    if (host.equals("localhost", ignoreCase = true)) return true
+    if (host.isEmpty()) return false
+    // Имя без точек — это имя из локальной сети или /etc/hosts, в публичном DNS такого нет.
+    if (!host.contains('.')) return true
     if (host.endsWith(".lc", ignoreCase = true) || host.endsWith(".local", ignoreCase = true)) {
         return true
     }
@@ -71,6 +80,9 @@ internal fun isLocalStand(host: String): Boolean {
         numbers[0] == 10 -> true
         numbers[0] == 192 && numbers[1] == 168 -> true
         numbers[0] == 172 && numbers[1] in 16..31 -> true
+        // Link-local и CGNAT: сюда попадают адреса Tailscale и раздача без DHCP.
+        numbers[0] == 169 && numbers[1] == 254 -> true
+        numbers[0] == 100 && numbers[1] in 64..127 -> true
         else -> false
     }
 }

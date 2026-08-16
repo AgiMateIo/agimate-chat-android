@@ -36,6 +36,14 @@ class RealtimeUrlTest {
         assertEquals(server, resolveAgainst(server, "https://api.agimate.ru"))
     }
 
+    /** Локальным должен быть и хост из ответа: стенд в LAN может назвать достижимый публичный адрес. */
+    @Test
+    fun `a reachable address from a local stand is left alone`() {
+        val server = "wss://centrifugo.example.com/connection/websocket"
+
+        assertEquals(server, resolveAgainst(server, "http://192.168.1.42:8000"))
+    }
+
     @Test
     fun `an unparsable origin changes nothing`() {
         val server = "wss://centrifugo.agimate.ru/connection/websocket"
@@ -45,13 +53,19 @@ class RealtimeUrlTest {
 
     @Test
     fun `local stand hosts are recognised`() {
-        listOf("localhost", "127.0.0.1", "10.0.2.2", "192.168.0.10", "172.20.1.1", "centrifugo.agimate.lc")
-            .forEach { assertTrue(it, isLocalStand(it)) }
+        listOf(
+            "localhost", "mymachine", "127.0.0.1", "10.0.2.2", "192.168.0.10", "172.20.1.1",
+            "centrifugo.agimate.lc", "stand.local",
+            // Link-local и CGNAT: раздача без DHCP и адреса Tailscale.
+            "169.254.10.1", "100.100.0.5",
+        ).forEach { assertTrue(it, isLocalStand(it)) }
     }
 
     @Test
     fun `public hosts are not local`() {
-        listOf("api.agimate.ru", "www.agimate.io", "centrifugo.agimate.ru", "172.32.0.1", "11.0.0.1")
-            .forEach { assertFalse(it, isLocalStand(it)) }
+        listOf(
+            "api.agimate.ru", "www.agimate.io", "centrifugo.agimate.ru",
+            "172.32.0.1", "11.0.0.1", "100.128.0.1", "",
+        ).forEach { assertFalse(it, isLocalStand(it)) }
     }
 }
