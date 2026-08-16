@@ -37,18 +37,25 @@ object NetworkModule {
     @Provides
     @Singleton
     fun loggingInterceptor(): HttpLoggingInterceptor = HttpLoggingInterceptor().apply {
-        // Тела запросов содержат токены — в релизной сборке логировать нельзя даже заголовки.
-        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+        // В релизе не логируется ничего. В отладке — заголовки: с вычеркнутым `Authorization` они
+        // безопасны и говорят больше, чем строка запроса, а `BODY` тащил бы в logcat текст
+        // переписки и тела токенов.
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
         else HttpLoggingInterceptor.Level.NONE
+        redactHeader("Authorization")
+        redactHeader("Cookie")
     }
 
     @Provides
     @Singleton
     @PlainClient
     fun plainClient(
+        retry: RetryInterceptor,
         origin: OriginInterceptor,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
+        // Ретраи снаружи всего: каждая попытка заново проходит подстановку origin и авторизацию.
+        .addInterceptor(retry)
         .addInterceptor(origin)
         .addInterceptor(logging)
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -61,11 +68,13 @@ object NetworkModule {
     @Singleton
     @AuthedClient
     fun authedClient(
+        retry: RetryInterceptor,
         origin: OriginInterceptor,
         auth: AuthInterceptor,
         authenticator: TokenAuthenticator,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(retry)
         .addInterceptor(origin)
         .addInterceptor(auth)
         .authenticator(authenticator)
