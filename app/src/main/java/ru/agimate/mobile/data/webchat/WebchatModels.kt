@@ -1,6 +1,7 @@
 package ru.agimate.mobile.data.webchat
 
 import java.time.Instant
+import java.util.UUID
 
 /** Превью последнего сообщения для строки списка. */
 data class MessagePreview(
@@ -130,11 +131,22 @@ data class ChatMessage(
     val failed: Boolean = false,
     /** Локальный ключ оптимистичного сообщения: по нему схлопываем эхо. */
     val localId: String? = null,
+    /**
+     * Ключ элемента списка: у подтверждённых — id строки, у оптимистичных — локальный, у живых —
+     * `messageId`.
+     *
+     * Считается один раз при создании, а не свойством-геттером, и потому обязан быть непустым:
+     * два одинаковых ключа роняют LazyColumn, а все три идентификатора объявлены необязательными.
+     * Последняя ступень — сгенерированный id: сообщение без единого идентификатора всё равно
+     * останется различимым.
+     *
+     * `copy` ключ не пересчитывает, и это то, что нужно: правки сообщения (пришёл `messageId`,
+     * снялся `pending`) не должны выглядеть для списка как другой элемент. Единственное место, где
+     * ключ передают явно, — схлопывание эха в [ru.agimate.mobile.feature.chat.mergeLiveMessage].
+     */
+    val key: String = rowId ?: localId ?: messageId ?: UUID.randomUUID().toString(),
 ) {
     val isOwn: Boolean get() = direction == MessageDirection.USER
-
-    /** Ключ для списка: у подтверждённых — id строки, у оптимистичных — локальный. */
-    val key: String get() = rowId ?: localId ?: messageId ?: ""
 
     companion object {
         fun from(dto: WebchatMessageDto) = ChatMessage(

@@ -32,7 +32,12 @@ fun mergeLiveMessage(current: List<ChatMessage>, incoming: ChatMessage): LiveMer
         }
         if (index >= 0) {
             val merged = current.toMutableList()
-            merged[index] = incoming.copy(localId = current[index].localId)
+            merged[index] = incoming.copy(
+                localId = current[index].localId,
+                // Ключ берём у сообщения, в которое схлопываем: для списка это тот же элемент, и
+                // смена ключа показала бы переотрисовку на ровном месте.
+                key = current[index].key,
+            )
             return LiveMerge(merged, applied = true)
         }
     }

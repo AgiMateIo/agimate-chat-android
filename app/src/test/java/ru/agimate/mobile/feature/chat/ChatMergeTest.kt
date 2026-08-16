@@ -76,6 +76,16 @@ class ChatMergeTest {
         assertFalse(merged.pending)
     }
 
+    /** Схлопывание — это правка того же элемента списка, а не появление нового. */
+    @Test
+    fun `own echo keeps the list key of the message it collapses into`() {
+        val optimistic = optimistic("local-1", "посчитай расходы")
+
+        val result = mergeLiveMessage(listOf(optimistic), echo("m-42", "посчитай расходы"))
+
+        assertEquals(optimistic.key, result.messages.single().key)
+    }
+
     @Test
     fun `echo collapses by messageId once the send response has arrived`() {
         val existing = listOf(optimistic("local-1", "привет", messageId = "m-42"))

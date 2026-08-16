@@ -237,11 +237,6 @@ class ChatViewModel @Inject constructor(
         val incoming = ChatMessage(
             rowId = null,
             messageId = payload.messageId,
-            // У живого сообщения нет ни id строки, ни локального — ключом элемента списка остаётся
-            // `messageId`. Он по контракту всегда есть, но поле объявлено необязательным, а два
-            // пустых ключа роняют LazyColumn. Локальный id тут — гарантия уникальности, не признак
-            // оптимистичной отправки: дедупликация всё равно идёт по `messageId`.
-            localId = if (payload.messageId == null) UUID.randomUUID().toString() else null,
             direction = MessageDirection.parse(payload.direction),
             stream = MessageStream.parse(payload.stream),
             text = payload.text,
