@@ -21,9 +21,9 @@ import io.github.centrifugal.centrifuge.SubscriptionTokenGetter
 import io.github.centrifugal.centrifuge.TokenCallback
 import io.github.centrifugal.centrifuge.UnsubscribedEvent
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -41,11 +42,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import ru.agimate.mobile.BuildConfig
 import ru.agimate.mobile.core.di.ApplicationScope
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import ru.agimate.mobile.core.network.ApiJson
+import ru.agimate.mobile.core.network.NetworkMonitor
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,11 +63,15 @@ import javax.inject.Singleton
  * Каналов два и роли у них разные:
  *  - `user:{userId}` — одна подписка на всё приложение, живёт всегда, поднимает бейджи;
  *  - `webchat:{sessionId}` — подписка на время открытого чата, оттуда приходят сами сообщения.
+ *
+ * Имена каналов приходят из ответов на запрос токенов и на клиенте не собираются: токен — это грант
+ * ровно на тот канал, что назвал сервер, и разойдись имена, Centrifugo молча ответит «нет прав».
  */
 @Singleton
 class RealtimeClient @Inject constructor(
     private val repository: WebchatRepository,
     private val urls: RealtimeUrl,
+    private val network: NetworkMonitor,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _status = MutableStateFlow(RealtimeStatus.Idle)
@@ -90,21 +97,25 @@ class RealtimeClient @Inject constructor(
     private var client: Client? = null
     private var userSubscription: Subscription? = null
 
+    @Volatile
+    private var connectJob: Job? = null
+
     /**
-     * Живые каналы переписок по имени канала. На канал заводится ровно одна подписка, сколько бы
-     * экранов её ни читали: подписка в Centrifugo одна на клиента, и второй читатель, заведи он
-     * свою, получил бы `DuplicateSubscriptionException` и чужой listener — то есть тишину.
+     * Живые каналы переписок по идентификатору переписки. На канал заводится ровно одна подписка,
+     * сколько бы экранов её ни читали: подписка в Centrifugo одна на клиента, и второй читатель,
+     * заведи он свою, получил бы `DuplicateSubscriptionException` и чужой listener — то есть тишину.
+     *
+     * Ключ — `sessionId`, а не имя канала: имя известно только после ответа сервера с токеном.
      */
     private val channels = mutableMapOf<String, SessionChannel>()
 
     /**
      * Канал одной переписки и его читатели.
      *
-     * @param sessionId переписка, ради которой канал заведён — по ней же берётся токен подписки
+     * @param sessionId переписка, ради которой канал заведён — по ней берётся токен
+     * @param name имя канала, как его назвал сервер
      */
-    private class SessionChannel(val sessionId: String) {
-        val name: String get() = channelName(sessionId)
-
+    private class SessionChannel(val sessionId: String, val name: String) {
         /**
          * Replay закрывает щель между «подписка заведена» и «читатель прицепился» — доли
          * миллисекунды. На большее он не рассчитан и не нужен: пока читатель прицеплен,
@@ -127,12 +138,25 @@ class RealtimeClient @Inject constructor(
         var failedAttempts = 0
     }
 
-    /** Поднять соединение и подписку на личный канал. Идемпотентно. */
+    /**
+     * Поднять соединение и подписку на личный канал. Идемпотентно.
+     *
+     * Неудача не заканчивает попытку: сеть могла отсутствовать на старте приложения, и без повтора
+     * бейджи не поднялись бы до перезапуска.
+     */
     fun start() {
-        scope.launch { ensureConnected() }
+        if (connectJob?.isActive == true) return
+        connectJob = scope.launch {
+            var attempt = 0
+            while (ensureConnected() == null) {
+                awaitRetry(attempt++)
+            }
+        }
     }
 
     fun stop() {
+        connectJob?.cancel()
+        connectJob = null
         scope.launch {
             lock.withLock {
                 channels.values.forEach(::drop)
@@ -169,13 +193,15 @@ class RealtimeClient @Inject constructor(
      * оставлять открытый чат без живых сообщений до самого выхода с экрана.
      */
     fun sessionEvents(sessionId: String): Flow<SessionEvent> = flow {
+        var attempt = 0
         while (true) {
             val channel = acquire(sessionId)
             if (channel == null) {
                 emit(SessionEvent.Status(RealtimeStatus.Disconnected))
-                delay(RETRY_DELAY_MS)
+                awaitRetry(attempt++)
                 continue
             }
+            attempt = 0
             try {
                 emitAll(channel.events())
             } finally {
@@ -208,24 +234,38 @@ class RealtimeClient @Inject constructor(
         data object Dropped : Signal
     }
 
-    /** Ещё один читатель канала; первый заводит подписку. `null` — соединения нет, стоит повторить. */
+    /** Ещё один читатель канала; первый заводит подписку. `null` — не сложилось, стоит повторить. */
     private suspend fun acquire(sessionId: String): SessionChannel? {
-        // Снаружи замка: ensureConnected берёт его сам.
         ensureConnected() ?: return null
+
+        lock.withLock {
+            channels[sessionId]?.let {
+                it.readers++
+                return it
+            }
+        }
+
+        // За токеном ходим вне замка: это HTTP, и держать на нём мьютекс значит останавливать и
+        // другие каналы, и переподключение. Имя канала берём отсюда же — токен выписан на него.
+        val issued = runCatching { repository.sessionChannelToken(sessionId) }.getOrElse {
+            warn(it) { "токен канала переписки: не получен" }
+            return null
+        }
+
         return lock.withLock {
+            // Пока ходили за токеном, канал мог завести другой читатель.
+            channels[sessionId]?.let {
+                it.readers++
+                return@withLock it
+            }
             // Клиента перечитываем под замком: между ensureConnected и этой строкой мог пройти
             // stop(), и подписка ушла бы на уже выброшенный клиент — молча и навсегда.
             val live = client ?: return@withLock null
 
-            val existing = channels[channelName(sessionId)]
-            if (existing != null) {
-                existing.readers++
-                return@withLock existing
-            }
-            val fresh = SessionChannel(sessionId)
+            val fresh = SessionChannel(sessionId, issued.channel)
             fresh.readers = 1
-            channels[fresh.name] = fresh
-            subscribe(live, fresh)
+            channels[sessionId] = fresh
+            subscribe(live, fresh, issued.subscriptionToken)
             fresh
         }
     }
@@ -235,10 +275,10 @@ class RealtimeClient @Inject constructor(
         channel.readers--
         if (channel.readers > 0) return@withLock
 
-        // Сверка по экземпляру, а не по имени: канал могли выбросить и завести заново, и снимать
-        // чужую живую подписку нельзя.
-        if (channels[channel.name] === channel) {
-            channels.remove(channel.name)
+        // Сверка по экземпляру, а не по идентификатору: канал могли выбросить и завести заново, и
+        // снимать чужую живую подписку нельзя.
+        if (channels[channel.sessionId] === channel) {
+            channels.remove(channel.sessionId)
         }
         channel.subscription?.let { subscription ->
             val live = client
@@ -250,17 +290,23 @@ class RealtimeClient @Inject constructor(
         channel.subscription = null
     }
 
-    /** Заводит подписку канала. Вызывать под [lock]. */
-    private fun subscribe(client: Client, channel: SessionChannel) {
+    /**
+     * Заводит подписку канала. Вызывать под [lock].
+     *
+     * @param token готовый токен подписки; `null` — пусть его добудет `tokenGetter` (так поднимают
+     *              подписку заново: прежний токен к тому моменту обычно и есть причина падения)
+     */
+    private fun subscribe(client: Client, channel: SessionChannel, token: String?) {
         val options = SubscriptionOptions().apply {
             setPositioned(true)
             setRecoverable(true)
+            if (token != null) this.token = token
             tokenGetter = object : SubscriptionTokenGetter() {
                 override fun getSubscriptionToken(event: SubscriptionTokenEvent, cb: TokenCallback) {
                     provideToken(cb, "токен ${channel.name}") {
                         val issued = repository.sessionChannelToken(channel.sessionId)
-                        // Имя канала строится на клиенте, а грант выписан на канал из ответа:
-                        // разойдись они — Centrifugo ответит «нет прав», и чат замолчит.
+                        // Сервер сменил имя канала на лету — подписка уже заведена на прежнее, и
+                        // свежий грант к ней не подойдёт.
                         if (issued.channel != channel.name) {
                             warn { "${channel.name}: токен выписан на ${issued.channel}" }
                         }
@@ -342,13 +388,12 @@ class RealtimeClient @Inject constructor(
      */
     private fun scheduleResubscribe(channel: SessionChannel) {
         val attempt = channel.failedAttempts++
-        val backoff = RETRY_DELAY_MS shl attempt.coerceIn(0, MAX_BACKOFF_SHIFT)
 
         scope.launch {
-            delay(backoff.coerceAtMost(MAX_RETRY_DELAY_MS))
+            awaitRetry(attempt)
             lock.withLock {
                 // Канал успели закрыть или пересоздать — восстанавливать нечего.
-                if (channels[channel.name] !== channel || channel.readers == 0) return@withLock
+                if (channels[channel.sessionId] !== channel || channel.readers == 0) return@withLock
 
                 val live = client
                 if (live == null) {
@@ -359,9 +404,21 @@ class RealtimeClient @Inject constructor(
                 }
                 channel.subscription?.let { runCatching { live.removeSubscription(it) } }
                 channel.subscription = null
-                subscribe(live, channel)
+                subscribe(live, channel, token = null)
             }
         }
+    }
+
+    /**
+     * Пауза перед повтором: растёт вдвое от попытки к попытке, но обрывается вернувшейся сетью.
+     *
+     * Без второго условия чат после туннеля или лифта молчал бы ещё до минуты — интервал к тому
+     * времени успевает дорасти до потолка, а связь уже есть.
+     */
+    private suspend fun awaitRetry(attempt: Int) {
+        val backoff = (RETRY_DELAY_MS shl attempt.coerceIn(0, MAX_BACKOFF_SHIFT))
+            .coerceAtMost(MAX_RETRY_DELAY_MS)
+        withTimeoutOrNull(backoff) { network.becameAvailable.first() }
     }
 
     private suspend fun ensureConnected(): Client? = lock.withLock {
@@ -369,7 +426,8 @@ class RealtimeClient @Inject constructor(
 
         _status.value = RealtimeStatus.Connecting
 
-        // Первый токен нужен до создания клиента: из этого же ответа берётся адрес WebSocket.
+        // Первый токен нужен до создания клиента: из этого же ответа берутся адрес WebSocket и имя
+        // личного канала.
         val bootstrap = runCatching { repository.userChannelToken() }.getOrElse {
             warn(it) { "токен личного канала: не получен" }
             _status.value = RealtimeStatus.Disconnected
@@ -446,8 +504,6 @@ class RealtimeClient @Inject constructor(
 
         override fun onConnecting(client: Client, event: ConnectingEvent) {
             if (!isCurrent(client)) return
-            // Сюда же приходит бесконечный повтор при недоступном WebSocket: адрес взят из ответа
-            // сервера, и промахнуться в нём можно, ничего не сломав в остальном API.
             trace { "подключаюсь (${event.code}) ${event.reason}" }
             _status.value = RealtimeStatus.Connecting
         }
@@ -533,13 +589,11 @@ class RealtimeClient @Inject constructor(
     private companion object {
         const val TAG = "Realtime"
 
-        /** Пауза перед повтором: и для соединения, и первая ступень для упавшей подписки. */
+        /** Первая ступень паузы перед повтором — дальше удваивается. */
         const val RETRY_DELAY_MS = 3_000L
         const val MAX_RETRY_DELAY_MS = 60_000L
 
         /** Потолок удвоений: дальше пауза упирается в [MAX_RETRY_DELAY_MS]. */
         const val MAX_BACKOFF_SHIFT = 5
-
-        fun channelName(sessionId: String) = "webchat:$sessionId"
     }
 }
