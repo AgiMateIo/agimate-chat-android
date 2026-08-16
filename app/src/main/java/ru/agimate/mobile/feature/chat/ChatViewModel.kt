@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,6 +100,7 @@ class ChatViewModel @Inject constructor(
     /** Половинки живой связи: соединение целиком и подписка на канал этой переписки. */
     private var connectionStatus = RealtimeStatus.Idle
     private var channelStatus = RealtimeStatus.Idle
+    private var slowConnectJob: Job? = null
 
     init {
         openChats.open(sessionId)
@@ -218,6 +220,17 @@ class ChatViewModel @Inject constructor(
     private fun publishRealtimeStatus() {
         val merged = RealtimeStatus.worseOf(connectionStatus, channelStatus)
         _state.update { it.copy(realtime = merged) }
+
+        slowConnectJob?.cancel()
+        if (merged == RealtimeStatus.Connected) return
+        // Centrifugo повторяет подключение молча и бесконечно, о новых попытках не сообщая. Значит,
+        // «подключаюсь» само по себе никогда не станет ошибкой, и неверный адрес WebSocket выглядит
+        // как исправный чат, в который просто ничего не приходит. Считаем затянувшееся подключение
+        // потерей связи — человеку важно не состояние сокета, а то, что лента больше не живая.
+        slowConnectJob = viewModelScope.launch {
+            delay(SLOW_CONNECT_MS)
+            _state.update { it.copy(realtime = RealtimeStatus.Disconnected) }
+        }
     }
 
     private fun applyLiveMessage(payload: WebchatMessagePayload) {
@@ -429,5 +442,10 @@ class ChatViewModel @Inject constructor(
     override fun onCleared() {
         openChats.close(sessionId)
         super.onCleared()
+    }
+
+    private companion object {
+        /** Сколько ждать живую связь, прежде чем признать её потерянной. */
+        const val SLOW_CONNECT_MS = 10_000L
     }
 }

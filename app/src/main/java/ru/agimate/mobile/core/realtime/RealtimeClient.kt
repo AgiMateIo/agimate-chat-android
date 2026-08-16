@@ -40,6 +40,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.agimate.mobile.core.di.ApplicationScope
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import ru.agimate.mobile.core.network.ApiJson
 import ru.agimate.mobile.data.webchat.WebchatRepository
@@ -222,11 +223,7 @@ class RealtimeClient @Inject constructor(
                 val payload = decode<WebchatMessagePayload>(event, RealtimeEventType.MESSAGE)
                 if (payload == null) {
                     // Не разобралось или это не webchat_message — иначе сообщение пропадёт молча.
-                    Log.w(
-                        TAG,
-                        "${channel.name}: публикация не разобрана: " +
-                            String(event.data, Charsets.UTF_8).take(200),
-                    )
+                    Log.w(TAG, "${channel.name}: публикация не разобрана — ${describe(event)}")
                     return
                 }
                 Log.i(TAG, "${channel.name}: ${payload.stream} ${payload.messageId}")
@@ -402,6 +399,23 @@ class RealtimeClient @Inject constructor(
                     cb.Done(it, null)
                 }
         }
+    }
+
+    /**
+     * Чем описать неразобранную публикацию. Текст переписки в лог не попадает — только тип события
+     * и имена полей: этого хватает, чтобы понять, разошлись ли формы, а содержимое сообщений в
+     * logcat читает кто угодно.
+     */
+    private fun describe(event: PublicationEvent): String {
+        val envelope = runCatching {
+            ApiJson.decodeFromString(
+                RealtimeEnvelope.serializer(),
+                String(event.data, Charsets.UTF_8),
+            )
+        }.getOrNull() ?: return "${event.data.size} Б, конверт не разобран"
+
+        val fields = (envelope.payload as? JsonObject)?.keys?.joinToString(",").orEmpty()
+        return "type=${envelope.type}, поля payload: $fields"
     }
 
     private inline fun <reified T> decode(event: PublicationEvent, expectedType: String): T? =
