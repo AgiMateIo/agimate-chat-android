@@ -17,6 +17,7 @@ import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.realtime.OpenChatTracker
 import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeStatus
+import ru.agimate.mobile.core.realtime.SessionEvent
 import ru.agimate.mobile.core.realtime.WebchatMessagePayload
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.AttachmentUploader
@@ -95,6 +96,10 @@ class ChatViewModel @Inject constructor(
     /** Чем в последний раз двигали указатель прочтения — чтобы не звать сервер на каждый скролл. */
     private var lastReadMarker: String? = null
 
+    /** Половинки живой связи: соединение целиком и подписка на канал этой переписки. */
+    private var connectionStatus = RealtimeStatus.Idle
+    private var channelStatus = RealtimeStatus.Idle
+
     init {
         openChats.open(sessionId)
         observeRealtimeStatus()
@@ -122,7 +127,9 @@ class ChatViewModel @Inject constructor(
             _state.update { it.copy(loading = true, error = null) }
             try {
                 val page = repository.messages(sessionId, 0)
-                messages = page.items
+                // Не присваивание: подписка живёт с самого init, и пока грузилась история, в ленту
+                // уже могли лечь живые сообщения. Второй раз их никто не пришлёт.
+                messages = mergeHistoryPage(messages, page.items)
                 nextPage = 1
                 lastReadMarker = page.items.firstOrNull()?.rowId
                 _state.update {
@@ -187,14 +194,30 @@ class ChatViewModel @Inject constructor(
 
     private fun subscribeToSession() {
         viewModelScope.launch {
-            realtime.sessionMessages(sessionId).collect { payload -> applyLiveMessage(payload) }
+            realtime.sessionEvents(sessionId).collect { event ->
+                when (event) {
+                    is SessionEvent.Message -> applyLiveMessage(event.payload)
+                    is SessionEvent.Status -> {
+                        channelStatus = event.status
+                        publishRealtimeStatus()
+                    }
+                }
+            }
         }
     }
 
     private fun observeRealtimeStatus() {
         viewModelScope.launch {
-            realtime.status.collect { status -> _state.update { it.copy(realtime = status) } }
+            realtime.status.collect { status ->
+                connectionStatus = status
+                publishRealtimeStatus()
+            }
         }
+    }
+
+    private fun publishRealtimeStatus() {
+        val merged = RealtimeStatus.worseOf(connectionStatus, channelStatus)
+        _state.update { it.copy(realtime = merged) }
     }
 
     private fun applyLiveMessage(payload: WebchatMessagePayload) {

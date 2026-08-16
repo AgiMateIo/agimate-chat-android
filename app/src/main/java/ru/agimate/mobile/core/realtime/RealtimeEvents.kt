@@ -50,5 +50,35 @@ object RealtimeEventType {
     const val ACTIVITY = "webchat_activity"
 }
 
+/**
+ * Что происходит в канале переписки.
+ *
+ * Состояние подписки едет тем же потоком, что и сообщения, не отдельным: подписка живёт ровно
+ * столько, сколько её читают, и отдельный поток состояния пришлось бы считать вторым читателем.
+ */
+sealed interface SessionEvent {
+    data class Message(val payload: WebchatMessagePayload) : SessionEvent
+
+    data class Status(val status: RealtimeStatus) : SessionEvent
+}
+
 /** Состояние живого соединения — для полоски «связь потеряна / восстановлена». */
-enum class RealtimeStatus { Idle, Connecting, Connected, Disconnected }
+enum class RealtimeStatus {
+    Idle, Connecting, Connected, Disconnected;
+
+    companion object {
+        /**
+         * Худшее из двух состояний.
+         *
+         * Живое сообщение доезжает, только когда целы обе половины — и соединение, и подписка на
+         * канал переписки. Целый WebSocket с умершей подпиской показывал бы «на связи», пока чат
+         * молчит, — а это ровно тот случай, который надо видеть.
+         */
+        fun worseOf(a: RealtimeStatus, b: RealtimeStatus): RealtimeStatus = when {
+            a == Disconnected || b == Disconnected -> Disconnected
+            a == Connecting || b == Connecting -> Connecting
+            a == Connected && b == Connected -> Connected
+            else -> Idle
+        }
+    }
+}

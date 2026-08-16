@@ -99,6 +99,49 @@ class ChatMergeTest {
     }
 
     @Test
+    fun `history page does not wipe messages that arrived while it was loading`() {
+        // Подписка поднимается раньше истории: ответ, пришедший в это окно, второй раз не придёт.
+        val live = listOf(agent("m-live", "готово"))
+        val page = listOf(agent("m-2", "предыдущее"), agent("m-1", "первое"))
+
+        val merged = mergeHistoryPage(live, page)
+
+        assertEquals(listOf("m-live", "m-2", "m-1"), merged.map { it.messageId })
+    }
+
+    @Test
+    fun `a message present in both history and the live feed is taken from history`() {
+        val live = listOf(agent("m-2", "готово"))
+        // У истории есть id строки — им отмечают прочтение, у живого события его нет.
+        val page = listOf(
+            agent("m-2", "готово").copy(rowId = "row-2"),
+            agent("m-1", "первое").copy(rowId = "row-1"),
+        )
+
+        val merged = mergeHistoryPage(live, page)
+
+        assertEquals("сообщение не должно раздвоиться", 2, merged.size)
+        assertEquals("row-2", merged.first().rowId)
+    }
+
+    @Test
+    fun `an optimistic message survives the history page while its send is in flight`() {
+        val live = listOf(optimistic("local-1", "посчитай расходы"))
+        val page = listOf(agent("m-1", "первое"))
+
+        val merged = mergeHistoryPage(live, page)
+
+        assertEquals(listOf("local-1", null), merged.map { it.localId })
+    }
+
+    @Test
+    fun `an empty feed takes the history page as is`() {
+        val page = listOf(agent("m-1", "первое"))
+
+        assertEquals(page, mergeHistoryPage(emptyList(), page))
+    }
+
+    @Test
     fun `progress messages accumulate rather than replace each other`() {
         var feed = emptyList<ChatMessage>()
         listOf("читаю таблицу", "считаю суммы", "рисую график").forEachIndexed { index, text ->

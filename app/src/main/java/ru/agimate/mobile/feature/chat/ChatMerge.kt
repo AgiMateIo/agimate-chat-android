@@ -43,3 +43,20 @@ fun mergeLiveMessage(current: List<ChatMessage>, incoming: ChatMessage): LiveMer
 
     return LiveMerge(listOf(incoming) + current, applied = true)
 }
+
+/**
+ * Подкладывает первую страницу истории под то, что уже успело прийти живьём.
+ *
+ * Подписка на канал поднимается раньше, чем приезжает история, и сообщение, пришедшее в это окно,
+ * присваиванием ленты стёрлось бы насовсем: доставка at-least-once, но не «навсегда» —
+ * Centrifugo второй раз его не пришлёт, и в чате оно не появится до переоткрытия экрана.
+ *
+ * Пересечение убирается по `messageId`: то, что уже есть в истории, у неё и берём — там, в отличие
+ * от живого события, есть `id` строки, которым отмечают прочтение.
+ */
+fun mergeHistoryPage(live: List<ChatMessage>, page: List<ChatMessage>): List<ChatMessage> {
+    if (live.isEmpty()) return page
+
+    val known = page.mapNotNullTo(mutableSetOf()) { it.messageId }
+    return live.filter { it.messageId == null || it.messageId !in known } + page
+}

@@ -55,14 +55,18 @@ fun buildChatItems(
             index++
         }
 
-        val newest = messages.getOrNull(index - 1)?.createdAt
-        if (newest != null) {
+        val anchor = messages.getOrNull(index - 1)
+        val newest = anchor?.createdAt
+        if (anchor != null && newest != null) {
             val older = messages.getOrNull(index)?.createdAt
             val startsNewDay = older == null ||
                 older.atZone(zone).toLocalDate() != newest.atZone(zone).toLocalDate()
             if (startsNewDay) {
                 items += ChatItem.DaySeparator(
-                    key = "d:${newest.atZone(zone).toLocalDate()}",
+                    // Ключ — по сообщению, над которым разделитель встал, а не по дате. Сообщение
+                    // без `createdAt` разрывает ленту на «разные дни» посередине, и одна и та же
+                    // дата даёт два разделителя, а на повторившемся ключе LazyColumn падает.
+                    key = "d:${anchor.key}",
                     label = TimeFormat.daySeparator(newest, zone),
                 )
             }

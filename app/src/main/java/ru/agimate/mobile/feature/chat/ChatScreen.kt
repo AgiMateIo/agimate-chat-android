@@ -65,6 +65,9 @@ import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.webchat.PendingAttachment
 
+/** За сколько элементов до верха ленты просить следующую страницу. */
+private const val LOAD_OLDER_THRESHOLD = 4
+
 @Composable
 fun ChatScreen(
     state: ChatUiState,
@@ -85,19 +88,26 @@ fun ChatScreen(
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
 
+    val itemCount = state.items.size
+
     // Список перевёрнут: индекс 0 — самое свежее сообщение внизу, конец списка — самое старое сверху.
-    val nearOldest by remember {
+    //
+    // Ключ у remember обязателен. `derivedStateOf` пересчитывается только по прочитанным
+    // State-объектам, а число элементов — обычное значение, захваченное замыканием: без ключа оно
+    // навсегда осталось бы нулём из первой композиции, «близко к началу» было бы вечно истинным, и
+    // чат тянул бы историю страница за страницей на каждое новое сообщение.
+    val nearOldest by remember(itemCount) {
         derivedStateOf {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= state.items.lastIndex - 3
+            val visible = listState.layoutInfo.visibleItemsInfo
+            visible.isNotEmpty() && visible.last().index >= itemCount - LOAD_OLDER_THRESHOLD
         }
     }
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
 
-    LaunchedEffect(nearOldest, state.items.size) {
+    LaunchedEffect(nearOldest, itemCount) {
         if (nearOldest) onLoadOlder()
     }
-    LaunchedEffect(atBottom, state.items.size) {
+    LaunchedEffect(atBottom, itemCount) {
         if (atBottom) onReachedBottom()
     }
 

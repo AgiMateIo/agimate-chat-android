@@ -76,10 +76,25 @@ class ChatItemsTest {
         val keys = items.map { it.key }
 
         // Список рисуется перевёрнутым, поэтому «после» в массиве означает «выше» на экране.
+        // Ключ разделителя — по сообщению, над которым он встал.
         assertEquals(
-            listOf("m:today", "d:2026-08-15", "m:yesterday-2", "m:yesterday-1", "d:2026-08-14"),
+            listOf("m:today", "d:today", "m:yesterday-2", "m:yesterday-1", "d:yesterday-1"),
             keys,
         )
+    }
+
+    /** Сообщение без времени разрывает ленту посередине — два разделителя одной даты. */
+    @Test
+    fun `a message without a timestamp does not produce a duplicate key`() {
+        val feed = listOf(
+            message("a", MessageStream.ANSWER, "2026-08-15T10:00:00Z"),
+            message("b", MessageStream.ANSWER, "2026-08-15T09:00:00Z").copy(createdAt = null),
+            message("c", MessageStream.ANSWER, "2026-08-15T08:00:00Z"),
+        )
+
+        val keys = buildChatItems(feed, zone).map { it.key }
+
+        assertEquals("на повторившемся ключе LazyColumn падает", keys.size, keys.distinct().size)
     }
 
     @Test
