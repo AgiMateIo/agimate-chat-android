@@ -73,12 +73,17 @@ enum class RealtimeStatus {
          * Живое сообщение доезжает, только когда целы обе половины — и соединение, и подписка на
          * канал переписки. Целый WebSocket с умершей подпиской показывал бы «на связи», пока чат
          * молчит, — а это ровно тот случай, который надо видеть.
+         *
+         * `Idle` получается, только когда **обе** половины ещё не отчитались. Одна известная и одна
+         * неизвестная — это «подключаюсь», а не «ничего не начиналось»: экран считает всё, кроме
+         * `Connected`, поводом завести таймер потери связи, и `Idle` от живой половины показывал бы
+         * «связь потеряна» поверх исправного соединения.
          */
         fun worseOf(a: RealtimeStatus, b: RealtimeStatus): RealtimeStatus = when {
             a == Disconnected || b == Disconnected -> Disconnected
-            a == Connecting || b == Connecting -> Connecting
+            a == Idle && b == Idle -> Idle
             a == Connected && b == Connected -> Connected
-            else -> Idle
+            else -> Connecting
         }
     }
 }

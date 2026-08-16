@@ -34,4 +34,21 @@ class RealtimeStatusTest {
             RealtimeStatus.worseOf(RealtimeStatus.Idle, RealtimeStatus.Idle),
         )
     }
+
+    /**
+     * Регрессия. Подписка на канал отчитывается позже соединения, и пока она молчит, вторая
+     * половина — `Idle`. Считать это состояние «ничего не начиналось» нельзя: экран заводит по нему
+     * таймер и показывал бы «связь потеряна» поверх исправного сокета.
+     */
+    @Test
+    fun `one half still unknown reads as connecting, not idle`() {
+        assertEquals(
+            RealtimeStatus.Connecting,
+            RealtimeStatus.worseOf(RealtimeStatus.Connected, RealtimeStatus.Idle),
+        )
+        assertEquals(
+            RealtimeStatus.Connecting,
+            RealtimeStatus.worseOf(RealtimeStatus.Idle, RealtimeStatus.Connected),
+        )
+    }
 }
