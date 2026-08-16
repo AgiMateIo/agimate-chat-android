@@ -185,8 +185,12 @@ fun ChatScreen(
 
         }
 
-        if (state.isRunning) {
-            RunningStrip(progress = state.liveProgress)
+        // Полоска говорит только о том, чем агент занят прямо сейчас. Что он вообще работает, уже
+        // сказано подписью в шапке и кнопкой «стоп», и заглушка здесь была третьим повтором одного
+        // и того же — а заодно дёргала ленту, появляясь и исчезая на пустом месте.
+        val progress = state.liveProgress?.takeIf { it.isNotBlank() }
+        if (state.isRunning && progress != null) {
+            RunningStrip(progress = progress)
         }
 
         Composer(
@@ -483,8 +487,9 @@ private fun DaySeparatorRow(label: String) {
     )
 }
 
+/** Что агент делает прямо сейчас. Без шага не показывается — см. место вызова. */
 @Composable
-private fun RunningStrip(progress: String?, modifier: Modifier = Modifier) {
+private fun RunningStrip(progress: String, modifier: Modifier = Modifier) {
     val colors = AgiTheme.colors
     Row(
         modifier = modifier
@@ -500,7 +505,7 @@ private fun RunningStrip(progress: String?, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(AgiTheme.spacing.sm))
         Text(
-            text = progress?.takeIf { it.isNotBlank() } ?: "агент работает…",
+            text = progress,
             style = AgiTheme.typography.caption,
             color = colors.textSecondary,
             maxLines = 1,
