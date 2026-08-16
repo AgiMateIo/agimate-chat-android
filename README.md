@@ -4,7 +4,8 @@
 сложное — интеграции, навыки, политики доступа, выбор моделей, биллинг — живёт в админском
 интерфейсе и сюда не попадает.
 
-Контракт с бэкендом описан в [docs/android-app-spec.md](docs/android-app-spec.md).
+Контракт с бэкендом описан в [docs/android-app-spec.md](docs/android-app-spec.md), история
+изменений — в [CHANGELOG.md](CHANGELOG.md).
 
 ## Сборка
 
