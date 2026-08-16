@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".MainActivity">
+            <!--
+              App Link — предпочтительный адрес возврата: он проверяется доменом и присвоить его
+              чужому приложению нельзя. Фильтр объявлен заранее, но redirect_to начнёт указывать
+              сюда только когда BuildConfig.USE_APP_LINK станет true — то есть после публикации
+              /.well-known/assetlinks.json с отпечатком рабочей подписи. До этого проверка не
+              проходит и ссылка просто открывается в браузере; приложение это переживает.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="www.agimate.io"
+                    android:path="/app/auth"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

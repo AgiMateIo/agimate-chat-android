@@ -1,0 +1,94 @@
+package ru.agimate.mobile.data.webchat
+
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import ru.agimate.mobile.core.network.PageEnvelope
+import ru.agimate.mobile.core.network.apiCall
+import ru.agimate.mobile.core.network.unwrap
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Одна страница чего-либо плюс признак «дальше ничего нет». */
+data class Paged<T>(val items: List<T>, val isLast: Boolean, val totalElements: Long)
+
+@Singleton
+class WebchatRepository @Inject constructor(
+    private val api: WebchatApi,
+) {
+    suspend fun contacts(page: Int, size: Int = PAGE_SIZE): Paged<Contact> =
+        apiCall { api.contacts(page, size) }
+            .unwrap("список контактов")
+            .toPaged(Contact::from)
+
+    suspend fun sessions(agentId: String, page: Int, size: Int = PAGE_SIZE): Paged<ChatSession> =
+        apiCall { api.sessions(agentId, page, size) }
+            .unwrap("переписки агента")
+            .toPaged(ChatSession::from)
+
+    /** Первая страница — конец переписки; листание вверх это `page + 1`. */
+    suspend fun messages(sessionId: String, page: Int, size: Int = PAGE_SIZE): Paged<ChatMessage> =
+        apiCall { api.messages(sessionId, page, size) }
+            .unwrap("история переписки")
+            .toPaged(ChatMessage::from)
+
+    suspend fun startSession(agentId: String): ChatSession =
+        ChatSession.from(
+            apiCall { api.startSession(StartSessionRequest(agentId)) }.unwrap("новая переписка")
+        )
+
+    suspend fun closeSession(sessionId: String): ChatSession =
+        ChatSession.from(
+            apiCall { api.closeSession(sessionId) }.unwrap("закрытие переписки")
+        )
+
+    suspend fun send(
+        sessionId: String,
+        text: String?,
+        fileIds: List<String>,
+    ): SendMessageResponseDto = apiCall {
+        api.sendMessage(
+            sessionId,
+            SendMessageRequest(
+                text = text?.takeIf { it.isNotBlank() },
+                parts = fileIds.takeIf { it.isNotEmpty() }?.map(::AttachmentRef),
+            ),
+        )
+    }.unwrap("отправка сообщения")
+
+    /**
+     * @param lastReadRowId **id строки**, а не `messageId` — иначе 400. `null` помечает сессию
+     *                      прочитанной до конца.
+     */
+    suspend fun markRead(sessionId: String, lastReadRowId: String?) {
+        apiCall { api.markRead(sessionId, MarkReadRequest(lastReadRowId)) }
+    }
+
+    suspend fun upload(fileName: String, mime: String?, bytes: ByteArray): WebchatFileDto {
+        val body = bytes.toRequestBody(mime?.toMediaTypeOrNull())
+        // Имя части — ровно `file`.
+        val part = MultipartBody.Part.createFormData("file", fileName, body)
+        return apiCall { api.uploadFile(part) }.unwrap("загрузка файла")
+    }
+
+    /** Останавливает переписку целиком, а не один запуск. Повторное нажатие безопасно. */
+    suspend fun cancelSession(sessionId: String): CancelSessionDto =
+        apiCall { api.cancelSession(sessionId) }.unwrap("остановка ответа")
+
+    suspend fun userChannelToken(): CentrifugoTokenDto =
+        apiCall { api.userToken() }.unwrap("токен личного канала")
+
+    suspend fun sessionChannelToken(sessionId: String): CentrifugoTokenDto =
+        apiCall { api.sessionToken(sessionId) }.unwrap("токен канала переписки")
+
+    private fun <D, T> PageEnvelope<D>.toPaged(map: (D) -> T) = Paged(
+        items = content.map(map),
+        isLast = isLastPage,
+        totalElements = totalElements,
+    )
+
+    companion object {
+        /** Потолок на сервере — 100; просить больше бессмысленно, ответ молча урежут. */
+        const val PAGE_SIZE = 50
+    }
+}
