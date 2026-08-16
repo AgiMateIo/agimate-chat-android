@@ -32,13 +32,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import ru.agimate.mobile.BuildConfig
 import ru.agimate.mobile.core.di.ApplicationScope
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -75,6 +78,15 @@ class RealtimeClient @Inject constructor(
     val activity: SharedFlow<WebchatActivityPayload> = _activity.asSharedFlow()
 
     private val lock = Mutex()
+
+    /**
+     * Текущий клиент.
+     *
+     * `@Volatile`, потому что с ним сверяются слушатели библиотеки со своих потоков: выброшенный
+     * клиент досылает свои события уже после замены, и его `onDisconnected` иначе затирал бы
+     * статус живого соединения.
+     */
+    @Volatile
     private var client: Client? = null
     private var userSubscription: Subscription? = null
 
@@ -94,8 +106,9 @@ class RealtimeClient @Inject constructor(
         val name: String get() = channelName(sessionId)
 
         /**
-         * Небольшой replay закрывает щель между «подписка заведена» и «читатель прицепился»:
-         * повтор безопасен, ленту дедуплицирует `mergeLiveMessage`, а потеря — нет.
+         * Replay закрывает щель между «подписка заведена» и «читатель прицепился» — доли
+         * миллисекунды. На большее он не рассчитан и не нужен: пока читатель прицеплен,
+         * буферизацией занимается `extraBufferCapacity`.
          */
         val messages = MutableSharedFlow<WebchatMessagePayload>(
             replay = 4,
@@ -104,8 +117,14 @@ class RealtimeClient @Inject constructor(
         )
         val status = MutableStateFlow(RealtimeStatus.Connecting)
 
+        /** Канал выброшен из реестра — читателям пора идти за новым. */
+        val dropped = MutableStateFlow(false)
+
         var readers = 0
         var subscription: Subscription? = null
+
+        /** Сколько раз подряд подписка не поднялась — от этого растёт пауза перед повтором. */
+        var failedAttempts = 0
     }
 
     /** Поднять соединение и подписку на личный канал. Идемпотентно. */
@@ -116,19 +135,28 @@ class RealtimeClient @Inject constructor(
     fun stop() {
         scope.launch {
             lock.withLock {
-                channels.values.forEach { channel ->
-                    channel.subscription?.let { runCatching { it.unsubscribe() } }
-                    channel.subscription = null
-                    channel.status.value = RealtimeStatus.Disconnected
-                }
+                channels.values.forEach(::drop)
                 channels.clear()
-                userSubscription?.let { runCatching { it.unsubscribe() } }
                 userSubscription = null
-                client?.let { runCatching { it.disconnect() } }
+
+                val dying = client
+                // Обнулить до close: слушатель сверяется с этим полем, и события умирающего
+                // клиента должны отсеяться как чужие.
                 client = null
                 _status.value = RealtimeStatus.Idle
+                // close, а не disconnect: disconnect рвёт только соединение, оставляя живыми
+                // executor, scheduler и пул соединений — каждый разлогин протекал бы ими.
+                dying?.let { runCatching { it.close(0) } }
             }
         }
+    }
+
+    /** Снять подписку канала и объявить его выброшенным. Вызывать под [lock]. */
+    private fun drop(channel: SessionChannel) {
+        channel.subscription?.let { runCatching { it.unsubscribe() } }
+        channel.subscription = null
+        channel.status.value = RealtimeStatus.Disconnected
+        channel.dropped.value = true
     }
 
     /**
@@ -137,8 +165,8 @@ class RealtimeClient @Inject constructor(
      * У канала включены история и восстановление: после реконнекта Centrifugo досылает пропущенное,
      * поэтому перечитывать историю HTTP-запросом после каждого разрыва не нужно.
      *
-     * Неудача с соединением или токеном поток не завершает: одна осечка не должна оставлять
-     * открытый чат без живых сообщений до самого выхода с экрана.
+     * Ни неудача с соединением, ни потеря самого канала поток не завершают: осечка не должна
+     * оставлять открытый чат без живых сообщений до самого выхода с экрана.
      */
     fun sessionEvents(sessionId: String): Flow<SessionEvent> = flow {
         while (true) {
@@ -149,25 +177,46 @@ class RealtimeClient @Inject constructor(
                 continue
             }
             try {
-                emitAll(
-                    merge(
-                        channel.messages.map(SessionEvent::Message),
-                        channel.status.map(SessionEvent::Status),
-                    )
-                )
+                emitAll(channel.events())
             } finally {
                 // Отпускать надо и при отмене — иначе счётчик читателей не сойдётся и канал
                 // останется висеть подписанным до конца жизни процесса.
-                withContext(NonCancellable) { release(sessionId) }
+                withContext(NonCancellable) { release(channel) }
             }
+            // Досюда доходим, только когда канал выбросили: идём за новым.
         }
+    }
+
+    /**
+     * События канала, кончающиеся вместе с ним.
+     *
+     * Без явного признака выброшенности поток из `SharedFlow` и `StateFlow` не кончается никогда, и
+     * читатель, чей канал сняли, молча висел бы на мёртвом до закрытия экрана.
+     */
+    private fun SessionChannel.events(): Flow<SessionEvent> = merge(
+        messages.map { Signal.Event(SessionEvent.Message(it)) },
+        status.map { Signal.Event(SessionEvent.Status(it)) },
+        dropped.filter { it }.map { Signal.Dropped },
+    ).transformWhile { signal ->
+        if (signal is Signal.Event) emit(signal.event)
+        signal is Signal.Event
+    }
+
+    private sealed interface Signal {
+        data class Event(val event: SessionEvent) : Signal
+
+        data object Dropped : Signal
     }
 
     /** Ещё один читатель канала; первый заводит подписку. `null` — соединения нет, стоит повторить. */
     private suspend fun acquire(sessionId: String): SessionChannel? {
         // Снаружи замка: ensureConnected берёт его сам.
-        val connected = ensureConnected() ?: return null
+        ensureConnected() ?: return null
         return lock.withLock {
+            // Клиента перечитываем под замком: между ensureConnected и этой строкой мог пройти
+            // stop(), и подписка ушла бы на уже выброшенный клиент — молча и навсегда.
+            val live = client ?: return@withLock null
+
             val existing = channels[channelName(sessionId)]
             if (existing != null) {
                 existing.readers++
@@ -176,20 +225,23 @@ class RealtimeClient @Inject constructor(
             val fresh = SessionChannel(sessionId)
             fresh.readers = 1
             channels[fresh.name] = fresh
-            subscribe(connected, fresh)
+            subscribe(live, fresh)
             fresh
         }
     }
 
     /** Читателем меньше; последний уносит с собой подписку. */
-    private suspend fun release(sessionId: String) = lock.withLock {
-        val channel = channels[channelName(sessionId)] ?: return@withLock
+    private suspend fun release(channel: SessionChannel) = lock.withLock {
         channel.readers--
         if (channel.readers > 0) return@withLock
 
-        channels.remove(channel.name)
-        val live = client
+        // Сверка по экземпляру, а не по имени: канал могли выбросить и завести заново, и снимать
+        // чужую живую подписку нельзя.
+        if (channels[channel.name] === channel) {
+            channels.remove(channel.name)
+        }
         channel.subscription?.let { subscription ->
+            val live = client
             // removeSubscription отписывается сам; без клиента остаётся только отписка.
             runCatching {
                 if (live != null) live.removeSubscription(subscription) else subscription.unsubscribe()
@@ -226,17 +278,18 @@ class RealtimeClient @Inject constructor(
                     Log.w(TAG, "${channel.name}: публикация не разобрана — ${describe(event)}")
                     return
                 }
-                Log.i(TAG, "${channel.name}: ${payload.stream} ${payload.messageId}")
+                trace("${channel.name}: ${payload.stream} ${payload.messageId}")
                 channel.messages.tryEmit(payload)
             }
 
             override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
-                Log.i(TAG, "${channel.name}: подписан, recovered=${event.recovered}")
+                trace("${channel.name}: подписан, recovered=${event.recovered}")
+                channel.failedAttempts = 0
                 channel.status.value = RealtimeStatus.Connected
             }
 
             override fun onSubscribing(sub: Subscription, event: SubscribingEvent) {
-                Log.i(TAG, "${channel.name}: подписывается (${event.code}) ${event.reason}")
+                trace("${channel.name}: подписывается (${event.code}) ${event.reason}")
                 channel.status.value = RealtimeStatus.Connecting
             }
 
@@ -256,7 +309,7 @@ class RealtimeClient @Inject constructor(
             }
         }
 
-        Log.i(TAG, "${channel.name}: завожу подписку")
+        trace("${channel.name}: завожу подписку")
         val subscription = runCatching { client.newSubscription(channel.name, options, listener) }
             .getOrElse {
                 // В реестре осталась подписка от прошлой жизни канала. Своей рядом не завести, а
@@ -270,7 +323,10 @@ class RealtimeClient @Inject constructor(
         channel.subscription = subscription
         if (subscription == null) {
             channel.status.value = RealtimeStatus.Disconnected
-            Log.w(TAG, "Канал ${channel.name}: подписку завести не удалось")
+            Log.w(TAG, "${channel.name}: подписку завести не удалось")
+            // Без повтора канал остался бы в реестре с мёртвой подпиской: `onUnsubscribed` уже не
+            // придёт — некому, — и поднять его было бы нечем.
+            scheduleResubscribe(channel)
             return
         }
         subscription.subscribe()
@@ -279,14 +335,28 @@ class RealtimeClient @Inject constructor(
     /**
      * Поднять умершую подписку. Именно новой: старая держит тот же протухший токен — библиотека
      * чистит его лишь на части кодов, — и повторный `subscribe()` упёрся бы в ту же ошибку.
+     *
+     * Пауза растёт от попытки к попытке. Постоянная ошибка вроде «нет прав» иначе превращается в
+     * бесконечный штурм раз в три секунды, каждый круг — с HTTP-запросом за токеном и разбуженным
+     * радио. Успешная подписка обнуляет счёт.
      */
     private fun scheduleResubscribe(channel: SessionChannel) {
+        val attempt = channel.failedAttempts++
+        val backoff = RETRY_DELAY_MS shl attempt.coerceIn(0, MAX_BACKOFF_SHIFT)
+
         scope.launch {
-            delay(RETRY_DELAY_MS)
+            delay(backoff.coerceAtMost(MAX_RETRY_DELAY_MS))
             lock.withLock {
                 // Канал успели закрыть или пересоздать — восстанавливать нечего.
                 if (channels[channel.name] !== channel || channel.readers == 0) return@withLock
-                val live = client ?: return@withLock
+
+                val live = client
+                if (live == null) {
+                    // Соединения сейчас нет, но канал ещё нужен: сдаться здесь значит оставить
+                    // открытый чат немым навсегда.
+                    scheduleResubscribe(channel)
+                    return@withLock
+                }
                 channel.subscription?.let { runCatching { live.removeSubscription(it) } }
                 channel.subscription = null
                 subscribe(live, channel)
@@ -318,8 +388,11 @@ class RealtimeClient @Inject constructor(
         }
 
         val wsUrl = urls.resolve(bootstrap.wsUrl)
-        Log.i(TAG, "подключаюсь к $wsUrl (сервер отдал ${bootstrap.wsUrl})")
+        trace("подключаюсь к $wsUrl (сервер отдал ${bootstrap.wsUrl})")
         val created = Client(wsUrl, options, connectionListener())
+        // Присвоить до connect: слушатель сверяется с этим полем и отбросил бы как чужие
+        // собственные события, пришедшие раньше присваивания.
+        client = created
         created.connect()
 
         val userOptions = SubscriptionOptions().apply {
@@ -339,12 +412,12 @@ class RealtimeClient @Inject constructor(
             override fun onPublication(sub: Subscription, event: PublicationEvent) {
                 val payload = decode<WebchatActivityPayload>(event, RealtimeEventType.ACTIVITY)
                 if (payload == null) return
-                Log.i(TAG, "${bootstrap.channel}: активность ${payload.stream} ${payload.messageId}")
+                trace("${bootstrap.channel}: активность ${payload.stream} ${payload.messageId}")
                 _activity.tryEmit(payload)
             }
 
             override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
-                Log.i(TAG, "${bootstrap.channel}: подписан")
+                trace("${bootstrap.channel}: подписан")
             }
 
             override fun onError(sub: Subscription, event: SubscriptionErrorEvent) {
@@ -361,28 +434,36 @@ class RealtimeClient @Inject constructor(
                 .also { it.subscribe() }
         }.getOrNull()
 
-        client = created
         created
     }
 
     private fun connectionListener() = object : EventListener() {
         override fun onConnected(client: Client, event: ConnectedEvent) {
-            Log.i(TAG, "соединение установлено")
+            if (!isCurrent(client)) return
+            trace("соединение установлено")
             _status.value = RealtimeStatus.Connected
         }
 
         override fun onConnecting(client: Client, event: ConnectingEvent) {
+            if (!isCurrent(client)) return
             // Сюда же приходит бесконечный повтор при недоступном WebSocket: адрес взят из ответа
             // сервера, и промахнуться в нём можно, ничего не сломав в остальном API.
-            Log.i(TAG, "подключаюсь (${event.code}) ${event.reason}")
+            trace("подключаюсь (${event.code}) ${event.reason}")
             _status.value = RealtimeStatus.Connecting
         }
 
         override fun onDisconnected(client: Client, event: DisconnectedEvent) {
+            if (!isCurrent(client)) return
             Log.w(TAG, "соединение потеряно (${event.code}) ${event.reason}")
             _status.value = RealtimeStatus.Disconnected
         }
     }
+
+    /**
+     * Свой ли это клиент. Выброшенный досылает события уже после замены, а статус общий — без
+     * сверки его прощальное `onDisconnected` показывало бы потерю связи поверх живого соединения.
+     */
+    private fun isCurrent(candidate: Client): Boolean = candidate === client
 
     /**
      * Библиотека зовёт TokenGetter со своего потока и ждёт колбэка. Сходить за токеном надо по
@@ -418,6 +499,15 @@ class RealtimeClient @Inject constructor(
         return "type=${envelope.type}, поля payload: $fields"
     }
 
+    /**
+     * Ход событий real-time — только для отладочной сборки. В релизе это строка на каждое
+     * сообщение, и в ней идентификаторы сессии: logcat читает кто угодно, а поводов туда смотреть
+     * у пользователя нет. Настоящие поломки идут через [Log.w] и остаются всегда.
+     */
+    private fun trace(message: String) {
+        if (BuildConfig.DEBUG) Log.i(TAG, message)
+    }
+
     private inline fun <reified T> decode(event: PublicationEvent, expectedType: String): T? =
         runCatching {
             val envelope = ApiJson.decodeFromString(
@@ -432,8 +522,12 @@ class RealtimeClient @Inject constructor(
     private companion object {
         const val TAG = "Realtime"
 
-        /** Пауза перед повтором — и для соединения, и для упавшей подписки. */
+        /** Пауза перед повтором: и для соединения, и первая ступень для упавшей подписки. */
         const val RETRY_DELAY_MS = 3_000L
+        const val MAX_RETRY_DELAY_MS = 60_000L
+
+        /** Потолок удвоений: дальше пауза упирается в [MAX_RETRY_DELAY_MS]. */
+        const val MAX_BACKOFF_SHIFT = 5
 
         fun channelName(sessionId: String) = "webchat:$sessionId"
     }
