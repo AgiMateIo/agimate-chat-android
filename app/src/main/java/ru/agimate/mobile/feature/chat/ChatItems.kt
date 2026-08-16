@@ -55,9 +55,10 @@ fun buildChatItems(
             index++
         }
 
-        val anchor = messages.getOrNull(index - 1)
-        val newest = anchor?.createdAt
-        if (anchor != null && newest != null) {
+        // Индекс уже сдвинут за только что выпущенный элемент, так что предыдущий существует всегда.
+        val anchor = messages[index - 1]
+        val newest = anchor.createdAt
+        if (newest != null) {
             val older = messages.getOrNull(index)?.createdAt
             val startsNewDay = older == null ||
                 older.atZone(zone).toLocalDate() != newest.atZone(zone).toLocalDate()

@@ -43,6 +43,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,14 +93,17 @@ fun ChatScreen(
 
     // Список перевёрнут: индекс 0 — самое свежее сообщение внизу, конец списка — самое старое сверху.
     //
-    // Ключ у remember обязателен. `derivedStateOf` пересчитывается только по прочитанным
-    // State-объектам, а число элементов — обычное значение, захваченное замыканием: без ключа оно
-    // навсегда осталось бы нулём из первой композиции, «близко к началу» было бы вечно истинным, и
-    // чат тянул бы историю страница за страницей на каждое новое сообщение.
-    val nearOldest by remember(itemCount) {
+    // Число элементов заворачивается в rememberUpdatedState, а не отдаётся ключом в remember.
+    // `derivedStateOf` пересчитывается только по прочитанным State-объектам, и обычное значение,
+    // захваченное замыканием, навсегда осталось бы нулём из первой композиции: «близко к началу»
+    // было бы вечно истинным, и чат тянул бы историю страница за страницей на каждое сообщение.
+    // Ключ у remember это тоже чинит, но пересоздаёт узел на каждое сообщение — а обновляемое
+    // состояние оставляет один и всегда видит текущее число.
+    val count by rememberUpdatedState(itemCount)
+    val nearOldest by remember {
         derivedStateOf {
             val visible = listState.layoutInfo.visibleItemsInfo
-            visible.isNotEmpty() && visible.last().index >= itemCount - LOAD_OLDER_THRESHOLD
+            visible.isNotEmpty() && visible.last().index >= count - LOAD_OLDER_THRESHOLD
         }
     }
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
