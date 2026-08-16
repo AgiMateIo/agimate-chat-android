@@ -204,8 +204,14 @@ class RealtimeClient @Inject constructor(
             setRecoverable(true)
             tokenGetter = object : SubscriptionTokenGetter() {
                 override fun getSubscriptionToken(event: SubscriptionTokenEvent, cb: TokenCallback) {
-                    provideToken(cb) {
-                        repository.sessionChannelToken(channel.sessionId).subscriptionToken
+                    provideToken(cb, "токен ${channel.name}") {
+                        val issued = repository.sessionChannelToken(channel.sessionId)
+                        // Имя канала строится на клиенте, а грант выписан на канал из ответа:
+                        // разойдись они — Centrifugo ответит «нет прав», и чат замолчит.
+                        if (issued.channel != channel.name) {
+                            Log.w(TAG, "${channel.name}: токен выписан на ${issued.channel}")
+                        }
+                        issued.subscriptionToken
                     }
                 }
             }
@@ -213,20 +219,32 @@ class RealtimeClient @Inject constructor(
 
         val listener = object : SubscriptionEventListener() {
             override fun onPublication(sub: Subscription, event: PublicationEvent) {
-                decode<WebchatMessagePayload>(event, RealtimeEventType.MESSAGE)
-                    ?.let { channel.messages.tryEmit(it) }
+                val payload = decode<WebchatMessagePayload>(event, RealtimeEventType.MESSAGE)
+                if (payload == null) {
+                    // Не разобралось или это не webchat_message — иначе сообщение пропадёт молча.
+                    Log.w(
+                        TAG,
+                        "${channel.name}: публикация не разобрана: " +
+                            String(event.data, Charsets.UTF_8).take(200),
+                    )
+                    return
+                }
+                Log.i(TAG, "${channel.name}: ${payload.stream} ${payload.messageId}")
+                channel.messages.tryEmit(payload)
             }
 
             override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
+                Log.i(TAG, "${channel.name}: подписан, recovered=${event.recovered}")
                 channel.status.value = RealtimeStatus.Connected
             }
 
             override fun onSubscribing(sub: Subscription, event: SubscribingEvent) {
+                Log.i(TAG, "${channel.name}: подписывается (${event.code}) ${event.reason}")
                 channel.status.value = RealtimeStatus.Connecting
             }
 
             override fun onError(sub: Subscription, event: SubscriptionErrorEvent) {
-                Log.w(TAG, "Канал ${channel.name}: ошибка подписки", event.error)
+                Log.w(TAG, "${channel.name}: ошибка подписки", event.error)
             }
 
             /**
@@ -236,11 +254,12 @@ class RealtimeClient @Inject constructor(
              */
             override fun onUnsubscribed(sub: Subscription, event: UnsubscribedEvent) {
                 channel.status.value = RealtimeStatus.Disconnected
-                Log.w(TAG, "Канал ${channel.name}: подписка снята (${event.code}) ${event.reason}")
+                Log.w(TAG, "${channel.name}: подписка снята (${event.code}) ${event.reason}")
                 scheduleResubscribe(channel)
             }
         }
 
+        Log.i(TAG, "${channel.name}: завожу подписку")
         val subscription = runCatching { client.newSubscription(channel.name, options, listener) }
             .getOrElse {
                 // В реестре осталась подписка от прошлой жизни канала. Своей рядом не завести, а
@@ -285,6 +304,7 @@ class RealtimeClient @Inject constructor(
 
         // Первый токен нужен до создания клиента: из этого же ответа берётся адрес WebSocket.
         val bootstrap = runCatching { repository.userChannelToken() }.getOrElse {
+            Log.w(TAG, "токен личного канала: не получен", it)
             _status.value = RealtimeStatus.Disconnected
             return null
         }
@@ -293,35 +313,49 @@ class RealtimeClient @Inject constructor(
             token = bootstrap.connectionToken
             tokenGetter = object : ConnectionTokenGetter() {
                 override fun getConnectionToken(event: ConnectionTokenEvent, cb: TokenCallback) {
-                    provideToken(cb) { repository.userChannelToken().connectionToken }
+                    provideToken(cb, "токен соединения") {
+                        repository.userChannelToken().connectionToken
+                    }
                 }
             }
         }
 
-        val created = Client(urls.resolve(bootstrap.wsUrl), options, connectionListener())
+        val wsUrl = urls.resolve(bootstrap.wsUrl)
+        Log.i(TAG, "подключаюсь к $wsUrl (сервер отдал ${bootstrap.wsUrl})")
+        val created = Client(wsUrl, options, connectionListener())
         created.connect()
 
         val userOptions = SubscriptionOptions().apply {
             token = bootstrap.subscriptionToken
             tokenGetter = object : SubscriptionTokenGetter() {
                 override fun getSubscriptionToken(event: SubscriptionTokenEvent, cb: TokenCallback) {
-                    provideToken(cb) { repository.userChannelToken().subscriptionToken }
+                    provideToken(cb, "токен личного канала") {
+                        repository.userChannelToken().subscriptionToken
+                    }
                 }
             }
         }
 
+        // Личный канал логируется наравне с каналом переписки намеренно: рядом видно, работает ли
+        // соединение вообще, — иначе не отличить «сломан весь real-time» от «сломан один канал».
         val userListener = object : SubscriptionEventListener() {
             override fun onPublication(sub: Subscription, event: PublicationEvent) {
-                decode<WebchatActivityPayload>(event, RealtimeEventType.ACTIVITY)
-                    ?.let { _activity.tryEmit(it) }
+                val payload = decode<WebchatActivityPayload>(event, RealtimeEventType.ACTIVITY)
+                if (payload == null) return
+                Log.i(TAG, "${bootstrap.channel}: активность ${payload.stream} ${payload.messageId}")
+                _activity.tryEmit(payload)
+            }
+
+            override fun onSubscribed(sub: Subscription, event: SubscribedEvent) {
+                Log.i(TAG, "${bootstrap.channel}: подписан")
             }
 
             override fun onError(sub: Subscription, event: SubscriptionErrorEvent) {
-                Log.w(TAG, "Личный канал: ошибка подписки", event.error)
+                Log.w(TAG, "${bootstrap.channel}: ошибка подписки", event.error)
             }
 
             override fun onUnsubscribed(sub: Subscription, event: UnsubscribedEvent) {
-                Log.w(TAG, "Личный канал: подписка снята (${event.code}) ${event.reason}")
+                Log.w(TAG, "${bootstrap.channel}: подписка снята (${event.code}) ${event.reason}")
             }
         }
 
@@ -336,14 +370,19 @@ class RealtimeClient @Inject constructor(
 
     private fun connectionListener() = object : EventListener() {
         override fun onConnected(client: Client, event: ConnectedEvent) {
+            Log.i(TAG, "соединение установлено")
             _status.value = RealtimeStatus.Connected
         }
 
         override fun onConnecting(client: Client, event: ConnectingEvent) {
+            // Сюда же приходит бесконечный повтор при недоступном WebSocket: адрес взят из ответа
+            // сервера, и промахнуться в нём можно, ничего не сломав в остальном API.
+            Log.i(TAG, "подключаюсь (${event.code}) ${event.reason}")
             _status.value = RealtimeStatus.Connecting
         }
 
         override fun onDisconnected(client: Client, event: DisconnectedEvent) {
+            Log.w(TAG, "соединение потеряно (${event.code}) ${event.reason}")
             _status.value = RealtimeStatus.Disconnected
         }
     }
@@ -352,11 +391,16 @@ class RealtimeClient @Inject constructor(
      * Библиотека зовёт TokenGetter со своего потока и ждёт колбэка. Сходить за токеном надо по
      * HTTP, поэтому запускаем корутину в области приложения и отвечаем, когда придёт ответ.
      */
-    private fun provideToken(cb: TokenCallback, fetch: suspend () -> String) {
+    private fun provideToken(cb: TokenCallback, what: String, fetch: suspend () -> String) {
         scope.launch {
             runCatching { fetch() }
                 .onSuccess { cb.Done(null, it) }
-                .onFailure { cb.Done(it, null) }
+                .onFailure {
+                    // Библиотека молча уходит в повтор с backoff — без этой строки не видно,
+                    // что подписка стоит именно на добыче токена.
+                    Log.w(TAG, "$what: не получен", it)
+                    cb.Done(it, null)
+                }
         }
     }
 
