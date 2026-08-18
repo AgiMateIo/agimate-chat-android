@@ -112,7 +112,7 @@ class ChatViewModel @Inject constructor(
         markReadWholeSession()
     }
 
-    fun fileUrl(relativeUrl: String): String = origins.fileUrl(relativeUrl)
+    fun fileUrl(url: String): String = origins.fileUrl(url)
 
     fun onInputChange(value: String) {
         _state.update { it.copy(input = value, sendError = null) }

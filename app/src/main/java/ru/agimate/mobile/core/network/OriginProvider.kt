@@ -36,12 +36,8 @@ class OriginProvider @Inject constructor(
     /** Базовый адрес control-api: `<origin>/control`. */
     val controlBase: String get() = current.trimEnd('/') + "/control"
 
-    /**
-     * Полный адрес содержимого вложения. Поле `url` приходит относительным и **без** префикса
-     * `/control` — собирается как `<origin>` + `/control` + `url`.
-     */
-    fun fileUrl(relativeUrl: String): String =
-        controlBase + if (relativeUrl.startsWith("/")) relativeUrl else "/$relativeUrl"
+    /** Полный адрес содержимого вложения. Правило — в [resolveFileUrl]. */
+    fun fileUrl(url: String): String = resolveFileUrl(url, controlBase)
 
     fun override(value: String): Boolean {
         if (!BuildConfig.ALLOW_ORIGIN_OVERRIDE) return false
@@ -83,3 +79,24 @@ class OriginProvider @Inject constructor(
         const val KEY = "origin"
     }
 }
+
+/**
+ * Чистая половина [OriginProvider.fileUrl]: во что превращается `url` вложения.
+ *
+ * Вид адреса выбирает сервер, и **оба приходят вперемешку в одном ответе**. Относительный — путь
+ * **без** префикса `/control`, к нему приклеивается `<origin>/control`. Абсолютный — пресайненная
+ * ссылка прямо в объектное хранилище, её нельзя трогать вовсе: приклеенный origin даёт мусор вида
+ * `https://api.agimate.io/control https://s3.…`. Относительный вариант остаётся штатным запасным
+ * путём (например, у файла не проставлен mime), а не признаком сбоя.
+ *
+ * Подпись в обоих случаях внутри самого адреса (наш `exp`+`sig` либо SigV4 хранилища) — заголовки
+ * не нужны, ссылка годится прямо в загрузчик картинок.
+ *
+ * Вынесено из класса, чтобы правило проверялось тестом без DI и Context.
+ */
+internal fun resolveFileUrl(url: String, controlBase: String): String =
+    if (url.toHttpUrlOrNull() != null) {
+        url
+    } else {
+        controlBase + if (url.startsWith("/")) url else "/$url"
+    }

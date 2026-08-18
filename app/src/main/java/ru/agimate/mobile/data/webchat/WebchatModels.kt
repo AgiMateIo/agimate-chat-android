@@ -95,7 +95,7 @@ data class Attachment(
     val mime: String?,
     val size: Long?,
     val name: String?,
-    /** Относительный подписанный адрес; полный собирается через OriginProvider.fileUrl. */
+    /** Подписанный адрес как его отдал сервер: относительный или абсолютный. См. OriginProvider.fileUrl. */
     val url: String?,
 ) {
     val isImage: Boolean get() = mime?.startsWith("image/") == true

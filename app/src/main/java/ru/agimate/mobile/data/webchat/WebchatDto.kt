@@ -94,8 +94,9 @@ data class WebchatAttachmentDto(
     val size: Long? = null,
     val name: String? = null,
     /**
-     * Относительный подписанный адрес, живёт 15 минут и приходит **без** префикса `/control`.
-     * Полный адрес собирает [ru.agimate.mobile.core.network.OriginProvider.fileUrl].
+     * Подписанный адрес содержимого, живёт 15 минут. Приходит либо относительным (тогда **без**
+     * префикса `/control`), либо абсолютным — прямой ссылкой в хранилище; вперемешку в одном
+     * ответе. Разбирается в [ru.agimate.mobile.core.network.OriginProvider.fileUrl].
      */
     val url: String? = null,
 )
