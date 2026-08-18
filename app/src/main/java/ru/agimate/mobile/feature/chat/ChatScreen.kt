@@ -57,8 +57,10 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
+import ru.agimate.mobile.core.ui.components.ImageViewer
 import ru.agimate.mobile.core.ui.components.MarkdownText
 import ru.agimate.mobile.core.ui.components.Skeleton
+import ru.agimate.mobile.core.ui.components.ViewerImage
 import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.webchat.Attachment
@@ -124,87 +126,97 @@ fun ChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .imePadding()
-    ) {
-        ChatHeader(
-            state = state,
-            onBack = onBack,
-            onOpenSessions = onOpenSessions,
-            onNewSession = onNewSession,
-            onCloseSession = onCloseSession,
-        )
+    // Просмотрщик — слой поверх экрана, а не маршрут навигации: подписанный адрес живёт 15 минут,
+    // и в back stack он рано или поздно окажется протухшим.
+    var viewer by remember { mutableStateOf<ViewerImage?>(null) }
 
-        if (state.realtime == RealtimeStatus.Disconnected) {
-            Text(
-                text = "Связь потеряна — пробуем восстановить",
-                style = AgiTheme.typography.caption,
-                color = colors.textSecondary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.surfaceMuted)
-                    .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.sm),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .imePadding()
+        ) {
+            ChatHeader(
+                state = state,
+                onBack = onBack,
+                onOpenSessions = onOpenSessions,
+                onNewSession = onNewSession,
+                onCloseSession = onCloseSession,
             )
-        }
 
-        Box(modifier = Modifier.weight(1f)) {
-            when {
-                state.loading -> ChatSkeleton()
+            if (state.realtime == RealtimeStatus.Disconnected) {
+                Text(
+                    text = "Связь потеряна — пробуем восстановить",
+                    style = AgiTheme.typography.caption,
+                    color = colors.textSecondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surfaceMuted)
+                        .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.sm),
+                )
+            }
 
-                state.items.isEmpty() -> EmptyChatHint(agentName = state.agentName)
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    state.loading -> ChatSkeleton()
 
-                else -> LazyColumn(
-                    state = listState,
-                    reverseLayout = true,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = AgiTheme.spacing.screen,
-                        vertical = AgiTheme.spacing.md,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
-                ) {
-                    chatItems(state.items, fileUrl, onRetryMessage)
+                    state.items.isEmpty() -> EmptyChatHint(agentName = state.agentName)
 
-                    if (state.loadingOlder) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(AgiTheme.spacing.md),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = colors.textTertiary,
-                                )
+                    else -> LazyColumn(
+                        state = listState,
+                        reverseLayout = true,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            horizontal = AgiTheme.spacing.screen,
+                            vertical = AgiTheme.spacing.md,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
+                    ) {
+                        chatItems(state.items, fileUrl, onRetryMessage, onOpenImage = { viewer = it })
+
+                        if (state.loadingOlder) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(AgiTheme.spacing.md),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = colors.textTertiary,
+                                    )
+                                }
                             }
                         }
                     }
                 }
+
             }
 
+            // Полоска говорит только о том, чем агент занят прямо сейчас. Что он вообще работает, уже
+            // сказано подписью в шапке и кнопкой «стоп», и заглушка здесь была третьим повтором одного
+            // и того же — а заодно дёргала ленту, появляясь и исчезая на пустом месте.
+            val progress = state.liveProgress?.takeIf { it.isNotBlank() }
+            if (state.isRunning && progress != null) {
+                RunningStrip(progress = progress)
+            }
+
+            Composer(
+                state = state,
+                onInputChange = onInputChange,
+                onSend = onSend,
+                onStop = onStop,
+                onAttach = onAttach,
+                onRemoveAttachment = onRemoveAttachment,
+            )
         }
 
-        // Полоска говорит только о том, чем агент занят прямо сейчас. Что он вообще работает, уже
-        // сказано подписью в шапке и кнопкой «стоп», и заглушка здесь была третьим повтором одного
-        // и того же — а заодно дёргала ленту, появляясь и исчезая на пустом месте.
-        val progress = state.liveProgress?.takeIf { it.isNotBlank() }
-        if (state.isRunning && progress != null) {
-            RunningStrip(progress = progress)
+        viewer?.let { image ->
+            ImageViewer(image = image, onClose = { viewer = null })
         }
-
-        Composer(
-            state = state,
-            onInputChange = onInputChange,
-            onSend = onSend,
-            onStop = onStop,
-            onAttach = onAttach,
-            onRemoveAttachment = onRemoveAttachment,
-        )
     }
 }
 
@@ -212,6 +224,7 @@ private fun LazyListScope.chatItems(
     items: List<ChatItem>,
     fileUrl: (String) -> String,
     onRetryMessage: (ChatMessage) -> Unit,
+    onOpenImage: (ViewerImage) -> Unit,
 ) {
     items(count = items.size, key = { items[it].key }) { index ->
         when (val item = items[index]) {
@@ -219,6 +232,7 @@ private fun LazyListScope.chatItems(
                 message = item.message,
                 fileUrl = fileUrl,
                 onRetry = { onRetryMessage(item.message) },
+                onOpenImage = onOpenImage,
             )
 
             is ChatItem.ProgressGroup -> ProgressGroupRow(item)
@@ -325,6 +339,7 @@ private fun MessageBubble(
     message: ChatMessage,
     fileUrl: (String) -> String,
     onRetry: () -> Unit,
+    onOpenImage: (ViewerImage) -> Unit,
 ) {
     val colors = AgiTheme.colors
     val own = message.isOwn
@@ -357,7 +372,11 @@ private fun MessageBubble(
                 .alpha(if (message.pending) 0.6f else 1f),
         ) {
             message.attachments.forEach { attachment ->
-                AttachmentView(attachment = attachment, fileUrl = fileUrl)
+                AttachmentView(
+                    attachment = attachment,
+                    fileUrl = fileUrl,
+                    onOpenImage = onOpenImage,
+                )
                 Spacer(Modifier.height(AgiTheme.spacing.xs))
             }
 
@@ -402,7 +421,11 @@ private fun bubbleShape(own: Boolean) = if (own) {
 }
 
 @Composable
-private fun AttachmentView(attachment: Attachment, fileUrl: (String) -> String) {
+private fun AttachmentView(
+    attachment: Attachment,
+    fileUrl: (String) -> String,
+    onOpenImage: (ViewerImage) -> Unit,
+) {
     val colors = AgiTheme.colors
     val url = attachment.url?.let(fileUrl)
 
@@ -414,7 +437,10 @@ private fun AttachmentView(attachment: Attachment, fileUrl: (String) -> String) 
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .heightIn(max = 320.dp)
-                .background(colors.surfaceMuted, AgiTheme.shapes.card),
+                .background(colors.surfaceMuted, AgiTheme.shapes.card)
+                // Адрес берётся в момент тапа: подпись живёт 15 минут, и запоминать её заранее
+                // значит открыть просмотр по протухшей ссылке.
+                .clickable { onOpenImage(ViewerImage(url, attachment.name)) },
         )
     } else {
         Row(
