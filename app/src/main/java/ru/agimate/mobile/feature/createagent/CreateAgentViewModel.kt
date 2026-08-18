@@ -14,6 +14,7 @@ import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
 import ru.agimate.mobile.data.agents.AgentPresetDto
 import ru.agimate.mobile.data.agents.AgentsApi
+import ru.agimate.mobile.data.agents.BindConnectorRequest
 import ru.agimate.mobile.data.agents.CreateAgentRequest
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import javax.inject.Inject
@@ -29,6 +30,12 @@ data class CreateAgentUiState(
     val instructionsExpanded: Boolean = false,
     val creating: Boolean = false,
     val createError: String? = null,
+    /**
+     * Уже созданный агент. Создание идёт в несколько запросов, и повтор после ошибки на любом из
+     * них не должен плодить агентов: имя у дубля будет ещё и разведено сервером до «… (2)».
+     */
+    val createdAgentId: String? = null,
+    val createdAgentName: String = "",
 )
 
 /** Созданный агент и открытая для него переписка. */
@@ -75,12 +82,17 @@ class CreateAgentViewModel @Inject constructor(
                 instructions = preset.instructions.orEmpty(),
                 instructionsExpanded = false,
                 createError = null,
+                createdAgentId = null,
+                createdAgentName = "",
             )
         }
     }
 
     fun backToGallery() {
-        _state.update { it.copy(selected = null, createError = null) }
+        // Другая роль — другой агент: недоделанного здесь уже не продолжить.
+        _state.update {
+            it.copy(selected = null, createError = null, createdAgentId = null, createdAgentName = "")
+        }
     }
 
     fun onNameChange(value: String) {
@@ -99,6 +111,12 @@ class CreateAgentViewModel @Inject constructor(
      * Отдельного «создать из пресета» на бэкенде нет — запрос собирается здесь. `presetName`
      * проверяется сервером: неизвестное значение даёт 400.
      *
+     * Создание не заканчивается на `POST /agents/`: привязка навыка ничего не открывает, а навык с
+     * неоткрытым коннектором считается неудовлетворённым и агенту **не отдаётся вовсе** — ни тулов,
+     * ни текста навыка. Поэтому мастер сам открывает коннекторы пресета (`connectorCodes` — их
+     * объединение по его навыкам). Иначе получается агент-пустышка: роль выбрана, а умеет он ровно
+     * то же, что и агент без роли.
+     *
      * Кнопка завершения ведёт сразу в чат, а не обратно в список, поэтому здесь же создаётся первая
      * переписка.
      */
@@ -106,36 +124,54 @@ class CreateAgentViewModel @Inject constructor(
         val current = _state.value
         val preset = current.selected ?: return
         if (current.creating || current.name.isBlank()) return
+        val name = current.name.trim()
 
         viewModelScope.launch {
             _state.update { it.copy(creating = true, createError = null) }
             try {
-                val created = apiCall {
-                    api.createAgent(
-                        CreateAgentRequest(
-                            name = current.name.trim(),
-                            description = preset.description,
-                            instructions = current.instructions,
-                            // У пресета тип может быть не задан. Тогда это агент, чей «мозг» живёт
-                            // на платформе, — GENERIC.
-                            type = preset.agentType ?: DEFAULT_AGENT_TYPE,
-                            skillIds = preset.skills.map { it.id },
-                            presetName = preset.name,
+                val existingId = current.createdAgentId
+                val (agentId, agentName) = if (existingId != null) {
+                    existingId to current.createdAgentName
+                } else {
+                    val created = apiCall {
+                        api.createAgent(
+                            CreateAgentRequest(
+                                name = name,
+                                description = preset.description,
+                                instructions = current.instructions,
+                                // У пресета тип может быть не задан. Тогда это агент, чей «мозг» живёт
+                                // на платформе, — GENERIC.
+                                type = preset.agentType ?: DEFAULT_AGENT_TYPE,
+                                skillIds = preset.skills.map { it.id },
+                                presetName = preset.name,
+                            )
                         )
-                    )
-                }.unwrap("создание агента")
+                    }.unwrap("создание агента")
 
-                // Ответ содержит ещё и fullKey — программный ключ агента. Мессенджеру он не нужен:
-                // не показываем и не храним.
-                val agent = created.agent
-                    ?: throw IllegalStateException("Сервер не вернул созданного агента")
+                    // Ответ содержит ещё и fullKey — программный ключ агента. Мессенджеру он не нужен:
+                    // не показываем и не храним.
+                    val agent = created.agent
+                        ?: throw IllegalStateException("Сервер не вернул созданного агента")
+                    val id = agent.id
+                    val resolvedName = agent.name.ifBlank { name }
+                    _state.update { it.copy(createdAgentId = id, createdAgentName = resolvedName) }
+                    id to resolvedName
+                }
 
-                val session = webchat.startSession(agent.id)
+                // Коннекторы пресетных навыков внутренние: открываются по коду, инстанс подставляет
+                // сервер. Вызов идемпотентен — повтор после обрыва ничего не задваивает. Внешний
+                // коннектор в пресете — ошибка конфигурации: выбирать инстанс мессенджеру негде, и
+                // отказ здесь лучше, чем тихо отданный агент без навыка.
+                for (code in preset.connectorCodes) {
+                    apiCall { api.bindConnector(agentId, BindConnectorRequest(code)) }
+                }
+
+                val session = webchat.startSession(agentId)
                 _state.update { it.copy(creating = false) }
                 onCreated(
                     CreatedAgent(
-                        agentId = agent.id,
-                        agentName = agent.name.ifBlank { current.name.trim() },
+                        agentId = agentId,
+                        agentName = agentName,
                         sessionId = session.sessionId,
                     )
                 )
