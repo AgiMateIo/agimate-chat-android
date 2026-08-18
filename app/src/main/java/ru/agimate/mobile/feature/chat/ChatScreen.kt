@@ -1,5 +1,16 @@
 package ru.agimate.mobile.feature.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,7 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.ImageViewer
@@ -70,6 +81,9 @@ import ru.agimate.mobile.data.webchat.PendingAttachment
 
 /** За сколько элементов до верха ленты просить следующую страницу. */
 private const val LOAD_OLDER_THRESHOLD = 4
+
+/** Проявление нового элемента ленты. Короче — и появление уже читается как рывок. */
+private const val APPEAR_MS = 180
 
 @Composable
 fun ChatScreen(
@@ -119,9 +133,13 @@ fun ChatScreen(
 
     // Своё отправленное сообщение и свежий ответ должны оказаться перед глазами. Но только если
     // человек стоял внизу: тому, кто ушёл читать историю вверх, дёргать ленту нельзя.
+    //
+    // Заготовка ответа — такой же новый низ ленты, как сообщение, поэтому она тоже в ключах: без
+    // этого она появлялась бы за краем экрана и весь смысл заготовки терялся.
     val newestKey = state.items.firstOrNull()?.key
-    LaunchedEffect(newestKey) {
-        if (newestKey != null && listState.firstVisibleItemIndex <= 2) {
+    LaunchedEffect(newestKey, state.isRunning) {
+        val hasBottom = newestKey != null || state.isRunning
+        if (hasBottom && listState.firstVisibleItemIndex <= 2) {
             listState.animateScrollToItem(0)
         }
     }
@@ -145,7 +163,13 @@ fun ChatScreen(
                 onCloseSession = onCloseSession,
             )
 
-            if (state.realtime == RealtimeStatus.Disconnected) {
+            // Полоска забирает высоту у ленты, и появлением встык она сдвигает всё содержимое
+            // рывком. Раскрытие показывает, что подвинулось и почему.
+            AnimatedVisibility(
+                visible = state.realtime == RealtimeStatus.Disconnected,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
                 Text(
                     text = "Связь потеряна — пробуем восстановить",
                     style = AgiTheme.typography.caption,
@@ -173,6 +197,21 @@ fun ChatScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
                     ) {
+                        // Заготовка объявлена первой: список перевёрнут, и первый элемент — самый низ.
+                        //
+                        // Уходит без затухания: место она освобождает ровно под пузырь ответа, и
+                        // гаснущая копия оставалась бы поверх него — вместо замены вышло бы мигание.
+                        if (state.isRunning) {
+                            item(key = "typing") {
+                                TypingBubble(
+                                    modifier = Modifier.animateItem(
+                                        fadeInSpec = tween(APPEAR_MS),
+                                        fadeOutSpec = null,
+                                    ),
+                                )
+                            }
+                        }
+
                         chatItems(state.items, fileUrl, onRetryMessage, onOpenImage = { viewer = it })
 
                         if (state.loadingOlder) {
@@ -194,14 +233,6 @@ fun ChatScreen(
                     }
                 }
 
-            }
-
-            // Полоска говорит только о том, чем агент занят прямо сейчас. Что он вообще работает, уже
-            // сказано подписью в шапке и кнопкой «стоп», и заглушка здесь была третьим повтором одного
-            // и того же — а заодно дёргала ленту, появляясь и исчезая на пустом месте.
-            val progress = state.liveProgress?.takeIf { it.isNotBlank() }
-            if (state.isRunning && progress != null) {
-                RunningStrip(progress = progress)
             }
 
             Composer(
@@ -227,17 +258,26 @@ private fun LazyListScope.chatItems(
     onOpenImage: (ViewerImage) -> Unit,
 ) {
     items(count = items.size, key = { items[it].key }) { index ->
+        // Соседи уезжают на новые места пружиной, а не телепортом. Проявление — только самому
+        // нижнему элементу: это и есть только что пришедшее сообщение. Подгруженная страница
+        // истории для списка такая же вставка, и с проявлением у всех лента мигала бы на каждом
+        // листании вверх. Появление отдано tween'у: пружина на коротком пути выглядит вялой.
+        val appear = Modifier.animateItem(
+            fadeInSpec = if (index == 0) tween(APPEAR_MS) else null,
+        )
+
         when (val item = items[index]) {
             is ChatItem.Bubble -> MessageBubble(
                 message = item.message,
                 fileUrl = fileUrl,
                 onRetry = { onRetryMessage(item.message) },
                 onOpenImage = onOpenImage,
+                modifier = appear,
             )
 
-            is ChatItem.ProgressGroup -> ProgressGroupRow(item)
+            is ChatItem.ProgressGroup -> ProgressGroupRow(item, modifier = appear)
 
-            is ChatItem.DaySeparator -> DaySeparatorRow(item.label)
+            is ChatItem.DaySeparator -> DaySeparatorRow(item.label, modifier = appear)
         }
     }
 }
@@ -340,6 +380,7 @@ private fun MessageBubble(
     fileUrl: (String) -> String,
     onRetry: () -> Unit,
     onOpenImage: (ViewerImage) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = AgiTheme.colors
     val own = message.isOwn
@@ -357,7 +398,7 @@ private fun MessageBubble(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (own) Arrangement.End else Arrangement.Start,
     ) {
         Column(
@@ -430,13 +471,24 @@ private fun AttachmentView(
     val url = attachment.url?.let(fileUrl)
 
     if (attachment.isImage && url != null) {
-        AsyncImage(
+        // Размеров картинки сервер не отдаёт, так что до загрузки её высота неизвестна: пузырь
+        // рождался нулевой высоты и подпрыгивал, когда картинка доезжала. Скелетон занимает место
+        // заранее, а разницу между ним и настоящим размером сглаживает animateContentSize.
+        SubcomposeAsyncImage(
             model = url,
             contentDescription = attachment.name,
             contentScale = ContentScale.Fit,
+            loading = {
+                Skeleton(
+                    modifier = Modifier.width(240.dp),
+                    height = 160.dp,
+                    shape = AgiTheme.shapes.card,
+                )
+            },
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .heightIn(max = 320.dp)
+                .animateContentSize()
                 .background(colors.surfaceMuted, AgiTheme.shapes.card)
                 // Адрес берётся в момент тапа: подпись живёт 15 минут, и запоминать её заранее
                 // значит открыть просмотр по протухшей ссылке.
@@ -472,15 +524,18 @@ private fun AttachmentView(
  * лента не должна превращаться в лог.
  */
 @Composable
-private fun ProgressGroupRow(group: ChatItem.ProgressGroup) {
+private fun ProgressGroupRow(group: ChatItem.ProgressGroup, modifier: Modifier = Modifier) {
     val colors = AgiTheme.colors
     var expanded by remember(group.key) { mutableStateOf(false) }
     val last = group.lines.lastOrNull()?.text.orEmpty()
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
+            // Свёрнутая строка и десяток развёрнутых различаются в высоте кратно: без анимации тап
+            // подбрасывает всю ленту выше группы.
+            .animateContentSize()
             .padding(vertical = AgiTheme.spacing.xs),
     ) {
         if (expanded) {
@@ -505,42 +560,66 @@ private fun ProgressGroupRow(group: ChatItem.ProgressGroup) {
 }
 
 @Composable
-private fun DaySeparatorRow(label: String) {
+private fun DaySeparatorRow(label: String, modifier: Modifier = Modifier) {
     Text(
         text = label,
         style = AgiTheme.typography.caption,
         color = AgiTheme.colors.textTertiary,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = AgiTheme.spacing.sm),
         textAlign = TextAlign.Center,
     )
 }
 
-/** Что агент делает прямо сейчас. Без шага не показывается — см. место вызова. */
+/**
+ * Заготовка ответа — пузырь агента с точками, стоящий там, где вырастет сам ответ.
+ *
+ * Ответ приходит одним куском: сервер стримит только промежуточные шаги, а готовый текст публикует
+ * целиком. Без заготовки полотно возникало бы на пустом месте; с ней приход ответа читается как
+ * замена уже стоящего элемента, а не как рывок.
+ *
+ * Только точки, без текста: чем агент занят, сказано строкой progress-группы прямо над заготовкой —
+ * там же, откуда этот текст брала прежняя полоска над полем ввода.
+ */
 @Composable
-private fun RunningStrip(progress: String, modifier: Modifier = Modifier) {
+private fun TypingBubble(modifier: Modifier = Modifier) {
     val colors = AgiTheme.colors
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.background)
-            .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(12.dp),
-            strokeWidth = 1.5.dp,
-            color = colors.accent,
-        )
-        Spacer(Modifier.width(AgiTheme.spacing.sm))
-        Text(
-            text = progress,
-            style = AgiTheme.typography.caption,
-            color = colors.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Row(
+            modifier = Modifier
+                .background(colors.bubbleAgent, bubbleShape(false))
+                .border(1.dp, colors.hairline, bubbleShape(false))
+                .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TypingDots()
+        }
+    }
+}
+
+/** Три точки, гаснущие по очереди: то же спокойное дыхание, что у скелетонов. */
+@Composable
+private fun TypingDots(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "typing")
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        repeat(3) { index ->
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 0.9f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(520, delayMillis = index * 160),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "typing-dot-$index",
+            )
+            if (index > 0) Spacer(Modifier.width(AgiTheme.spacing.xs))
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(AgiTheme.colors.textTertiary.copy(alpha = alpha), AgiTheme.shapes.pill)
+            )
+        }
     }
 }
 
@@ -583,15 +662,26 @@ private fun Composer(
     val colors = AgiTheme.colors
     val blocked = state.composerBlockedReason
 
+    // Пока полоска уезжает, ошибки в состоянии уже нет, и текст ей нужен последний показанный —
+    // иначе схлопывание шло бы по пустой строке.
+    var lastError by remember { mutableStateOf("") }
+    LaunchedEffect(state.sendError) {
+        state.sendError?.let { lastError = it }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.background)
             .navigationBarsPadding()
     ) {
-        if (state.sendError != null) {
+        AnimatedVisibility(
+            visible = state.sendError != null,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
             Text(
-                text = state.sendError,
+                text = lastError,
                 style = AgiTheme.typography.caption,
                 color = colors.danger,
                 modifier = Modifier

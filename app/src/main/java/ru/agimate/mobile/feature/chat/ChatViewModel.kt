@@ -44,8 +44,6 @@ data class ChatUiState(
     val error: String? = null,
     /** Агент сейчас работает. Гаснет приходом ответа или ошибки, а не опросом. */
     val isRunning: Boolean = false,
-    /** Последний промежуточный шаг — показывается строкой, а не пузырём. */
-    val liveProgress: String? = null,
     val input: String = "",
     val attachments: List<PendingAttachment> = emptyList(),
     val sending: Boolean = false,
@@ -248,16 +246,17 @@ class ChatViewModel @Inject constructor(
         messages = merge.messages
         if (!merge.applied) return
 
+        // Лента и признак работы обновляются одним разом. Двумя обновлениями заготовка ответа
+        // гасла бы в одном кадре, а сам ответ встал бы в следующем — между ними лента осталась бы
+        // без обоих и подпрыгнула.
         _state.update { current ->
+            val next = current.copy(items = buildChatItems(messages))
             when (incoming.stream) {
-                MessageStream.PROGRESS -> current.copy(isRunning = true, liveProgress = incoming.text)
-                MessageStream.ANSWER, MessageStream.ERROR ->
-                    current.copy(isRunning = false, liveProgress = null)
-
-                MessageStream.NONE -> current
+                MessageStream.PROGRESS -> next.copy(isRunning = true)
+                MessageStream.ANSWER, MessageStream.ERROR -> next.copy(isRunning = false)
+                MessageStream.NONE -> next
             }
         }
-        publishItems()
     }
 
     private fun publishItems() {
@@ -392,7 +391,7 @@ class ChatViewModel @Inject constructor(
     fun stop() {
         viewModelScope.launch {
             runCatching { repository.cancelSession(sessionId) }
-                .onSuccess { _state.update { it.copy(isRunning = false, liveProgress = null) } }
+                .onSuccess { _state.update { it.copy(isRunning = false) } }
                 .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().message) } }
         }
     }

@@ -10,6 +10,8 @@ import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownAnimations
+import com.mikepenz.markdown.model.rememberMarkdownState
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
 /**
@@ -27,9 +29,18 @@ fun MarkdownText(
     val base = AgiTheme.typography.body.copy(color = textColor)
     val mono = AgiTheme.typography.mono.copy(color = textColor)
 
+    // Разбор — синхронно, прямо в композиции. По умолчанию библиотека разбирает текст в фоне и до
+    // готовности рисует пустой Box, а в ленте пузырь на каждом выезде за край экрана выходит из
+    // композиции: возвращаясь, он заново оказывался пустым, и сообщения мигали при скролле.
+    // Синхронный разбор стоит доли миллисекунды на обычный ответ — дешевле пустого кадра.
+    val markdown = rememberMarkdownState(content = content, immediate = true)
+
     Markdown(
-        content = content,
+        markdownState = markdown,
         modifier = modifier,
+        // Дефолт анимирует размер каждого текстового блока: текст «вырастал» из нулевой высоты и
+        // при первом показе, и на каждом возврате во вьюпорт, дёргая заодно всю ленту.
+        animations = markdownAnimations { this },
         colors = markdownColor(
             text = textColor,
             codeBackground = AgiTheme.colors.surfaceMuted,
