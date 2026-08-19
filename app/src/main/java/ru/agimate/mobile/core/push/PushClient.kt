@@ -60,9 +60,13 @@ class PushClient @Inject constructor(
         RuStoreUniversalPushClient.setOnMessageReceiveListener(
             object : OnMessageReceivedListener {
                 override fun onMessageReceived(message: UniversalRemoteMessage) {
-                    // Чужие и незнакомые события молча пропускаем: канал общий, а разбирать мы
-                    // умеем только сообщения переписки.
-                    PushMessage.parse(message.data)?.let(onMessage)
+                    // Чужие и незнакомые события пропускаем: канал общий, а разбирать мы умеем
+                    // только сообщения переписки. В отладке это не молча: «уведомление не пришло»
+                    // и «пришло, но мы его не поняли» выглядят одинаково, а чинятся по-разному.
+                    // Печатаются поля, а не значения: в payload лежит текст ответа агента.
+                    trace { "пуш от транспорта: поля ${message.data.keys}" }
+                    val parsed = PushMessage.parse(message.data)
+                    if (parsed == null) trace { "пуш пропущен: не наш формат" } else onMessage(parsed)
                 }
             }
         )
