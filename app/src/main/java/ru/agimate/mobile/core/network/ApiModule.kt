@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import ru.agimate.mobile.data.agents.AgentsApi
+import ru.agimate.mobile.data.push.PushApi
 import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.webchat.WebchatApi
 import javax.inject.Singleton
@@ -28,4 +29,8 @@ object ApiModule {
     @Singleton
     fun agentsApi(@AuthedClient retrofit: Retrofit): AgentsApi =
         retrofit.create(AgentsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun pushApi(@AuthedClient retrofit: Retrofit): PushApi = retrofit.create(PushApi::class.java)
 }

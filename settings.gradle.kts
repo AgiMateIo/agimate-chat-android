@@ -17,6 +17,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // SDK пуш-уведомлений RuStore в Maven Central не публикуется — только сюда.
+        maven("https://artifactory-external.vkpartner.ru/artifactory/maven") {
+            content { includeGroupByRegex("ru\\.rustore.*") }
+        }
     }
 }
 

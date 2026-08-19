@@ -38,11 +38,22 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"http://10.0.2.2:8000\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "true")
             buildConfigField("boolean", "USE_APP_LINK", "false")
+            // Проект пуш-уведомлений из консоли RuStore. Пустой — пуши просто не поднимаются:
+            // приложение работает как раньше, живая лента никуда не девается.
+            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"-eeO-sKPI0qq82bCMFqbndv2iR8kNPrd\"")
         }
         create("prod") {
             dimension = "backend"
-            buildConfigField("String", "API_ORIGIN", "\"https://www.agimate.io\"")
+            // Именно api.*, а не www: на www.agimate.io стоит сайт, и он уводит запрос на
+            // локализованный путь (307 на /ru/...), где API нет — приложение получало 404 на
+            // профиле и показывало «не найдено». OAuth на бэкенде тоже настроен на этот хост:
+            // redirect_uri в ответе /user/oauth2/authorization/* указывает на api.agimate.io.
+            buildConfigField("String", "API_ORIGIN", "\"https://api.agimate.io\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "false")
+            // Пока тот же проект, что у стенда: в проекте пушей один отпечаток подписи, и там
+            // сейчас отладочный — то есть боевая сборка токена по нему не получит. Как появится
+            // релизный ключ, здесь должен встать свой проект с его отпечатком.
+            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"-eeO-sKPI0qq82bCMFqbndv2iR8kNPrd\"")
             // Включить, когда на домене появится /.well-known/assetlinks.json с отпечатком
             // рабочей подписи. До этого App Link молча уводит редирект в браузер.
             buildConfigField("boolean", "USE_APP_LINK", "false")
@@ -69,6 +80,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        // Юнит-тесты видят заглушку android.jar, где `Log` бросает «not mocked». Отладочные строки
+        // есть почти в каждом классе, и проверяем мы не их — пусть заглушки молча возвращают ноль.
+        unitTests.isReturnDefaultValues = true
     }
 
     packaging {
@@ -117,6 +134,9 @@ dependencies {
 
     implementation(libs.markdown.renderer)
     implementation(libs.markdown.renderer.m3)
+
+    implementation(libs.rustore.universalpush)
+    implementation(libs.rustore.universalrustore)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

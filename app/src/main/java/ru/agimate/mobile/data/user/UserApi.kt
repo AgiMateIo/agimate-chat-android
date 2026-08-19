@@ -55,6 +55,26 @@ data class UserProfile(
     }
 }
 
+/**
+ * Подписка **этого** входа на уведомления.
+ *
+ * Записей у живого устройства бывает две-три, и это норма: когда транспорт выдаёт новый токен,
+ * прежняя живёт до ответа транспорта «такого токена нет» или до планового смёта, и до тех пор
+ * уведомления уходят на обе. Ошибкой это считать не надо, чистить — тоже: своего эндпойнта нет.
+ */
+@Serializable
+data class PushSubscriptionDto(
+    /** `RUSTORE`, `FIREBASE` или `HMS`. */
+    val provider: String? = null,
+    /**
+     * Первые 8 символов токена и многоточие. Целиком токен не отдаётся никому, включая владельца:
+     * сверять можно только начало, отправлять обратно в API — некуда.
+     */
+    val maskedToken: String? = null,
+    @Serializable(with = InstantSerializer::class)
+    val lastSeenAt: Instant? = null,
+)
+
 @Serializable
 data class DeviceSessionDto(
     val id: String,
@@ -65,6 +85,8 @@ data class DeviceSessionDto(
     val createdAt: Instant? = null,
     @Serializable(with = InstantSerializer::class)
     val lastSeenAt: Instant? = null,
+    /** Пустой список — уведомления на это устройство не идут: сервер не знает, куда слать. */
+    val push: List<PushSubscriptionDto> = emptyList(),
 )
 
 interface UserApi {
@@ -73,6 +95,10 @@ interface UserApi {
     @GET("user/user/me")
     suspend fun me(): ApiEnvelope<UserDto>
 
+    /**
+     * Активные входы, свежие сверху. Отозванные и истёкшие не приходят вовсе — всё, что в списке,
+     * живое. Слэш на конце значим: без него 404.
+     */
     @GET("user/sessions/")
     suspend fun sessions(): ApiEnvelope<List<DeviceSessionDto>>
 

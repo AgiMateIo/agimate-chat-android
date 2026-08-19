@@ -13,6 +13,7 @@ import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
+import ru.agimate.mobile.core.push.PushSubscriptions
 import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.user.UserProfile
 import javax.inject.Inject
@@ -45,6 +46,8 @@ class SessionManager @Inject constructor(
     private val userApi: UserApi,
     private val authRepository: AuthRepository,
     private val realtime: RealtimeClient,
+    private val currentSession: CurrentSession,
+    private val push: PushSubscriptions,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<AppSession>(AppSession.Loading)
@@ -53,7 +56,7 @@ class SessionManager @Inject constructor(
     private val loading = Mutex()
 
     /** Идентификатор строки этого устройства в списке сессий. */
-    val currentSessionId: String? get() = tokenStore.load()?.sessionId
+    val currentSessionId: String? get() = currentSession.current
 
     init {
         scope.launch {
@@ -74,7 +77,13 @@ class SessionManager @Inject constructor(
         scope.launch { loadProfile() }
     }
 
+    /**
+     * Выход. Подписку на пуши снимаем здесь, до очистки токенов: порядок принадлежит сессии, а не
+     * экрану, который нажали. После очистки запрос ушёл бы без авторизации, и устройство осталось
+     * бы в списке — с уведомлениями о переписках, которых человек больше не видит.
+     */
     suspend fun signOut() {
+        push.signOut()
         authRepository.logout()
     }
 

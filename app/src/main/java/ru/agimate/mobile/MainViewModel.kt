@@ -14,6 +14,7 @@ import ru.agimate.mobile.core.auth.AuthRepository
 import ru.agimate.mobile.core.auth.PendingLoginLost
 import ru.agimate.mobile.core.auth.SessionManager
 import ru.agimate.mobile.core.network.OriginProvider
+import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.network.toApiException
 import javax.inject.Inject
 
@@ -35,6 +36,15 @@ class MainViewModel @Inject constructor(
 
     private val _login = MutableStateFlow(LoginUiState())
     val login: StateFlow<LoginUiState> = _login.asStateFlow()
+
+    /**
+     * Переписка, которую попросили открыть тапом по уведомлению.
+     *
+     * Держится до тех пор, пока навигация не готова её принять: пуш приходит и когда профиль ещё
+     * грузится, и когда человек вообще не вошёл, — а переход возможен только внутри продукта.
+     */
+    private val _pendingChat = MutableStateFlow<PushChatTarget?>(null)
+    val pendingChat: StateFlow<PushChatTarget?> = _pendingChat.asStateFlow()
 
     val origin: StateFlow<String> = origins.origin
 
@@ -91,6 +101,14 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun onPushChat(target: PushChatTarget?) {
+        if (target != null) _pendingChat.value = target
+    }
+
+    fun onPendingChatHandled() {
+        _pendingChat.value = null
+    }
+
     fun dismissLoginMessage() {
         _login.value = _login.value.copy(message = null)
     }
@@ -105,6 +123,8 @@ class MainViewModel @Inject constructor(
     }
 
     fun signOut() {
+        // Снятие подписки на пуши делает сама сессия: порядок «сначала пуши, потом логаут» —
+        // её инвариант, а не знание экрана.
         viewModelScope.launch { sessionManager.signOut() }
     }
 

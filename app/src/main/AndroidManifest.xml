@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- То же разрешение приносит манифест пуш-SDK; объявлено и здесь, чтобы список того, что
+         приложение просит у человека, читался в одном месте. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Видимость пакетов для Custom Tabs: без этого на API 30+ браузер не находится. -->
     <queries>
         <intent>

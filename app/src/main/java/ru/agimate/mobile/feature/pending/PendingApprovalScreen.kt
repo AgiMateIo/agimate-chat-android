@@ -30,6 +30,7 @@ fun PendingApprovalScreen(
     displayName: String,
     email: String?,
     onRefresh: () -> Unit,
+    onDevices: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val colors = AgiTheme.colors
@@ -74,6 +75,16 @@ fun PendingApprovalScreen(
             PrimaryButton(
                 text = "Проверить снова",
                 onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(AgiTheme.spacing.md))
+
+            // Список входов открыт и до одобрения: потерявшему телефон отзыв нужен раньше, чем
+            // администратор дойдёт до заявки.
+            SecondaryButton(
+                text = "Мои устройства",
+                onClick = onDevices,
                 modifier = Modifier.fillMaxWidth(),
             )
 

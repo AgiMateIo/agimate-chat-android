@@ -14,6 +14,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import ru.agimate.mobile.core.auth.CustomTabs
+import ru.agimate.mobile.core.push.PushExtras
 import ru.agimate.mobile.core.ui.theme.AgiMateTheme
 import ru.agimate.mobile.core.ui.theme.DarkColors
 import ru.agimate.mobile.core.ui.theme.LightColors
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
         // Активность объявлена singleTask: возврат из Custom Tabs приходит сюда, а не поднимает
         // второй экземпляр. Первый intent разбираем здесь, последующие — в onNewIntent.
         viewModel.onRedirect(intent?.data)
+        viewModel.onPushChat(PushExtras.target(intent))
 
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
@@ -43,12 +45,15 @@ class MainActivity : ComponentActivity() {
                 val session by viewModel.session.collectAsStateWithLifecycle()
                 val login by viewModel.login.collectAsStateWithLifecycle()
                 val origin by viewModel.origin.collectAsStateWithLifecycle()
+                val pendingChat by viewModel.pendingChat.collectAsStateWithLifecycle()
 
                 AppRoot(
                     session = session,
                     login = login,
                     origin = origin,
                     originEditable = viewModel.originEditable,
+                    pendingChat = pendingChat,
+                    onPendingChatHandled = viewModel::onPendingChatHandled,
                     onProvider = { provider ->
                         val uri = viewModel.beginLogin(provider)
                         val opened = CustomTabs.open(
@@ -75,5 +80,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         viewModel.onRedirect(intent.data)
+        viewModel.onPushChat(PushExtras.target(intent))
     }
 }

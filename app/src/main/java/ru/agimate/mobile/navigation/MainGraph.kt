@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -15,6 +16,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ru.agimate.mobile.core.push.PushChatTarget
+import ru.agimate.mobile.core.push.RequestNotificationPermission
 import ru.agimate.mobile.feature.chat.ChatScreen
 import ru.agimate.mobile.feature.chat.ChatViewModel
 import ru.agimate.mobile.feature.contacts.ContactsScreen
@@ -60,8 +63,22 @@ private fun optionalArg(name: String) = navArgument(name) {
 @Composable
 fun MainGraph(
     onSignOut: () -> Unit,
+    pendingChat: PushChatTarget? = null,
+    onPendingChatHandled: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
 ) {
+    RequestNotificationPermission()
+
+    // Тап по уведомлению открывает переписку. `launchSingleTop` — чтобы второй пуш той же
+    // переписки не укладывал в стек её копию.
+    LaunchedEffect(pendingChat) {
+        val target = pendingChat ?: return@LaunchedEffect
+        navController.navigate(
+            Routes.chat(target.sessionId, target.agentId, target.agentName)
+        ) { launchSingleTop = true }
+        onPendingChatHandled()
+    }
+
     NavHost(
         navController = navController,
         startDestination = Routes.CONTACTS,

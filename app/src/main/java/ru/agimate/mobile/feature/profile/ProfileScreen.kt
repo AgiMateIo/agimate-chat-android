@@ -23,10 +23,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import ru.agimate.mobile.core.push.PushHealth
 import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
@@ -41,6 +45,11 @@ fun ProfileScreen(
     onSignOut: () -> Unit,
 ) {
     val colors = AgiTheme.colors
+
+    // Подписка на сервере может быть в полном порядке, а уведомления при этом никто не увидит:
+    // разрешение системы снимается и без нас, из настроек телефона.
+    val context = LocalContext.current
+    val systemAllowed = remember { NotificationManagerCompat.from(context).areNotificationsEnabled() }
 
     Column(
         modifier = Modifier
@@ -126,7 +135,11 @@ fun ProfileScreen(
 
                 else -> Column {
                     state.devices.forEach { device ->
-                        DeviceRowView(device = device, onRevoke = { onRevoke(device.id) })
+                        DeviceRowView(
+                            device = device,
+                            pushNote = pushNote(device, state.pushHealth, systemAllowed),
+                            onRevoke = { onRevoke(device.id) },
+                        )
                     }
                 }
             }
@@ -143,8 +156,9 @@ fun ProfileScreen(
             Spacer(Modifier.height(AgiTheme.spacing.md))
 
             Text(
-                text = "Отзыв бьёт по обновлению токенов: у отозванного устройства связь пропадёт " +
-                    "в течение часа.",
+                text = "Уведомления на отозванное устройство перестают приходить сразу, а связь " +
+                    "с сервером пропадёт в течение часа: отзыв бьёт по обновлению токенов, и уже " +
+                    "выданный доживает свой срок.",
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
@@ -163,8 +177,33 @@ fun ProfileScreen(
     }
 }
 
+/** @param ok строка про порядок, а не про поломку — от этого зависит только цвет. */
+private data class PushNote(val text: String, val ok: Boolean)
+
+/**
+ * Признак «уведомления приходят» показываем строкой, а не списком токенов: записей у живого
+ * устройства штатно две-три, и человеку они не говорят ничего — их место в обращении в поддержку.
+ *
+ * Про своё устройство приложение знает точно, сверив маску с живым токеном SDK; про чужое — только
+ * то, что подписка есть. Поэтому «не приходят» утверждается лишь о своей строке.
+ */
+private fun pushNote(device: DeviceRow, health: PushHealth, systemAllowed: Boolean): PushNote? = when {
+    !device.isThisDevice ->
+        if (device.notifications) PushNote("уведомления приходят", ok = true) else null
+    // Транспорта нет вовсе (сборка без ключей) — говорить не о чем.
+    health == PushHealth.Unknown -> null
+    // Отказ в разрешении — нормальный исход, но «уведомления приходят» после него было бы враньём:
+    // сервер отправит, а шторка промолчит.
+    !systemAllowed -> PushNote("уведомления выключены в настройках телефона", ok = false)
+    // Токена у транспорта ещё нет: после входа и после ротации SDK отдаёт пустой список несколько
+    // секунд. Подписка уедет сама, как только он появится, — «не приходят» здесь пугало бы зря.
+    health == PushHealth.Preparing -> PushNote("настраиваем уведомления", ok = true)
+    device.notifications -> PushNote("уведомления приходят", ok = true)
+    else -> PushNote("уведомления не приходят", ok = false)
+}
+
 @Composable
-private fun DeviceRowView(device: DeviceRow, onRevoke: () -> Unit) {
+private fun DeviceRowView(device: DeviceRow, pushNote: PushNote?, onRevoke: () -> Unit) {
     val colors = AgiTheme.colors
 
     Row(
@@ -200,6 +239,13 @@ private fun DeviceRowView(device: DeviceRow, onRevoke: () -> Unit) {
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
+            if (pushNote != null) {
+                Text(
+                    text = pushNote.text,
+                    style = AgiTheme.typography.caption,
+                    color = if (pushNote.ok) colors.textTertiary else colors.warning,
+                )
+            }
         }
 
         // Своё устройство отозвать нельзя случайно — для выхода есть отдельная кнопка внизу.
