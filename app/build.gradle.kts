@@ -1,3 +1,5 @@
+import java.util.Properties
+
 // Плагина org.jetbrains.kotlin.android здесь нет намеренно: с AGP 9 поддержка Kotlin встроена,
 // а повторное применение падает на «extension with name 'kotlin' already registered».
 plugins {
@@ -6,7 +8,27 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    // Требует app/google-services.json: без файла сборка падает осознанно, а не выдаёт
+    // приложение, молча оставшееся без второго канала уведомлений.
+    alias(libs.plugins.google.services)
 }
+
+/**
+ * Ключ подписи в репозитории не лежит и лежать не будет: он задаёт личность приложения навсегда, и
+ * магазин запоминает сертификат первой загрузки. Путь и пароли — в local.properties, которого в git
+ * нет.
+ *
+ * Если ключа нет, релиз собирается неподписанным, а не падает: у форка и у чужой машины своего
+ * ключа быть не может, и ломать им сборку из-за этого незачем — подписать APK можно и потом,
+ * apksigner'ом.
+ */
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+val releaseKeystore = localProperties.getProperty("release.storeFile")
+    ?.let(::file)
+    ?.takeIf { it.exists() }
 
 android {
     namespace = "ru.agimate.mobile"
@@ -60,11 +82,24 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = localProperties.getProperty("release.storePassword")
+                keyAlias = localProperties.getProperty("release.keyAlias")
+                keyPassword = localProperties.getProperty("release.keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
+            // findByName, а не getByName: без ключа конфигурации нет вовсе, и это не ошибка.
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -137,6 +172,7 @@ dependencies {
 
     implementation(libs.rustore.universalpush)
     implementation(libs.rustore.universalrustore)
+    implementation(libs.rustore.universalfcm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
