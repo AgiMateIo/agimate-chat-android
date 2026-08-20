@@ -11,4 +11,5 @@ captures/
 *.aab
 *.keystore
 !debug.keystore
+app/google-services.json
 .kotlin/
