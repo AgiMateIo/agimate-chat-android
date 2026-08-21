@@ -112,6 +112,12 @@
     <string name="language_title">Язык</string>
     <string name="language_system">Как в системе</string>
 
+    <!-- Тема интерфейса -->
+    <string name="theme_title">Тема</string>
+    <string name="theme_system">Как в системе</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+
     <!-- Профиль и устройства -->
     <string name="profile_title">Профиль</string>
     <string name="profile_no_name">Без имени</string>

@@ -125,6 +125,14 @@
     <string name="language_ru" translatable="false">Русский</string>
     <string name="language_en" translatable="false">English</string>
 
+    <!--
+      Тема интерфейса. «Как в системе» — это отсутствие выбора, а не третье его значение.
+    -->
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+
     <!-- Профиль и устройства -->
     <string name="profile_title">Profile</string>
     <string name="profile_no_name">No name</string>

@@ -18,6 +18,7 @@ import ru.agimate.mobile.core.auth.CustomTabs
 import ru.agimate.mobile.core.push.PushExtras
 import ru.agimate.mobile.core.ui.locale.AppLanguages
 import ru.agimate.mobile.core.ui.theme.AgiMateTheme
+import ru.agimate.mobile.core.ui.theme.AppThemes
 import ru.agimate.mobile.core.ui.theme.DarkColors
 import ru.agimate.mobile.core.ui.theme.LightColors
 import ru.agimate.mobile.navigation.AppRoot
@@ -27,8 +28,9 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    // Язык и тема подменяют конфигурацию у одного и того же контекста, поэтому идут цепочкой.
     override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(AppLanguages.applyTo(newBase))
+        super.attachBaseContext(AppThemes.applyTo(AppLanguages.applyTo(newBase)))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

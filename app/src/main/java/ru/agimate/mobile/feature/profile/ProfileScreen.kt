@@ -48,6 +48,8 @@ import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.locale.AppLanguage
 import ru.agimate.mobile.core.ui.locale.AppLanguages
+import ru.agimate.mobile.core.ui.theme.AppTheme
+import ru.agimate.mobile.core.ui.theme.AppThemes
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
@@ -132,6 +134,16 @@ fun ProfileScreen(
 
             LanguagePicker()
 
+            Spacer(Modifier.height(AgiTheme.spacing.lg))
+
+            Text(
+                text = stringResource(R.string.theme_title),
+                style = AgiTheme.typography.caption,
+                color = colors.textTertiary,
+            )
+
+            ThemePicker()
+
             Spacer(Modifier.height(AgiTheme.spacing.xl))
 
             Text(
@@ -210,12 +222,55 @@ fun ProfileScreen(
  */
 @Composable
 private fun LanguagePicker() {
-    val colors = AgiTheme.colors
     val context = LocalContext.current
     val activity = LocalActivity.current
-
-    var open by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(AppLanguages.current(context)) }
+
+    ChoicePicker(
+        current = current,
+        entries = AppLanguage.entries,
+        titleRes = { it.titleRes },
+        onChoose = { language ->
+            current = language
+            if (AppLanguages.choose(context, language)) activity?.recreate()
+        },
+    )
+}
+
+/**
+ * Выбор темы.
+ *
+ * Пересоздание нужно всегда: конфигурацию подменяет `attachBaseContext`, а он отрабатывает на
+ * создании активности. Своей ветки «система сделает сама», как у языка, здесь нет — темы
+ * приложения система не знает.
+ */
+@Composable
+private fun ThemePicker() {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    var current by remember { mutableStateOf(AppThemes.current(context)) }
+
+    ChoicePicker(
+        current = current,
+        entries = AppTheme.entries,
+        titleRes = { it.titleRes },
+        onChoose = { theme ->
+            current = theme
+            if (AppThemes.choose(context, theme)) activity?.recreate()
+        },
+    )
+}
+
+/** Строка настройки с выпадающим списком из трёх-четырёх значений. */
+@Composable
+private fun <T> ChoicePicker(
+    current: T,
+    entries: List<T>,
+    titleRes: (T) -> Int,
+    onChoose: (T) -> Unit,
+) {
+    val colors = AgiTheme.colors
+    var open by remember { mutableStateOf(false) }
 
     Box {
         Row(
@@ -226,7 +281,7 @@ private fun LanguagePicker() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = stringResource(current.titleRes),
+                text = stringResource(titleRes(current)),
                 style = AgiTheme.typography.body,
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f),
@@ -240,18 +295,18 @@ private fun LanguagePicker() {
         }
 
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            AppLanguage.entries.forEach { language ->
+            entries.forEach { entry ->
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = stringResource(language.titleRes),
+                            text = stringResource(titleRes(entry)),
                             style = AgiTheme.typography.body,
                         )
                     },
                     trailingIcon = {
                         // Галочка только у выбранного: список из трёх строк без неё не говорит,
                         // на чём человек стоит сейчас.
-                        if (language == current) {
+                        if (entry == current) {
                             Icon(
                                 imageVector = Icons.Outlined.Check,
                                 contentDescription = null,
@@ -262,8 +317,7 @@ private fun LanguagePicker() {
                     },
                     onClick = {
                         open = false
-                        current = language
-                        if (AppLanguages.choose(context, language)) activity?.recreate()
+                        onChoose(entry)
                     },
                 )
             }
