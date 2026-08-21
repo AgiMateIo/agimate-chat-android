@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -184,6 +185,17 @@ fun ChatScreen(
         }
     }
 
+    // Своя отправка — исключение из правила выше: за низом ленты человек следит сам, но если он
+    // только что нажал «отправить», то смотреть ему теперь надо туда, куда легло его сообщение, —
+    // даже если он читал историю за десять экранов отсюда.
+    //
+    // Счётчик, а не флаг в состоянии: подряд отправленные сообщения должны сработать каждое, а
+    // повторная отправка упавшего — нет, она ничего не двигает.
+    var sent by remember { mutableIntStateOf(0) }
+    LaunchedEffect(sent) {
+        if (sent > 0) listState.animateScrollToItem(0)
+    }
+
     // Просмотрщик — слой поверх экрана, а не маршрут навигации: подписанный адрес живёт 15 минут,
     // и в back stack он рано или поздно окажется протухшим.
     var viewer by remember { mutableStateOf<OpenImage?>(null) }
@@ -296,7 +308,7 @@ fun ChatScreen(
             Composer(
                 state = state,
                 onInputChange = onInputChange,
-                onSend = onSend,
+                onSend = { onSend(); sent++ },
                 onStop = onStop,
                 onAttach = onAttach,
                 onRemoveAttachment = onRemoveAttachment,
