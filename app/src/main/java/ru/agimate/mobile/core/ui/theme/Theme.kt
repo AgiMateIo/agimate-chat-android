@@ -154,6 +154,10 @@ fun AgiMateTheme(
         LocalAgiTypography provides AgiTypographyDefaults,
         LocalReducedMotion provides reducedMotion,
     ) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(
+            colorScheme = scheme,
+            typography = PlexMaterialTypography,
+            content = content,
+        )
     }
 }
