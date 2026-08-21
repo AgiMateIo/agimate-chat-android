@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -184,7 +187,10 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.background)
-                .imePadding()
+                // Объединение, а не imePadding с navigationBarsPadding под ним: клавиатура
+                // рисуется поверх навигационной панели, и её вставка панель уже включает.
+                // Два отступа подряд давали лишнюю полосу фона между клавиатурой и полем ввода.
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
         ) {
             ChatHeader(
                 state = state,
@@ -226,7 +232,16 @@ fun ChatScreen(
                             horizontal = AgiTheme.spacing.screen,
                             vertical = AgiTheme.spacing.md,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
+                        // Выравнивание к низу, а не просто отступ между элементами.
+                        // reverseLayout переворачивает порядок, но не аррангемент: голый
+                        // spacedBy пакует к верху, и короткая переписка висела бы под шапкой,
+                        // оторванная от поля ввода. Хуже того, якорь прокрутки у перевёрнутого
+                        // списка держится за низ — при появлении клавиатуры лента ехала за ней,
+                        // а аррангемент тут же тянул её обратно вверх.
+                        verticalArrangement = Arrangement.spacedBy(
+                            AgiTheme.spacing.sm,
+                            Alignment.Bottom,
+                        ),
                     ) {
                         // Заготовка объявлена первой: список перевёрнут, и первый элемент — самый низ.
                         //
@@ -842,7 +857,6 @@ private fun Composer(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.background)
-            .navigationBarsPadding()
     ) {
         AnimatedVisibility(
             visible = state.sendError != null,
