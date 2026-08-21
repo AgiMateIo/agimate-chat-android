@@ -84,7 +84,7 @@
     <string name="viewer_link_expired_hint">Ссылка живёт 15 минут. Откройте чат заново — придёт свежая.</string>
 
     <!-- Файлы: поделиться и сохранить -->
-    <string name="file_copied">Скопировано</string>
+    <string name="file_copied">Скопировано!</string>
     <string name="file_opening">Открываю файл…</string>
     <string name="file_preparing">Готовлю файл…</string>
     <string name="file_saving">Сохраняю…</string>
@@ -122,7 +122,7 @@
     <string name="profile_title">Профиль</string>
     <string name="profile_no_name">Без имени</string>
     <string name="profile_devices">Мои устройства</string>
-    <string name="profile_devices_empty">Список пуст</string>
+    <string name="profile_devices_empty">Устройств пока нет</string>
     <string name="profile_revoke_note">Уведомления на отозванное устройство перестают приходить сразу, а связь с сервером пропадёт в течение часа: отзыв бьёт по обновлению токенов, и уже выданный доживает свой срок.</string>
     <string name="profile_this_device">это устройство</string>
     <string name="profile_kind_browser">браузер</string>
@@ -152,8 +152,8 @@
     <string name="error_not_found">Не найдено</string>
     <string name="error_rate_limited">Слишком часто — подождите немного</string>
     <string name="error_server">Сервер не отвечает</string>
-    <string name="error_code">Ошибка %1$d</string>
-    <string name="error_unexpected">Что-то пошло не так</string>
+    <string name="error_code">Сервер ответил кодом %1$d</string>
+    <string name="error_unexpected">Запрос не удался — обычно помогает повтор</string>
     <string name="error_empty_response">Сервер ответил пустым</string>
 
     <!-- Ошибки работы с файлами -->

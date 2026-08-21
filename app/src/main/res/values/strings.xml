@@ -26,8 +26,8 @@
     <string name="login_with_provider">Sign in with %1$s</string>
     <string name="login_origin_label">Server (debug builds only)</string>
     <string name="login_no_browser">No browser found to open the sign-in page</string>
-    <string name="login_failed_retry">Sign-in failed. Please try again.</string>
-    <string name="login_not_finished_retry">Sign-in was not finished. Please try again.</string>
+    <string name="login_failed_retry">Sign-in failed — try again</string>
+    <string name="login_not_finished_retry">Sign-in was not finished — try again</string>
     <string name="login_bad_origin">That address does not look right</string>
     <string name="login_lost">Sign-in was not finished — start again</string>
 
@@ -91,7 +91,7 @@
     <string name="viewer_link_expired_hint">The link lives 15 minutes. Reopen the chat — a fresh one will come.</string>
 
     <!-- Файлы: поделиться и сохранить -->
-    <string name="file_copied">Copied</string>
+    <string name="file_copied">Copied!</string>
     <string name="file_opening">Opening the file…</string>
     <string name="file_preparing">Preparing the file…</string>
     <string name="file_saving">Saving…</string>
@@ -137,7 +137,7 @@
     <string name="profile_title">Profile</string>
     <string name="profile_no_name">No name</string>
     <string name="profile_devices">My devices</string>
-    <string name="profile_devices_empty">The list is empty</string>
+    <string name="profile_devices_empty">No devices yet</string>
     <string name="profile_revoke_note">Notifications stop reaching a disconnected device right away, and its connection to the server drops within an hour: disconnecting hits token refresh, and the token already issued lives out its term.</string>
     <string name="profile_this_device">this device</string>
     <string name="profile_kind_browser">browser</string>
@@ -162,13 +162,13 @@
     <!-- Ошибки. Текст сервера, если он есть, показывается вместо этих: см. ApiException.of. -->
     <string name="error_offline">No connection to the server</string>
     <string name="error_bad_request">Request rejected</string>
-    <string name="error_unauthorized">Please sign in again</string>
+    <string name="error_unauthorized">You need to sign in again</string>
     <string name="error_forbidden">Access closed</string>
     <string name="error_not_found">Not found</string>
     <string name="error_rate_limited">Too often — wait a moment</string>
     <string name="error_server">The server is not responding</string>
-    <string name="error_code">Error %1$d</string>
-    <string name="error_unexpected">Something went wrong</string>
+    <string name="error_code">The server replied with code %1$d</string>
+    <string name="error_unexpected">The request failed — a retry usually helps</string>
     <string name="error_empty_response">The server replied with nothing</string>
 
     <!-- Ошибки работы с файлами -->
