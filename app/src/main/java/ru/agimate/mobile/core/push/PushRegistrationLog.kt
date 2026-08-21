@@ -23,6 +23,21 @@ data class PushConfirmation(
 )
 
 /**
+ * Значения, отозванные у транспорта при выходе.
+ *
+ * Отзыв не мгновенный: SDK начинает переподписку, а `getTokens()` в это окно продолжает отдавать то,
+ * что лежало в кэше. Зарегистрировав такое значение, приложение просит сервер слать в никуда —
+ * ровно это и случилось 20.08.2026, когда после перевхода обе подписки завели мёртвыми токенами и
+ * первое же уведомление их снесло.
+ *
+ * @param at когда отозвали: карантин не вечный, см. [PUSH_REVOCATION_TTL_MS]
+ */
+data class PushRevocation(
+    val tokens: Map<String, String>,
+    val at: Long,
+)
+
+/**
  * Память о подтверждённой подписке.
  *
  * Раньше здесь лежала одна отметка времени, и её не хватало дважды. «Когда» не отвечает на вопрос
@@ -38,8 +53,14 @@ interface PushRegistrationLog {
 
     fun write(confirmation: PushConfirmation)
 
-    /** Вход кончился — подтверждать больше нечего. */
+    /** Вход кончился — подтверждать больше нечего. Карантин при этом остаётся: он про то же окно. */
     fun forget()
+
+    /** Что отозвали при последнем выходе; null — карантина нет. */
+    fun readRevocation(): PushRevocation?
+
+    /** null — снять карантин. */
+    fun writeRevocation(revocation: PushRevocation?)
 }
 
 /**
@@ -71,8 +92,36 @@ class PrefsPushRegistrationLog @Inject constructor(
         }
     }
 
+    /**
+     * Стирается только подтверждение. Карантин отозванных токенов выход переживает намеренно — он
+     * заведён ровно ради окна между выходом и следующим входом, и `clear()` уносил бы его первым.
+     */
     override fun forget() {
-        prefs.edit { clear() }
+        prefs.edit {
+            remove(KEY_SESSION)
+            remove(KEY_TOKENS)
+            remove(KEY_CONFIRMED_AT)
+        }
+    }
+
+    override fun readRevocation(): PushRevocation? {
+        val at = prefs.getLong(KEY_REVOKED_AT, 0L)
+        val tokens = prefs.getString(KEY_REVOKED, null)
+            ?.let { runCatching { Json.decodeFromString(TOKENS, it) }.getOrNull() }
+        if (at <= 0L || tokens.isNullOrEmpty()) return null
+        return PushRevocation(tokens = tokens, at = at)
+    }
+
+    override fun writeRevocation(revocation: PushRevocation?) {
+        prefs.edit {
+            if (revocation == null) {
+                remove(KEY_REVOKED)
+                remove(KEY_REVOKED_AT)
+            } else {
+                putString(KEY_REVOKED, Json.encodeToString(TOKENS, revocation.tokens))
+                putLong(KEY_REVOKED_AT, revocation.at)
+            }
+        }
     }
 
     private companion object {
@@ -81,6 +130,8 @@ class PrefsPushRegistrationLog @Inject constructor(
         const val KEY_SESSION = "session"
         const val KEY_TOKENS = "tokens"
         const val KEY_CONFIRMED_AT = "confirmed_at"
+        const val KEY_REVOKED = "revoked_tokens"
+        const val KEY_REVOKED_AT = "revoked_at"
     }
 }
 
@@ -90,6 +141,30 @@ class PrefsPushRegistrationLog @Inject constructor(
  * лишним запросом из фона.
  */
 const val PUSH_CONFIRM_INTERVAL_MS: Long = 24 * 60 * 60 * 1000L
+
+/**
+ * Сколько держать карантин. Переподписка у SDK занимает секунды, десять минут — с запасом; при этом
+ * состояние «SDK упорно отдаёт отозванное» не становится вечным: по истечении срока верим
+ * транспорту, а мёртвый токен нам назовёт вендор при первой же отправке.
+ */
+const val PUSH_REVOCATION_TTL_MS: Long = 10 * 60 * 1000L
+
+/**
+ * Желаемое за вычетом того, что отозвали сами. Карантин точечный, по значению: тот же провайдер с
+ * другим токеном — это уже свежая выдача, и держать её незачем.
+ */
+fun pushUsable(
+    desired: Map<String, String>,
+    revocation: PushRevocation?,
+    now: Long,
+): Map<String, String> {
+    if (revocation == null || pushRevocationExpired(revocation.at, now)) return desired
+    return desired.filterNot { (provider, token) -> revocation.tokens[provider] == token }
+}
+
+/** Отметка из будущего — переведённые назад часы, а не карантин: та же осторожность, что у памятки. */
+fun pushRevocationExpired(at: Long, now: Long): Boolean =
+    at <= 0L || at > now || now - at >= PUSH_REVOCATION_TTL_MS
 
 /**
  * Что из желаемого надо отправить серверу. Чистая половина сверки — проверяется без Android.

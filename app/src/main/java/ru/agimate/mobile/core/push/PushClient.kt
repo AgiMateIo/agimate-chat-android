@@ -13,6 +13,7 @@ import ru.rustore.sdk.universalpush.listener.OnMessageReceivedListener
 import ru.rustore.sdk.universalpush.listener.OnNewTokenListener
 import ru.rustore.sdk.universalpush.listener.OnPushClientErrorListener
 import ru.rustore.sdk.universalpush.domain.model.UniversalRemoteMessage
+import ru.rustore.sdk.universalpush.firebase.provides.FirebasePushProvider
 import ru.rustore.sdk.universalpush.rustore.providers.RuStorePushProvider
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -55,6 +56,11 @@ class PushClient @Inject constructor(
                 projectId = BuildConfig.RUSTORE_PROJECT_ID,
                 logger = DefaultLogger(TAG),
             ),
+            // Второй канал, а не запасной: доставка на телефон без RuStore иначе невозможна вовсе, а
+            // отказ транспорта не виден отправителю — переключаться было бы не по чему. Дубль на
+            // устройстве с обоими токенами гасят дедупликация SDK и наша по `messageId`.
+            // Проект берётся из app/google-services.json, отдельного BuildConfig-поля тут нет.
+            firebase = FirebasePushProvider(context = context),
         )
 
         RuStoreUniversalPushClient.setOnMessageReceiveListener(

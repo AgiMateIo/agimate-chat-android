@@ -179,7 +179,7 @@ class ProfileViewModel @Inject constructor(
             web = client.equals("WEB", ignoreCase = true),
             lastSeen = lastSeenAt ?: createdAt,
             isThisDevice = mine,
-            notifications = if (mine) health == PushHealth.Working else push.isNotEmpty(),
+            notifications = if (mine) health.delivering else push.isNotEmpty(),
         )
     }
 }

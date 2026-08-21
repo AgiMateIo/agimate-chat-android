@@ -75,3 +75,45 @@ class PushDueTest {
         )
     }
 }
+
+/** Карантин отозванных значений: чистая половина того, что чинилось после инцидента 20.08.2026. */
+class PushUsableTest {
+
+    private val now = 1_000_000L
+    private val desired = mapOf("rustore" to "T1", "firebase" to "F1")
+
+    @Test
+    fun `карантина нет — желаемое проходит целиком`() {
+        assertEquals(desired, pushUsable(desired, revocation = null, now = now))
+    }
+
+    @Test
+    fun `отозванное значение отсеивается, соседний канал не страдает`() {
+        val revocation = PushRevocation(tokens = mapOf("rustore" to "T1"), at = now - 1_000)
+
+        assertEquals(mapOf("firebase" to "F1"), pushUsable(desired, revocation, now))
+    }
+
+    @Test
+    fun `другое значение того же канала — свежая выдача, карантин её не касается`() {
+        val revocation = PushRevocation(tokens = mapOf("rustore" to "T0"), at = now - 1_000)
+
+        assertEquals(desired, pushUsable(desired, revocation, now))
+    }
+
+    /** Иначе «SDK упорно отдаёт отозванное» стало бы вечным молчанием без единой записи в логе. */
+    @Test
+    fun `просроченный карантин ничего не держит`() {
+        val revocation = PushRevocation(tokens = desired, at = now - PUSH_REVOCATION_TTL_MS)
+
+        assertEquals(desired, pushUsable(desired, revocation, now))
+    }
+
+    /** Часы, переведённые назад: отметка из будущего — не карантин. Та же осторожность, что у памятки. */
+    @Test
+    fun `отметка из будущего карантином не считается`() {
+        val revocation = PushRevocation(tokens = desired, at = now + 1_000)
+
+        assertEquals(desired, pushUsable(desired, revocation, now))
+    }
+}

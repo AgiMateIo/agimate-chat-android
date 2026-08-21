@@ -2,6 +2,8 @@ package ru.agimate.mobile.core.push
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -51,6 +53,9 @@ class PushSubscriptions @Inject constructor(
     private val mutex = Mutex()
     private val started = AtomicBoolean(false)
 
+    /** Переспрашивание транспорта, пока тому нечего дать. Один на всё приложение. */
+    private var refresh: Job? = null
+
     /**
      * Вход, с которого подписку уже сняли.
      *
@@ -75,7 +80,8 @@ class PushSubscriptions @Inject constructor(
                     // отозваны, и принести их больше некому. Ответ придёт сюда же следующим
                     // состоянием, поэтому сверку на этом заходе делать не о чем.
                     if (session != null && tokens.isEmpty()) {
-                        remember(transport.tokens())
+                        observed(transport.tokens())
+                        scheduleRefresh()
                     } else {
                         reconcile(session, tokens)
                     }
@@ -83,9 +89,12 @@ class PushSubscriptions @Inject constructor(
         }
     }
 
-    /** Транспорт выдал новый токен. Не повод отправить запрос, а изменение состояния. */
+    /**
+     * Транспорт выдал новый токен. Не повод отправить запрос, а изменение состояния — и новость
+     * про один канал, поэтому запись сливается, а не подменяет снимок целиком.
+     */
     fun onTransportToken(provider: String, token: String) {
-        remember(mapOf(provider to token))
+        transportTokens.update { it + (provider to token) }
     }
 
     /**
@@ -100,7 +109,7 @@ class PushSubscriptions @Inject constructor(
     suspend fun repair(observedAt: Long): Boolean {
         if (!transport.configured) return false
         val tokens = transport.tokens()
-        remember(tokens)
+        observed(tokens)
         return reconcile(session.current, tokens, invalidBefore = observedAt)
     }
 
@@ -110,7 +119,13 @@ class PushSubscriptions @Inject constructor(
      */
     suspend fun health(remote: List<PushSubscriptionDto>): PushHealth {
         if (!transport.configured) return PushHealth.Unknown
-        return pushHealth(remote = remote, local = transport.tokens())
+        val tokens = transport.tokens()
+        // Ответ транспорта — не только материал для сравнения, но и свежее состояние. Пока он
+        // здесь выбрасывался, заход на экран устройств оказывался единственным способом узнать,
+        // что SDK наконец выдал токены: сверка о них не спрашивала, а колбэк поднимался как
+        // побочный эффект этого самого запроса.
+        observed(tokens)
+        return pushHealth(remote = remote, local = tokens)
     }
 
     /**
@@ -128,15 +143,61 @@ class PushSubscriptions @Inject constructor(
                 runCatching { apiCall { api.unsubscribe(PushUnsubscribeRequest(token = token)) } }
                     .onFailure { error -> warn(error) { "не удалось снять подписку $provider" } }
             }
+            // Карантин ставится до отзыва, а не после: SDK объявляет новый токен колбэком прямо
+            // из `deleteTokens`, и к этому моменту правило «эти значения больше не наши» должно
+            // уже действовать. Отзыв не мгновенный, `getTokens()` в этом окне отдаёт всё те же
+            // значения, и без карантина следующий вход зарегистрирует мёртвые токены — так и
+            // вышло 20.08.2026.
+            if (tokens.isNotEmpty()) {
+                registrations.writeRevocation(PushRevocation(tokens = tokens, at = System.currentTimeMillis()))
+            }
             transport.dropTokens(tokens)
             transportTokens.value = emptyMap()
         }
     }
 
-    private fun remember(tokens: Map<String, String>) {
-        if (tokens.isEmpty()) return
-        transportTokens.update { it + tokens }
+    /**
+     * Полный снимок транспорта — он **заменяет** словарь, а не дополняет его: канал, пропавший из
+     * ответа SDK, это тоже новость, и слать в него больше нечего. Слияние держало такой канал живым
+     * вечно, и подписка на него продолжала числиться нашей.
+     *
+     * Пустой снимок новостью не считается: сразу после входа и после ротации SDK несколько секунд
+     * отдаёт пустой список, и принять его за «каналов нет» значило бы забыть рабочие токены.
+     */
+    private fun observed(snapshot: Map<String, String>) {
+        if (snapshot.isEmpty()) return
+        transportTokens.value = snapshot
     }
+
+    /**
+     * Переспросить транспорт, пока тому нечего дать.
+     *
+     * После входа SDK какое-то время отдаёт либо пусто, либо то, что мы сами у него отозвали.
+     * Своего события «а вот теперь готово» у него нет: колбэк о новом токене поднимает сам запрос
+     * токенов. Без этих повторов приложение ждёт случайного повода — и на стенде 20.08.2026
+     * дождалось только захода в профиль: две с половиной минуты после входа уведомления не
+     * приходили, потому что подписки не существовало.
+     *
+     * Отступ растёт, попыток восемь — около четырёх минут. Дальше молча прекращаем: если за это
+     * время транспорт не поднялся, дело не в задержке, и следующий запуск приложения либо экран
+     * устройств спросят заново.
+     */
+    private fun scheduleRefresh() {
+        if (refresh?.isActive == true) return
+        refresh = scope.launch {
+            var wait = REFRESH_FIRST_DELAY_MS
+            repeat(REFRESH_ATTEMPTS) {
+                delay(wait)
+                if (session.current == null || usable().isNotEmpty()) return@launch
+                observed(transport.tokens())
+                wait = (wait * 2).coerceAtMost(REFRESH_MAX_DELAY_MS)
+            }
+        }
+    }
+
+    /** Что из известных токенов сейчас годно к отправке: карантин отозванных учтён. */
+    private fun usable(): Map<String, String> =
+        pushUsable(transportTokens.value, registrations.readRevocation(), System.currentTimeMillis())
 
     /**
      * Свести серверное состояние к желаемому. Единственное место, откуда уходит регистрация.
@@ -169,9 +230,17 @@ class PushSubscriptions @Inject constructor(
         if (session == retired) return@withLock false
 
         val now = System.currentTimeMillis()
+        // Отозванное при выходе отсеиваем до сверки. Иначе следующий вход регистрирует токен, у
+        // которого уже нет владельца: сервер снесёт его по первому уведомлению, а устройство
+        // останется без канала до следующей выдачи SDK.
+        val desired = pushUsable(tokens, registrations.readRevocation(), now)
+        if (desired.size != tokens.size) {
+            trace { "часть токенов отозвана при выходе — ждём, пока SDK выдаст другие" }
+            scheduleRefresh()
+        }
         val due = pushDue(
             session = session,
-            desired = tokens,
+            desired = desired,
             confirmed = registrations.read(),
             now = now,
             invalidBefore = invalidBefore,
@@ -183,7 +252,7 @@ class PushSubscriptions @Inject constructor(
         // Памятка двигается, только когда отправлено всё, что было должно: иначе недоехавший токен
         // считался бы подтверждённым до следующих суток, а он на сервере так и не появился.
         if (delivered.size == due.size) {
-            registrations.write(PushConfirmation(session = session, tokens = tokens, at = now))
+            registrations.write(PushConfirmation(session = session, tokens = desired, at = now))
         }
         true
     }
@@ -210,5 +279,8 @@ class PushSubscriptions @Inject constructor(
 
     private companion object {
         const val TAG = "AgiPush"
+        const val REFRESH_FIRST_DELAY_MS = 2_000L
+        const val REFRESH_MAX_DELAY_MS = 60_000L
+        const val REFRESH_ATTEMPTS = 8
     }
 }

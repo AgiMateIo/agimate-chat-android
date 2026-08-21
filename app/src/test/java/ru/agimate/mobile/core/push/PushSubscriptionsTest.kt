@@ -91,6 +91,95 @@ class PushSubscriptionsTest {
         assertEquals(listOf("T1"), api.subscribed.map { it.token })
     }
 
+    /**
+     * Инцидент 20.08.2026: после перевхода приложение зарегистрировало оба токена, отозванных
+     * минутой раньше, и первое же уведомление их снесло. Отзыв у SDK не мгновенный — `getTokens()`
+     * в этом окне продолжает отдавать старое, и верить ему нельзя.
+     */
+    @Test
+    fun `отозванный токен не регистрируется, даже если транспорт его отдаёт`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        // SDK держится за отозванное значение: отдаёт его и колбэком, и на запрос.
+        val subscriptions = subscriptions(FakeTransport(token = "T1", afterDrop = "T1"), api, store)
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+
+        subscriptions.signOut()
+        runCurrent()
+        store.clear()
+        runCurrent()
+        store.save(AuthTokens("access", "refresh", "s2"))
+        runCurrent()
+
+        // Только регистрация до выхода: новый вход ждёт, пока SDK выдаст другое значение.
+        assertEquals(listOf("T1"), api.subscribed.map { it.token })
+    }
+
+    /** Обратная сторона карантина: другое значение — это свежая выдача, и она уходит сразу. */
+    @Test
+    fun `после выхода свежий токен регистрируется без задержки`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        val subscriptions = subscriptions(FakeTransport(token = "T1", afterDrop = "T2"), api, store)
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+
+        subscriptions.signOut()
+        runCurrent()
+        store.clear()
+        runCurrent()
+        store.save(AuthTokens("access", "refresh", "s2"))
+        runCurrent()
+
+        assertEquals(listOf("T1", "T2"), api.subscribed.map { it.token })
+    }
+
+    /**
+     * У RuStore токен пропадает целиком, пока SDK переподписывается через `ru.vk.store`. Пока
+     * снимок сливался со старым состоянием, канал числился живым и продолжал уезжать на сервер.
+     */
+    @Test
+    fun `канал, пропавший из снимка транспорта, больше не отправляется`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        val transport = FakeTransport(token = "T1", others = mapOf("firebase" to "F1"))
+        val subscriptions = subscriptions(transport, api, store)
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+        assertEquals(1, api.subscribed.count { it.token == "F1" })
+
+        transport.loses("firebase")
+        // Починка с экрана устройств: сервер опроверг подтверждение, шлём всё желаемое заново.
+        subscriptions.repair(observedAt = System.currentTimeMillis() + 1_000)
+
+        assertEquals(2, api.subscribed.count { it.token == "T1" })
+        assertEquals(1, api.subscribed.count { it.token == "F1" })
+    }
+
+    /**
+     * Стенд, 20.08.2026: после входа транспорт ещё не поднялся, и приложение осталось ждать повода.
+     * Поводом оказался заход в профиль — две с половиной минуты без уведомлений. Своего события
+     * «токен готов» у SDK нет, поэтому спрашиваем сами, с отступом.
+     */
+    @Test
+    fun `после входа транспорт переспрашивают, пока он не выдаст токен`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        val transport = FakeTransport(token = null)
+        subscriptions(transport, api, store)
+
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+        assertEquals(emptyList<String>(), api.subscribed.map { it.token })
+
+        transport.issues("T1")
+        testScheduler.advanceTimeBy(3_000)
+        runCurrent()
+
+        assertEquals(listOf("T1"), api.subscribed.map { it.token })
+    }
+
     @Test
     fun `починка отправляет заново, если сервер видел старое состояние`() = runTest {
         val store = FakeTokenStore(null)
@@ -158,6 +247,7 @@ class PushSubscriptionsTest {
 private class FakeTransport(
     private var token: String?,
     private val afterDrop: String? = null,
+    private var others: Map<String, String> = emptyMap(),
 ) : PushTransport {
 
     var onToken: ((String, String) -> Unit)? = null
@@ -173,9 +263,19 @@ private class FakeTransport(
     }
 
     override suspend fun tokens(): Map<String, String> {
-        val current = token ?: return emptyMap()
+        val current = token ?: return others
         onToken?.invoke(PROVIDER, current)
-        return mapOf(PROVIDER to current)
+        return others + (PROVIDER to current)
+    }
+
+    /** Канал пропал у SDK: так ведёт себя RuStore, когда переподписывается через `ru.vk.store`. */
+    fun loses(provider: String) {
+        others = others - provider
+    }
+
+    /** Транспорт поднялся и выдал токен — но сам об этом не объявил, как и настоящий SDK. */
+    fun issues(fresh: String) {
+        token = fresh
     }
 
     override suspend fun dropTokens(tokens: Map<String, String>) {
@@ -206,6 +306,7 @@ private class RecordingPushApi : PushApi {
 private class InMemoryRegistrationLog : PushRegistrationLog {
 
     private var confirmation: PushConfirmation? = null
+    private var revocation: PushRevocation? = null
 
     override fun read(): PushConfirmation? = confirmation
 
@@ -213,7 +314,14 @@ private class InMemoryRegistrationLog : PushRegistrationLog {
         this.confirmation = confirmation
     }
 
+    /** Как в реализации на префах: выход стирает подтверждение, но не карантин. */
     override fun forget() {
         confirmation = null
+    }
+
+    override fun readRevocation(): PushRevocation? = revocation
+
+    override fun writeRevocation(revocation: PushRevocation?) {
+        this.revocation = revocation
     }
 }

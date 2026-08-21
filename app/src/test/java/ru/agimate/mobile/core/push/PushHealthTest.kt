@@ -1,6 +1,7 @@
 package ru.agimate.mobile.core.push
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.agimate.mobile.data.user.PushSubscriptionDto
 
@@ -58,6 +59,31 @@ class PushHealthTest {
     @Test
     fun `without a token from the sdk there is nothing to compare`() {
         assertEquals(PushHealth.Preparing, pushHealth(remote("cV8kQz1p…"), emptyMap()))
+    }
+
+    /**
+     * Два канала: RuStore переподписывается и на это время пропадает с сервера, FCM доставляет.
+     * Инцидент 20.08.2026 — экран говорил «уведомления не приходят» ровно в тот момент, когда
+     * уведомление пришло.
+     */
+    @Test
+    fun `one channel of two still delivers`() {
+        val both = mapOf("rustore" to token, "firebase" to "dD4u9DhOYYYYYYYY")
+        val onlyFirebase = listOf(PushSubscriptionDto(provider = "FIREBASE", maskedToken = "dD4u9DhO…"))
+
+        val health = pushHealth(onlyFirebase, both)
+
+        assertEquals(PushHealth.Partial, health)
+        assertTrue("уведомления приходят, пока жив хоть один канал", health.delivering)
+        assertTrue("недостающий канал всё равно надо зарегистрировать", health.fixable)
+    }
+
+    /** Ни один канал не найден — это уже не «часть», а устаревшая подписка. */
+    @Test
+    fun `no channel of two is stale, not partial`() {
+        val both = mapOf("rustore" to token, "firebase" to "dD4u9DhOYYYYYYYY")
+
+        assertEquals(PushHealth.Stale, pushHealth(remote("ZZZZZZZZ…"), both))
     }
 
     @Test
