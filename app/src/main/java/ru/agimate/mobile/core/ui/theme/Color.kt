@@ -2,14 +2,19 @@ package ru.agimate.mobile.core.ui.theme
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import com.agimate.design.AgimateTokens
 
 /**
  * Семантические токены цвета. Компоненты обращаются к роли («фон карточки», «текст второго
- * плана»), а не к конкретному оттенку, — тогда смена палитры под будущие макеты правится в одном
- * файле, а не по всему проекту.
+ * плана»), а не к конкретному оттенку.
  *
- * Палитра построена от знака AgiMate: угольный #2B2C30 и золото #D6B27B. Никаких градиентов и
- * сиреневого AI-клише — спокойный плотный мессенджер.
+ * Значения не подбираются здесь, а берутся из [AgimateTokens] — сгенерированного файла айдентики,
+ * общего у веба, Android и iOS. Правило бренд-бука: продуктовый код имеет право только на роли,
+ * примитивы («бирюза 500») сюда не попадают вовсе.
+ *
+ * Палитра v1: тёплые нейтрали Mocha Mousse и холодный бирюзовый акцент. Контраст температур и есть
+ * характер — тёплая подложка, холодный сигнал.
  */
 @Immutable
 data class AgiColors(
@@ -22,11 +27,24 @@ data class AgiColors(
     val textTertiary: Color,
     /** Акцент для активных состояний и мелких выделений. */
     val accent: Color,
+    /**
+     * Акцент, пригодный для мелкого текста. На тёмной теме у основного акцента контраст к фону
+     * 4,32 — ниже порога 4,5, поэтому там роль занимает светлая краска знака (9,67). На светлой
+     * акцент проходит с запасом и роли совпадают.
+     */
+    val accentText: Color,
     /** Приглушённая акцентная заливка — бейджи, подсветка выбранного. */
     val accentQuiet: Color,
-    /** Заливка главной кнопки. */
+    /** Заливка главной кнопки. Действия принадлежат акценту — это правило, а не выбор. */
     val action: Color,
     val onAction: Color,
+    /**
+     * Тёплая краска, Mocha Mousse. Единственный тёплый цвет, которому разрешено выйти на передний
+     * план: пустые состояния, иллюстрации, декоративные пометки. Ничего интерактивного — действия
+     * принадлежат акценту. Насыщать нельзя: от янтарного предупреждения её отличает не тон
+     * (между ними 20°), а насыщенность — земля против сигнала.
+     */
+    val warm: Color,
     val bubbleOwn: Color,
     val bubbleOwnText: Color,
     val bubbleAgent: Color,
@@ -39,50 +57,68 @@ data class AgiColors(
     val isDark: Boolean,
 )
 
-val LightColors = AgiColors(
-    background = Color(0xFFFAF8F4),
-    surface = Color(0xFFFFFFFF),
-    surfaceMuted = Color(0xFFF2EFE9),
-    hairline = Color(0xFFE6E1D8),
-    textPrimary = Color(0xFF2B2C30),
-    textSecondary = Color(0xFF6C6960),
-    textTertiary = Color(0xFF9A968C),
-    accent = Color(0xFFA97F31),
-    accentQuiet = Color(0xFFF3E9D6),
-    action = Color(0xFF2B2C30),
-    onAction = Color(0xFFF6F2EA),
-    bubbleOwn = Color(0xFFEFE6D4),
-    bubbleOwnText = Color(0xFF2B2C30),
-    bubbleAgent = Color(0xFFFFFFFF),
-    bubbleAgentText = Color(0xFF2B2C30),
-    danger = Color(0xFFA63D2C),
-    dangerQuiet = Color(0xFFFAE8E3),
-    warning = Color(0xFF8A6A16),
-    positive = Color(0xFF3F7A4E),
-    scrim = Color(0x66000000),
-    isDark = false,
-)
+/**
+ * Роли, которых в айдентике нет: мессенджера бренд-бук не покрывает, и ролей `bubble-*`,
+ * «приглушённой заливки» и «текста третьего плана» в токенах не существует.
+ *
+ * Поэтому они не подбираются на глаз, а выводятся из существующих ролей смешиванием — тогда смена
+ * токена тянет их за собой сама. Если пузыри однажды понадобятся вебу, роли надо будет завести в
+ * `theme.json` айдентики, и тогда этот блок исчезнет.
+ */
+private fun quiet(ink: Color, over: Color, alpha: Float) = ink.copy(alpha = alpha).compositeOver(over)
 
-val DarkColors = AgiColors(
-    background = Color(0xFF1B1C1F),
-    surface = Color(0xFF232428),
-    surfaceMuted = Color(0xFF2B2C30),
-    hairline = Color(0xFF35363B),
-    textPrimary = Color(0xFFECE8E0),
-    textSecondary = Color(0xFFA29E95),
-    textTertiary = Color(0xFF77746D),
-    accent = Color(0xFFD6B27B),
-    accentQuiet = Color(0xFF33302A),
-    action = Color(0xFFD6B27B),
-    onAction = Color(0xFF25262A),
-    bubbleOwn = Color(0xFF3A3527),
-    bubbleOwnText = Color(0xFFEFE7D8),
-    bubbleAgent = Color(0xFF232428),
-    bubbleAgentText = Color(0xFFECE8E0),
-    danger = Color(0xFFE08A7B),
-    dangerQuiet = Color(0xFF3A2723),
-    warning = Color(0xFFD9B36A),
-    positive = Color(0xFF7FB98C),
-    scrim = Color(0x99000000),
-    isDark = true,
-)
+val LightColors = with(AgimateTokens.Colors.Light) {
+    AgiColors(
+        background = background,
+        surface = surface,
+        surfaceMuted = surfaceSecondary,
+        hairline = border,
+        textPrimary = foreground,
+        textSecondary = muted,
+        textTertiary = quiet(muted, background, 0.62f),
+        accent = accent,
+        accentText = accent,
+        accentQuiet = quiet(accent, surface, 0.16f),
+        action = accent,
+        onAction = accentForeground,
+        warm = warm,
+        bubbleOwn = quiet(accent, surface, 0.14f),
+        bubbleOwnText = foreground,
+        bubbleAgent = surface,
+        bubbleAgentText = foreground,
+        danger = error,
+        dangerQuiet = quiet(error, surface, 0.12f),
+        warning = warning,
+        positive = success,
+        scrim = Color(0x66000000),
+        isDark = false,
+    )
+}
+
+val DarkColors = with(AgimateTokens.Colors.Dark) {
+    AgiColors(
+        background = background,
+        surface = surface,
+        surfaceMuted = surfaceSecondary,
+        hairline = border,
+        textPrimary = foreground,
+        textSecondary = muted,
+        textTertiary = quiet(muted, background, 0.62f),
+        accent = accent,
+        accentText = markInkLight,
+        accentQuiet = quiet(accent, surface, 0.20f),
+        action = accent,
+        onAction = accentForeground,
+        warm = warm,
+        bubbleOwn = quiet(accent, surface, 0.18f),
+        bubbleOwnText = foreground,
+        bubbleAgent = surface,
+        bubbleAgentText = foreground,
+        danger = error,
+        dangerQuiet = quiet(error, surface, 0.16f),
+        warning = warning,
+        positive = success,
+        scrim = Color(0x99000000),
+        isDark = true,
+    )
+}

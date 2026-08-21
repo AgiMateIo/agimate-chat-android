@@ -80,6 +80,8 @@ import ru.agimate.mobile.core.ui.components.ViewerImage
 import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.resolve
+import com.agimate.design.AgimateTokens
+import ru.agimate.mobile.core.ui.theme.AgiMotion
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
@@ -111,7 +113,7 @@ private data class OpenImage(val image: ViewerImage, val attachment: Attachment)
 private const val LOAD_OLDER_THRESHOLD = 4
 
 /** Проявление нового элемента ленты. Короче — и появление уже читается как рывок. */
-private const val APPEAR_MS = 180
+private const val APPEAR_MS = AgiMotion.nav
 
 @Composable
 fun ChatScreen(
@@ -234,7 +236,7 @@ fun ChatScreen(
                             item(key = "typing") {
                                 TypingBubble(
                                     modifier = Modifier.animateItem(
-                                        fadeInSpec = tween(APPEAR_MS),
+                                        fadeInSpec = tween(APPEAR_MS, easing = AgiMotion.arriveEasing),
                                         fadeOutSpec = null,
                                     ),
                                 )
@@ -306,7 +308,7 @@ private fun LazyListScope.chatItems(
         // истории для списка такая же вставка, и с проявлением у всех лента мигала бы на каждом
         // листании вверх. Появление отдано tween'у: пружина на коротком пути выглядит вялой.
         val appear = Modifier.animateItem(
-            fadeInSpec = if (index == 0) tween(APPEAR_MS) else null,
+            fadeInSpec = if (index == 0) tween(APPEAR_MS, easing = AgiMotion.arriveEasing) else null,
         )
 
         when (val item = items[index]) {
@@ -554,10 +556,14 @@ private fun MessageBubble(
     }
 }
 
+/** Радиус — панельный из токенов; срезанный угол показывает, с чьей стороны пузырь. */
+private val bubbleRadius = AgimateTokens.Radius.panel
+private val bubbleTail = 4.dp
+
 private fun bubbleShape(own: Boolean) = if (own) {
-    RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
+    RoundedCornerShape(bubbleRadius, bubbleRadius, bubbleTail, bubbleRadius)
 } else {
-    RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
+    RoundedCornerShape(bubbleRadius, bubbleRadius, bubbleRadius, bubbleTail)
 }
 
 /**
@@ -766,16 +772,21 @@ private fun TypingDots(modifier: Modifier = Modifier) {
                 initialValue = 0.25f,
                 targetValue = 0.9f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(520, delayMillis = index * 160),
+                    animation = tween(
+                        durationMillis = AgiTheme.motion.flight,
+                        delayMillis = index * 160,
+                        easing = AgiTheme.motion.standard,
+                    ),
                     repeatMode = RepeatMode.Reverse,
                 ),
                 label = "typing-dot-$index",
             )
+            val opacity = if (AgiTheme.reducedMotion) 0.6f else alpha
             if (index > 0) Spacer(Modifier.width(AgiTheme.spacing.xs))
             Box(
                 modifier = Modifier
                     .size(6.dp)
-                    .background(AgiTheme.colors.textTertiary.copy(alpha = alpha), AgiTheme.shapes.pill)
+                    .background(AgiTheme.colors.textTertiary.copy(alpha = opacity), AgiTheme.shapes.pill)
             )
         }
     }

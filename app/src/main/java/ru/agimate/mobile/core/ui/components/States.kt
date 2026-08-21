@@ -48,6 +48,10 @@ fun FullScreenLoading(modifier: Modifier = Modifier) {
 
 /**
  * Пустое состояние — не заглушка, а объяснение: что здесь будет и что для этого сделать.
+ *
+ * Единственное место в интерфейсе, где на передний план выходит тёплая краска. Всё остальное, на
+ * что падает взгляд, холодное, и тепло палитры живёт только в подложке; здесь оно отвечает. Метка
+ * декоративная и намеренно неинтерактивная — действия принадлежат акценту.
  */
 @Composable
 fun EmptyState(
@@ -63,6 +67,12 @@ fun EmptyState(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Box(
+            modifier = Modifier
+                .size(width = 28.dp, height = 3.dp)
+                .background(AgiTheme.colors.warm, AgiTheme.shapes.pill)
+        )
+        Spacer(Modifier.height(AgiTheme.spacing.lg))
         Text(
             text = title,
             style = AgiTheme.typography.subtitle,
@@ -119,12 +129,17 @@ fun Skeleton(
     val alpha by transition.animateFloat(
         initialValue = 0.35f,
         targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(
+            tween(AgiTheme.motion.arrive, easing = AgiTheme.motion.arriveEasing),
+            RepeatMode.Reverse,
+        ),
         label = "skeleton-alpha",
     )
+    // Бесконечная пульсация — ровно то, что человек выключает, прося систему не анимировать.
+    val opacity = if (AgiTheme.reducedMotion) 0.55f else alpha
     Box(
         modifier = modifier
             .height(height)
-            .background(AgiTheme.colors.surfaceMuted.copy(alpha = alpha), shape)
+            .background(AgiTheme.colors.surfaceMuted.copy(alpha = opacity), shape)
     )
 }
