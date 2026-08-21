@@ -1,5 +1,7 @@
 package ru.agimate.mobile.feature.profile
 
+import androidx.activity.compose.LocalActivity
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,25 +21,33 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.push.PushHealth
 import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
-import androidx.annotation.StringRes
-import androidx.compose.ui.res.stringResource
-import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.locale.AppLanguage
+import ru.agimate.mobile.core.ui.locale.AppLanguages
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
@@ -115,6 +125,16 @@ fun ProfileScreen(
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
 
             Text(
+                text = stringResource(R.string.language_title),
+                style = AgiTheme.typography.caption,
+                color = colors.textTertiary,
+            )
+
+            LanguagePicker()
+
+            Spacer(Modifier.height(AgiTheme.spacing.xl))
+
+            Text(
                 text = stringResource(R.string.profile_devices),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
@@ -175,6 +195,78 @@ fun ProfileScreen(
                 .padding(AgiTheme.spacing.screen)
         ) {
             SecondaryButton(text = stringResource(R.string.action_sign_out), onClick = onSignOut)
+        }
+    }
+}
+
+/**
+ * Выбор языка интерфейса.
+ *
+ * Состояние держит не ViewModel: выбранный язык — это состояние системы (Android 13+) или
+ * SharedPreferences, а не экрана, и пережить пересоздание оно должно само, без чьей-либо помощи.
+ *
+ * Пересоздать экран после выбора приходится только до Android 13 — дальше это делает система, и
+ * своё `recreate()` дало бы второй перезапуск подряд, заметный морганием.
+ */
+@Composable
+private fun LanguagePicker() {
+    val colors = AgiTheme.colors
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+
+    var open by remember { mutableStateOf(false) }
+    var current by remember { mutableStateOf(AppLanguages.current(context)) }
+
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { open = true }
+                .padding(vertical = AgiTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(current.titleRes),
+                style = AgiTheme.typography.body,
+                color = colors.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = colors.textSecondary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            AppLanguage.entries.forEach { language ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(language.titleRes),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
+                    trailingIcon = {
+                        // Галочка только у выбранного: список из трёх строк без неё не говорит,
+                        // на чём человек стоит сейчас.
+                        if (language == current) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = colors.accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    },
+                    onClick = {
+                        open = false
+                        current = language
+                        if (AppLanguages.choose(context, language)) activity?.recreate()
+                    },
+                )
+            }
         }
     }
 }

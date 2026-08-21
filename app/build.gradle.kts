@@ -135,6 +135,15 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    bundle {
+        language {
+            // Смена языка в профиле несовместима с разделением бандла по языкам: split оставил бы
+            // на устройстве ресурсы только системного языка, и переключатель показывал бы список,
+            // в котором выбрать нечего.
+            enableSplit = false
+        }
+    }
+
     packaging {
         resources.excludes += setOf(
             "/META-INF/{AL2.0,LGPL2.1}",

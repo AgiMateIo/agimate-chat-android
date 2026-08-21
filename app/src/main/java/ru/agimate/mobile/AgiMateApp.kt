@@ -11,6 +11,7 @@ import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
 import ru.agimate.mobile.core.push.AppVisibility
 import ru.agimate.mobile.core.push.PushSync
+import ru.agimate.mobile.core.ui.locale.AppLanguages
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -27,6 +28,14 @@ class AgiMateApp : Application() {
      */
     @Inject
     lateinit var push: Lazy<PushSync>
+
+    /**
+     * Выбранный язык до Android 13 приходится подставлять самим, и контексту приложения — тоже:
+     * из него берёт строки уведомление, а оно рисуется, когда ни одного экрана может не быть.
+     */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(AppLanguages.applyTo(base))
+    }
 
     override fun onCreate() {
         super.onCreate()

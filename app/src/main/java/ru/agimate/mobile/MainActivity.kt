@@ -1,5 +1,6 @@
 package ru.agimate.mobile
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import ru.agimate.mobile.core.auth.CustomTabs
 import ru.agimate.mobile.core.push.PushExtras
+import ru.agimate.mobile.core.ui.locale.AppLanguages
 import ru.agimate.mobile.core.ui.theme.AgiMateTheme
 import ru.agimate.mobile.core.ui.theme.DarkColors
 import ru.agimate.mobile.core.ui.theme.LightColors
@@ -24,6 +26,10 @@ import ru.agimate.mobile.navigation.AppRoot
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguages.applyTo(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

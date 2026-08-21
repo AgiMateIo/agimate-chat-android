@@ -31,7 +31,8 @@ annotation class AuthedClient
  *
  * Подстановка origin переписала бы хост у пресайненной ссылки в хранилище, и запрос ушёл бы за
  * файлом в API. `Authorization` там тоже лишний: подпись уже внутри адреса, а хранилище на запрос
- * с двумя способами авторизации отвечает отказом.
+ * с двумя способами авторизации отвечает отказом. `Accept-Language` здесь тоже не при чём: за этим
+ * адресом лежит байтовое содержимое файла, а не текст для человека.
  */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
@@ -63,11 +64,13 @@ object NetworkModule {
     fun plainClient(
         retry: RetryInterceptor,
         origin: OriginInterceptor,
+        language: AcceptLanguageInterceptor,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
         // Ретраи снаружи всего: каждая попытка заново проходит подстановку origin и авторизацию.
         .addInterceptor(retry)
         .addInterceptor(origin)
+        .addInterceptor(language)
         .addInterceptor(logging)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -82,12 +85,14 @@ object NetworkModule {
         retry: RetryInterceptor,
         origin: OriginInterceptor,
         auth: AuthInterceptor,
+        language: AcceptLanguageInterceptor,
         authenticator: TokenAuthenticator,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(retry)
         .addInterceptor(origin)
         .addInterceptor(auth)
+        .addInterceptor(language)
         .authenticator(authenticator)
         .addInterceptor(logging)
         .connectTimeout(15, TimeUnit.SECONDS)

@@ -115,6 +115,16 @@
     <string name="create_agent_submit">Create and write</string>
     <string name="create_agent_missing">The server did not return the created agent</string>
 
+    <!--
+      Язык интерфейса. Названия языков не переводятся: язык называет себя сам, и человеку,
+      открывшему список на языке, которого он не понимает, «Английский» не поможет, а English —
+      поможет.
+    -->
+    <string name="language_title">Language</string>
+    <string name="language_system">System default</string>
+    <string name="language_ru" translatable="false">Русский</string>
+    <string name="language_en" translatable="false">English</string>
+
     <!-- Профиль и устройства -->
     <string name="profile_title">Profile</string>
     <string name="profile_no_name">No name</string>

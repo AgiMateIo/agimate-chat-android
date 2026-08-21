@@ -108,6 +108,10 @@
     <string name="create_agent_submit">Завести и написать</string>
     <string name="create_agent_missing">Сервер не вернул созданного агента</string>
 
+    <!-- Названия языков не переводятся и живут только в базовых ресурсах. -->
+    <string name="language_title">Язык</string>
+    <string name="language_system">Как в системе</string>
+
     <!-- Профиль и устройства -->
     <string name="profile_title">Профиль</string>
     <string name="profile_no_name">Без имени</string>
