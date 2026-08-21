@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -18,8 +20,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.push.RequestNotificationPermission
+import ru.agimate.mobile.core.share.rememberSaveGate
+import ru.agimate.mobile.feature.chat.ChatEffect
 import ru.agimate.mobile.feature.chat.ChatScreen
 import ru.agimate.mobile.feature.chat.ChatViewModel
+import ru.agimate.mobile.feature.chat.MessageActions
 import ru.agimate.mobile.feature.contacts.ContactsScreen
 import ru.agimate.mobile.feature.contacts.ContactsViewModel
 import ru.agimate.mobile.feature.createagent.CreateAgentScreen
@@ -159,6 +164,30 @@ fun MainGraph(
                 ActivityResultContracts.OpenMultipleDocuments()
             ) { uris -> if (uris.isNotEmpty()) viewModel.addAttachments(uris) }
 
+            // Диалог «поделиться» и открытие файла чужим приложением запускает экран: ViewModel
+            // собирает интент, но `startActivity` нужен контекст, и держать его во ViewModel
+            // значит держать там же утёкшую Activity.
+            val context = LocalContext.current
+            LaunchedEffect(viewModel) {
+                viewModel.effects.collect { effect ->
+                    when (effect) {
+                        is ChatEffect.Launch -> context.startActivity(effect.intent)
+                    }
+                }
+            }
+
+            // До Android 10 сохранение требует разрешения, и спросить его может только экран.
+            val save = rememberSaveGate(onDenied = viewModel::onSaveDenied)
+            val actions = remember(viewModel, save) {
+                MessageActions(
+                    onCopy = viewModel::copyMessage,
+                    onShare = viewModel::shareMessage,
+                    onOpenFile = viewModel::openAttachment,
+                    onSaveFile = { attachment -> save { viewModel.saveAttachment(attachment) } },
+                    onShareFile = viewModel::shareAttachment,
+                )
+            }
+
             ChatScreen(
                 state = state,
                 fileUrl = viewModel::fileUrl,
@@ -171,6 +200,7 @@ fun MainGraph(
                 onLoadOlder = viewModel::loadOlder,
                 onReachedBottom = viewModel::onReachedBottom,
                 onRetryMessage = viewModel::retry,
+                actions = actions,
                 onOpenSessions = {
                     if (agentId != null) {
                         navController.navigate(

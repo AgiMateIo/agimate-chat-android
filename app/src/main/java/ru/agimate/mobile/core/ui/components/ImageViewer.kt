@@ -7,13 +7,17 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -28,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,7 +60,14 @@ private const val DOUBLE_TAP_SCALE = 2.5f
  * минут, и класть его в back stack значит когда-нибудь вернуться к нему протухшим.
  */
 @Composable
-fun ImageViewer(image: ViewerImage, onClose: () -> Unit) {
+fun ImageViewer(
+    image: ViewerImage,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    onClose: () -> Unit,
+    /** Строка о сохранении или подготовке файла: полоска чата отсюда не видна, она под слоем. */
+    status: String? = null,
+) {
     val colors = AgiTheme.colors
 
     var viewport by remember { mutableStateOf(Size.Zero) }
@@ -156,20 +168,55 @@ fun ImageViewer(image: ViewerImage, onClose: () -> Unit) {
             }
         }
 
-        Icon(
-            imageVector = Icons.Outlined.Close,
-            contentDescription = "Закрыть",
-            tint = Color.White,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(AgiTheme.spacing.sm)
-                .background(colors.scrim, CircleShape)
-                .padding(AgiTheme.spacing.xs)
-                .size(24.dp)
-                .pointerInput(Unit) { detectTapGestures { onClose() } },
-        )
+                .padding(AgiTheme.spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
+        ) {
+            // Действия появляются вместе с картинкой: сохранять и отправлять нечего, пока её нет.
+            if (ready) {
+                ViewerAction(Icons.Outlined.Download, "Сохранить", colors.scrim, onSave)
+                ViewerAction(Icons.Outlined.Share, "Поделиться", colors.scrim, onShare)
+            }
+            ViewerAction(Icons.Outlined.Close, "Закрыть", colors.scrim, onClose)
+        }
+
+        if (status != null) {
+            Text(
+                text = status,
+                style = AgiTheme.typography.caption,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(AgiTheme.spacing.lg)
+                    .background(colors.scrim, AgiTheme.shapes.pill)
+                    .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm),
+            )
+        }
     }
+}
+
+/** Кнопка поверх картинки: белая на затемнении, чтобы читалась и на светлом снимке. */
+@Composable
+private fun ViewerAction(
+    icon: ImageVector,
+    label: String,
+    background: Color,
+    onClick: () -> Unit,
+) {
+    Icon(
+        imageVector = icon,
+        contentDescription = label,
+        tint = Color.White,
+        modifier = Modifier
+            .background(background, CircleShape)
+            .padding(AgiTheme.spacing.xs)
+            .size(24.dp)
+            .pointerInput(Unit) { detectTapGestures { onClick() } },
+    )
 }
 
 /** Масштаб и сдвиг картинки в пикселях от центра области. */

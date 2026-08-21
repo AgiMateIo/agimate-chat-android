@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -79,6 +81,27 @@ import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.webchat.PendingAttachment
 
+/**
+ * Что можно сделать с сообщением и его файлами.
+ *
+ * Пучком, а не пятью параметрами: экран передаёт их насквозь до каждого пузыря, и врозь они
+ * заняли бы половину каждой сигнатуры по дороге.
+ */
+@Immutable
+data class MessageActions(
+    val onCopy: (ChatMessage) -> Unit,
+    val onShare: (ChatMessage) -> Unit,
+    val onOpenFile: (Attachment) -> Unit,
+    val onSaveFile: (Attachment) -> Unit,
+    val onShareFile: (Attachment) -> Unit,
+)
+
+/**
+ * Что открыто в просмотрщике: адрес для показа и само вложение — «сохранить» и «поделиться»
+ * работают с файлом, а не с картинкой на экране.
+ */
+private data class OpenImage(val image: ViewerImage, val attachment: Attachment)
+
 /** За сколько элементов до верха ленты просить следующую страницу. */
 private const val LOAD_OLDER_THRESHOLD = 4
 
@@ -98,6 +121,7 @@ fun ChatScreen(
     onLoadOlder: () -> Unit,
     onReachedBottom: () -> Unit,
     onRetryMessage: (ChatMessage) -> Unit,
+    actions: MessageActions,
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
@@ -146,7 +170,7 @@ fun ChatScreen(
 
     // Просмотрщик — слой поверх экрана, а не маршрут навигации: подписанный адрес живёт 15 минут,
     // и в back stack он рано или поздно окажется протухшим.
-    var viewer by remember { mutableStateOf<ViewerImage?>(null) }
+    var viewer by remember { mutableStateOf<OpenImage?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -212,7 +236,13 @@ fun ChatScreen(
                             }
                         }
 
-                        chatItems(state.items, fileUrl, onRetryMessage, onOpenImage = { viewer = it })
+                        chatItems(
+                            items = state.items,
+                            fileUrl = fileUrl,
+                            actions = actions,
+                            onRetryMessage = onRetryMessage,
+                            onOpenImage = { viewer = it },
+                        )
 
                         if (state.loadingOlder) {
                             item {
@@ -245,8 +275,15 @@ fun ChatScreen(
             )
         }
 
-        viewer?.let { image ->
-            ImageViewer(image = image, onClose = { viewer = null })
+        viewer?.let { open ->
+            ImageViewer(
+                image = open.image,
+                onSave = { actions.onSaveFile(open.attachment) },
+                onShare = { actions.onShareFile(open.attachment) },
+                onClose = { viewer = null },
+                // Полоска чата осталась под слоем просмотрщика: свой ответ ему нужен свой.
+                status = state.fileNotice?.text,
+            )
         }
     }
 }
@@ -254,8 +291,9 @@ fun ChatScreen(
 private fun LazyListScope.chatItems(
     items: List<ChatItem>,
     fileUrl: (String) -> String,
+    actions: MessageActions,
     onRetryMessage: (ChatMessage) -> Unit,
-    onOpenImage: (ViewerImage) -> Unit,
+    onOpenImage: (OpenImage) -> Unit,
 ) {
     items(count = items.size, key = { items[it].key }) { index ->
         // Соседи уезжают на новые места пружиной, а не телепортом. Проявление — только самому
@@ -270,6 +308,7 @@ private fun LazyListScope.chatItems(
             is ChatItem.Bubble -> MessageBubble(
                 message = item.message,
                 fileUrl = fileUrl,
+                actions = actions,
                 onRetry = { onRetryMessage(item.message) },
                 onOpenImage = onOpenImage,
                 modifier = appear,
@@ -378,13 +417,17 @@ private fun ChatHeader(
 private fun MessageBubble(
     message: ChatMessage,
     fileUrl: (String) -> String,
+    actions: MessageActions,
     onRetry: () -> Unit,
-    onOpenImage: (ViewerImage) -> Unit,
+    onOpenImage: (OpenImage) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = AgiTheme.colors
     val own = message.isOwn
     val isError = message.stream == MessageStream.ERROR
+    val text = message.text
+    val hasText = !text.isNullOrBlank()
+    var menuOpen by remember { mutableStateOf(false) }
 
     val background = when {
         isError -> colors.dangerQuiet
@@ -401,55 +444,77 @@ private fun MessageBubble(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (own) Arrangement.End else Arrangement.Start,
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .background(background, bubbleShape(own))
-                .then(
-                    if (own || isError) Modifier
-                    else Modifier.border(1.dp, colors.hairline, bubbleShape(false))
-                )
-                .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm)
-                .alpha(if (message.pending) 0.6f else 1f),
-        ) {
-            message.attachments.forEach { attachment ->
-                AttachmentView(
-                    attachment = attachment,
-                    fileUrl = fileUrl,
-                    onOpenImage = onOpenImage,
-                )
-                Spacer(Modifier.height(AgiTheme.spacing.xs))
-            }
-
-            val text = message.text
-            if (!text.isNullOrBlank()) {
-                if (own || isError) {
-                    Text(text = text, style = AgiTheme.typography.body, color = textColor)
-                } else {
-                    // Ответ агента — markdown: списки, жирный, код, ссылки, таблицы.
-                    MarkdownText(content = text, textColor = textColor, modifier = Modifier)
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+        // Box — якорь меню: оно должно выйти у пузыря, а не у края экрана.
+        Box {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .background(background, bubbleShape(own))
+                    .then(
+                        if (own || isError) Modifier
+                        else Modifier.border(1.dp, colors.hairline, bubbleShape(false))
+                    )
+                    // Долгое нажатие — только у сообщения с текстом: пузырь из одного вложения весь
+                    // и есть вложение, и меню там своё, файловое.
+                    .then(
+                        if (hasText) Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = { menuOpen = true },
+                        ) else Modifier
+                    )
+                    .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm)
+                    .alpha(if (message.pending) 0.6f else 1f),
             ) {
-                if (message.failed) {
-                    Text(
-                        text = "не отправлено · повторить",
-                        style = AgiTheme.typography.caption,
-                        color = colors.danger,
-                        modifier = Modifier.clickable(onClick = onRetry),
+                message.attachments.forEach { attachment ->
+                    AttachmentView(
+                        attachment = attachment,
+                        fileUrl = fileUrl,
+                        actions = actions,
+                        onOpenImage = onOpenImage,
                     )
-                } else {
-                    Text(
-                        text = if (message.pending) "отправляется…" else TimeFormat.messageStamp(message.createdAt),
-                        style = AgiTheme.typography.caption,
-                        color = colors.textTertiary,
-                    )
+                    Spacer(Modifier.height(AgiTheme.spacing.xs))
                 }
+
+                if (!text.isNullOrBlank()) {
+                    if (own || isError) {
+                        Text(text = text, style = AgiTheme.typography.body, color = textColor)
+                    } else {
+                        // Ответ агента — markdown: списки, жирный, код, ссылки, таблицы.
+                        MarkdownText(content = text, textColor = textColor, modifier = Modifier)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (message.failed) {
+                        Text(
+                            text = "не отправлено · повторить",
+                            style = AgiTheme.typography.caption,
+                            color = colors.danger,
+                            modifier = Modifier.clickable(onClick = onRetry),
+                        )
+                    } else {
+                        Text(
+                            text = if (message.pending) "отправляется…" else TimeFormat.messageStamp(message.createdAt),
+                            style = AgiTheme.typography.caption,
+                            color = colors.textTertiary,
+                        )
+                    }
+                }
+            }
+
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Поделиться", style = AgiTheme.typography.body) },
+                    onClick = { menuOpen = false; actions.onShare(message) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Копировать", style = AgiTheme.typography.body) },
+                    onClick = { menuOpen = false; actions.onCopy(message) },
+                )
             }
         }
     }
@@ -461,59 +526,98 @@ private fun bubbleShape(own: Boolean) = if (own) {
     RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
 }
 
+/**
+ * Вложение в пузыре.
+ *
+ * Картинку открывает тап — просмотрщиком; у файла открывать нечем, и тап показывает, что с ним
+ * вообще можно сделать. Долгое нажатие в обоих случаях приводит к одному и тому же меню: это
+ * привычный жест, и искать его отдельно для картинок человек не должен.
+ */
 @Composable
 private fun AttachmentView(
     attachment: Attachment,
     fileUrl: (String) -> String,
-    onOpenImage: (ViewerImage) -> Unit,
+    actions: MessageActions,
+    onOpenImage: (OpenImage) -> Unit,
 ) {
     val colors = AgiTheme.colors
     val url = attachment.url?.let(fileUrl)
+    var menuOpen by remember { mutableStateOf(false) }
 
-    if (attachment.isImage && url != null) {
-        // Размеров картинки сервер не отдаёт, так что до загрузки её высота неизвестна: пузырь
-        // рождался нулевой высоты и подпрыгивал, когда картинка доезжала. Скелетон занимает место
-        // заранее, а разницу между ним и настоящим размером сглаживает animateContentSize.
-        SubcomposeAsyncImage(
-            model = url,
-            contentDescription = attachment.name,
-            contentScale = ContentScale.Fit,
-            loading = {
-                Skeleton(
-                    modifier = Modifier.width(240.dp),
-                    height = 160.dp,
-                    shape = AgiTheme.shapes.card,
-                )
-            },
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .heightIn(max = 320.dp)
-                .animateContentSize()
-                .background(colors.surfaceMuted, AgiTheme.shapes.card)
-                // Адрес берётся в момент тапа: подпись живёт 15 минут, и запоминать её заранее
-                // значит открыть просмотр по протухшей ссылке.
-                .clickable { onOpenImage(ViewerImage(url, attachment.name)) },
-        )
-    } else {
-        Row(
-            modifier = Modifier
-                .background(colors.surfaceMuted, AgiTheme.shapes.control)
-                .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.AttachFile,
-                contentDescription = null,
-                tint = colors.textSecondary,
-                modifier = Modifier.size(18.dp),
+    Box {
+        if (attachment.isImage && url != null) {
+            // Размеров картинки сервер не отдаёт, так что до загрузки её высота неизвестна: пузырь
+            // рождался нулевой высоты и подпрыгивал, когда картинка доезжала. Скелетон занимает
+            // место заранее, а разницу между ним и настоящим размером сглаживает animateContentSize.
+            SubcomposeAsyncImage(
+                model = url,
+                contentDescription = attachment.name,
+                contentScale = ContentScale.Fit,
+                loading = {
+                    Skeleton(
+                        modifier = Modifier.width(240.dp),
+                        height = 160.dp,
+                        shape = AgiTheme.shapes.card,
+                    )
+                },
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .heightIn(max = 320.dp)
+                    .animateContentSize()
+                    .background(colors.surfaceMuted, AgiTheme.shapes.card)
+                    // Адрес берётся в момент тапа: подпись живёт 15 минут, и запоминать её заранее
+                    // значит открыть просмотр по протухшей ссылке.
+                    .combinedClickable(
+                        onClick = {
+                            onOpenImage(OpenImage(ViewerImage(url, attachment.name), attachment))
+                        },
+                        onLongClick = { menuOpen = true },
+                    ),
             )
-            Spacer(Modifier.width(AgiTheme.spacing.sm))
-            Text(
-                text = attachment.name ?: "Вложение",
-                style = AgiTheme.typography.secondary,
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        } else {
+            Row(
+                modifier = Modifier
+                    .background(colors.surfaceMuted, AgiTheme.shapes.control)
+                    .combinedClickable(
+                        onClick = { menuOpen = true },
+                        onLongClick = { menuOpen = true },
+                    )
+                    .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.AttachFile,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(AgiTheme.spacing.sm))
+                Text(
+                    text = attachment.name ?: "Вложение",
+                    style = AgiTheme.typography.secondary,
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            // У картинки «открыть» — это просмотрщик по тапу, и второй раз тем же словом про
+            // чужое приложение говорить незачем.
+            if (!attachment.isImage) {
+                DropdownMenuItem(
+                    text = { Text("Открыть", style = AgiTheme.typography.body) },
+                    onClick = { menuOpen = false; actions.onOpenFile(attachment) },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Сохранить", style = AgiTheme.typography.body) },
+                onClick = { menuOpen = false; actions.onSaveFile(attachment) },
+            )
+            DropdownMenuItem(
+                text = { Text("Поделиться", style = AgiTheme.typography.body) },
+                onClick = { menuOpen = false; actions.onShareFile(attachment) },
             )
         }
     }
@@ -687,6 +791,30 @@ private fun Composer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(colors.dangerQuiet)
+                    .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.sm),
+            )
+        }
+
+        // Ответ на «сохранить» и «поделиться». Отдельно от полоски ошибки отправки: у той свой
+        // повод и своя судьба — она ждёт, пока человек снова возьмётся за поле ввода.
+        var lastNotice by remember { mutableStateOf<FileNotice?>(null) }
+        LaunchedEffect(state.fileNotice) {
+            state.fileNotice?.let { lastNotice = it }
+        }
+
+        AnimatedVisibility(
+            visible = state.fileNotice != null,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            val failed = lastNotice?.failed == true
+            Text(
+                text = lastNotice?.text.orEmpty(),
+                style = AgiTheme.typography.caption,
+                color = if (failed) colors.danger else colors.textSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (failed) colors.dangerQuiet else colors.surfaceMuted)
                     .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.sm),
             )
         }

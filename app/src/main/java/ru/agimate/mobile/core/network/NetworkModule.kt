@@ -26,6 +26,17 @@ annotation class PlainClient
 @Retention(AnnotationRetention.BINARY)
 annotation class AuthedClient
 
+/**
+ * Клиент для скачивания вложений — без единого интерсептора, и это принципиально.
+ *
+ * Подстановка origin переписала бы хост у пресайненной ссылки в хранилище, и запрос ушёл бы за
+ * файлом в API. `Authorization` там тоже лишний: подпись уже внутри адреса, а хранилище на запрос
+ * с двумя способами авторизации отвечает отказом.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class FileClient
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -84,6 +95,17 @@ object NetworkModule {
         // можно ждать заметно дольше обычного. Загрузка файла — до 50 МБ.
         .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    @Provides
+    @Singleton
+    @FileClient
+    fun fileClient(logging: HttpLoggingInterceptor): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(logging)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        // Вложение — до 50 МБ, и качается оно в файл, а не в разбор JSON.
+        .readTimeout(120, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
 

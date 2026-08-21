@@ -1,5 +1,6 @@
 package ru.agimate.mobile.feature.chat
 
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -7,10 +8,13 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.network.OriginProvider
@@ -20,6 +24,10 @@ import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.realtime.SessionEvent
 import ru.agimate.mobile.core.realtime.WebchatMessagePayload
+import ru.agimate.mobile.core.share.FileStore
+import ru.agimate.mobile.core.share.RemoteFile
+import ru.agimate.mobile.core.share.SavedTo
+import ru.agimate.mobile.core.share.Sharing
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.AttachmentUploader
 import ru.agimate.mobile.data.webchat.ChatMessage
@@ -30,6 +38,25 @@ import ru.agimate.mobile.data.webchat.WebchatRepository
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
+
+/**
+ * Короткая строка о файле: «сохраняю…», «сохранено в галерею», «ссылка устарела».
+ *
+ * Отдельно от [ChatUiState.sendError]: та полоска про отправку сообщения и висит, пока человек её
+ * не перебьёт, а эта рассказывает про действие, которое уже закончилось, и гаснет сама.
+ */
+data class FileNotice(val text: String, val failed: Boolean = false)
+
+/**
+ * Разовое действие, которое экрану нужно совершить за ViewModel.
+ *
+ * Запуск чужого приложения — не состояние: показать диалог выбора второй раз после поворота экрана
+ * было бы не восстановлением, а сюрпризом.
+ */
+sealed interface ChatEffect {
+    /** Готовый интент: собрать его — дело ViewModel, запустить — экрана, у него есть контекст. */
+    data class Launch(val intent: Intent) : ChatEffect
+}
 
 data class ChatUiState(
     val agentName: String = "",
@@ -48,6 +75,8 @@ data class ChatUiState(
     val attachments: List<PendingAttachment> = emptyList(),
     val sending: Boolean = false,
     val sendError: String? = null,
+    /** Что сейчас происходит с файлом или буфером обмена. */
+    val fileNotice: FileNotice? = null,
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
 ) {
     val canSend: Boolean
@@ -68,6 +97,8 @@ class ChatViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
     private val uploader: AttachmentUploader,
+    private val files: FileStore,
+    private val sharing: Sharing,
     private val origins: OriginProvider,
     private val openChats: OpenChatTracker,
     savedState: SavedStateHandle,
@@ -86,11 +117,18 @@ class ChatViewModel @Inject constructor(
     )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<ChatEffect>(Channel.BUFFERED)
+    val effects: Flow<ChatEffect> = _effects.receiveAsFlow()
+
     /** Лента хранится от новых к старым — как её отдаёт сервер и как рисует перевёрнутый список. */
     private var messages: List<ChatMessage> = emptyList()
 
     private var nextPage = 0
     private var loadOlderJob: Job? = null
+
+    /** Дело с файлом — одно за раз; строка о нём — тоже одна. */
+    private var fileJob: Job? = null
+    private var noticeJob: Job? = null
 
     /** Чем в последний раз двигали указатель прочтения — чтобы не звать сервер на каждый скролл. */
     private var lastReadMarker: String? = null
@@ -382,6 +420,103 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // ------------------------------------------------- поделиться и сохранить
+
+    /** Текст сообщения — наружу. Вложения у сообщения свои действия, они не про текст. */
+    fun shareMessage(message: ChatMessage) {
+        val text = message.text?.takeIf { it.isNotBlank() } ?: return
+        handOff(sharing.shareText(text))
+    }
+
+    fun copyMessage(message: ChatMessage) {
+        val text = message.text?.takeIf { it.isNotBlank() } ?: return
+        sharing.copy(text)
+        if (!sharing.clipboardConfirmsItself) notice("Скопировано")
+    }
+
+    fun openAttachment(attachment: Attachment) = withFile(attachment, "Открываю файл…") { file ->
+        handOff(sharing.openFile(files.cache(file), file.mime))
+        null
+    }
+
+    fun shareAttachment(attachment: Attachment) = withFile(attachment, "Готовлю файл…") { file ->
+        handOff(sharing.shareFile(files.cache(file), file.mime))
+        null
+    }
+
+    fun saveAttachment(attachment: Attachment) = withFile(attachment, "Сохраняю…") { file ->
+        when (files.save(file)) {
+            SavedTo.GALLERY -> "Сохранено в галерею"
+            SavedTo.DOWNLOADS -> "Сохранено в «Загрузки»"
+        }
+    }
+
+    /** Разрешения на память не дали. Промолчать нельзя: нажатие осталось бы без всякого ответа. */
+    fun onSaveDenied() = notice("Без доступа к памяти сохранять некуда", failed = true)
+
+    /**
+     * Общая обвязка действий с файлом: скачать его нужно всем троим, и все трое делают это не
+     * мгновенно.
+     *
+     * [block] возвращает строку, которой заканчивается дело, или `null`, если дальше говорит уже
+     * не приложение: диалог выбора и так виден, и подпись под ним была бы лишней.
+     */
+    private fun withFile(
+        attachment: Attachment,
+        progress: String,
+        block: suspend (RemoteFile) -> String?,
+    ) {
+        val file = attachment.remote()
+        if (file == null) {
+            // Ссылки нет у своего же сообщения, пока сервер не подтвердил отправку.
+            notice("Файл ещё не доехал до сервера", failed = true)
+            return
+        }
+        // Второй тап не запускает вторую закачку: 50 МБ по мобильной сети качаются небыстро.
+        if (fileJob?.isActive == true) return
+
+        fileJob = viewModelScope.launch {
+            working(progress)
+            try {
+                val done = block(file)
+                if (done == null) clearNotice() else notice(done)
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                notice(e.toApiException().message.orEmpty(), failed = true)
+            }
+        }
+    }
+
+    private fun Attachment.remote(): RemoteFile? {
+        val address = url?.takeIf { it.isNotBlank() }?.let(origins::fileUrl) ?: return null
+        return RemoteFile(id = fileId, url = address, name = name, mime = mime)
+    }
+
+    private fun handOff(intent: Intent) {
+        _effects.trySend(ChatEffect.Launch(intent))
+    }
+
+    /** Строка о том, что уже случилось: гаснет сама — держать её на экране незачем. */
+    private fun notice(text: String, failed: Boolean = false) {
+        noticeJob?.cancel()
+        _state.update { it.copy(fileNotice = FileNotice(text, failed)) }
+        noticeJob = viewModelScope.launch {
+            delay(NOTICE_MILLIS)
+            _state.update { it.copy(fileNotice = null) }
+        }
+    }
+
+    /** Строка о том, что происходит прямо сейчас: она и есть признак работы, гаснуть ей нельзя. */
+    private fun working(text: String) {
+        noticeJob?.cancel()
+        _state.update { it.copy(fileNotice = FileNotice(text)) }
+    }
+
+    private fun clearNotice() {
+        noticeJob?.cancel()
+        _state.update { it.copy(fileNotice = null) }
+    }
+
     // ---------------------------------------------------------------- прочее
 
     /**
@@ -446,5 +581,8 @@ class ChatViewModel @Inject constructor(
     private companion object {
         /** Сколько ждать живую связь, прежде чем признать её потерянной. */
         const val SLOW_CONNECT_MS = 10_000L
+
+        /** Сколько висит строка о законченном деле с файлом. */
+        const val NOTICE_MILLIS = 4_000L
     }
 }
