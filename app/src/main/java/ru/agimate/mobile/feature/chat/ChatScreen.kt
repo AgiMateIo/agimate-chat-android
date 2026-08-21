@@ -43,6 +43,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -57,6 +58,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -64,15 +66,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
@@ -582,6 +588,46 @@ private fun bubbleShape(own: Boolean) = if (own) {
 }
 
 /**
+ * Место под картинку.
+ *
+ * Ширина одна на все картинки, высота считается из пропорции и подрезается: очень длинный кадр
+ * иначе занял бы экран целиком, а очень широкий выродился бы в полоску.
+ */
+private val IMAGE_WIDTH = 240.dp
+private val IMAGE_MIN_HEIGHT = 120.dp
+private val IMAGE_MAX_HEIGHT = 320.dp
+
+/** Пока пропорция неизвестна — альбомная: так снято большинство того, что присылают. */
+private const val DEFAULT_IMAGE_RATIO = 4f / 3f
+
+/**
+ * Пропорции картинок, узнанные при загрузке.
+ *
+ * Размеров вложения сервер не отдаёт — их нет ни в ответе, ни в хранимых `parts`, — поэтому до
+ * первой загрузки высота картинки неизвестна и место под неё резервируется наугад. Дальше
+ * пропорция известна, и при возврате в переписку или прокрутке назад лента уже не дёргается.
+ *
+ * Кеш живёт в процессе и ограничен: картинок за сеанс немного, но расти без предела он не должен.
+ * Настоящее лечение — размеры в контракте; тогда этот объект исчезнет.
+ */
+private object ImageRatios {
+
+    private const val MAX = 128
+
+    private val ratios = object : LinkedHashMap<String, Float>(MAX, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Float>) = size > MAX
+    }
+
+    operator fun get(fileId: String?): Float? =
+        fileId?.let { synchronized(ratios) { ratios[it] } }
+
+    operator fun set(fileId: String?, ratio: Float) {
+        fileId ?: return
+        synchronized(ratios) { ratios[fileId] = ratio }
+    }
+}
+
+/**
  * Вложение в пузыре.
  *
  * Картинку открывает тап — просмотрщиком; у файла открывать нечем, и тап показывает, что с ним
@@ -599,26 +645,68 @@ private fun AttachmentView(
     val url = attachment.url?.let(fileUrl)
     var menuOpen by remember { mutableStateOf(false) }
 
+    // Пропорцию помним между композициями: место под картинку резервируется до загрузки, и
+    // приехавшая картинка не двигает ленту. Первый раз пропорция неизвестна — тогда одна правка
+    // высоты на месте, без анимации.
+    var ratio by remember(attachment.fileId) {
+        mutableFloatStateOf(ImageRatios[attachment.fileId] ?: DEFAULT_IMAGE_RATIO)
+    }
+    val reserved = (IMAGE_WIDTH / ratio).coerceIn(IMAGE_MIN_HEIGHT, IMAGE_MAX_HEIGHT)
+
+    // Размер запроса привязан к самой большой возможной рамке, а не к текущей. Иначе первый показ
+    // декодировал бы картинку под рамку, посчитанную по угаданной пропорции: узнав настоящую,
+    // рамка вырастала, а декодированная под старую картинка так и оставалась меньше неё — при
+    // следующем заходе та же картинка занимала рамку целиком, и это выглядело как две разные.
+    val platform = LocalPlatformContext.current
+    val density = LocalDensity.current
+    val request = remember(url, platform, density) {
+        ImageRequest.Builder(platform)
+            .data(url)
+            .size(
+                width = with(density) { IMAGE_WIDTH.roundToPx() },
+                height = with(density) { IMAGE_MAX_HEIGHT.roundToPx() },
+            )
+            .build()
+    }
+
     Box {
         if (attachment.isImage && url != null) {
-            // Размеров картинки сервер не отдаёт, так что до загрузки её высота неизвестна: пузырь
-            // рождался нулевой высоты и подпрыгивал, когда картинка доезжала. Скелетон занимает
-            // место заранее, а разницу между ним и настоящим размером сглаживает animateContentSize.
             SubcomposeAsyncImage(
-                model = url,
+                model = request,
                 contentDescription = attachment.name,
                 contentScale = ContentScale.Fit,
                 loading = {
                     Skeleton(
-                        modifier = Modifier.width(240.dp),
-                        height = 160.dp,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = reserved,
                         shape = AgiTheme.shapes.card,
                     )
                 },
+                // Без своей рамки протухшая ссылка схлопывала пузырь в ноль — то же дёрганье,
+                // только в обратную сторону.
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.BrokenImage,
+                            contentDescription = stringResource(R.string.viewer_load_failed),
+                            tint = colors.textTertiary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                },
+                onSuccess = { state ->
+                    val measured = state.painter.intrinsicSize
+                    if (measured.isSpecified && measured.width > 0f && measured.height > 0f) {
+                        val actual = measured.width / measured.height
+                        ImageRatios[attachment.fileId] = actual
+                        ratio = actual
+                    }
+                },
                 modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .heightIn(max = 320.dp)
-                    .animateContentSize()
+                    .size(width = IMAGE_WIDTH, height = reserved)
                     .background(colors.surfaceMuted, AgiTheme.shapes.card)
                     // Адрес берётся в момент тапа: подпись живёт 15 минут, и запоминать её заранее
                     // значит открыть просмотр по протухшей ссылке.
