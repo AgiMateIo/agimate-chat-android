@@ -1,6 +1,7 @@
 package ru.agimate.mobile.feature.chat
 
 import ru.agimate.mobile.core.ui.format.TimeFormat
+import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
 import java.time.ZoneId
@@ -19,7 +20,7 @@ sealed interface ChatItem {
      */
     data class ProgressGroup(override val key: String, val lines: List<ChatMessage>) : ChatItem
 
-    data class DaySeparator(override val key: String, val label: String) : ChatItem
+    data class DaySeparator(override val key: String, val label: UiText) : ChatItem
 }
 
 /**

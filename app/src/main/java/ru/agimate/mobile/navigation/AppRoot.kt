@@ -19,6 +19,7 @@ import ru.agimate.mobile.core.auth.AuthProvider
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.FullScreenLoading
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.feature.login.LoginScreen
 import ru.agimate.mobile.feature.pending.PendingApprovalScreen
@@ -68,7 +69,7 @@ fun AppRoot(
                 )
 
                 is AppSession.Unavailable -> ErrorState(
-                    message = current.message.ifBlank { "Не удалось связаться с сервером" },
+                    message = current.text.resolve(),
                     onRetry = onRefreshSession,
                 )
 

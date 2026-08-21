@@ -31,12 +31,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.agents.AgentPresetDto
 
@@ -82,7 +85,7 @@ private fun PresetGallery(
             .fillMaxSize()
             .background(colors.background)
     ) {
-        StepHeader(title = "Кем будет агент", onBack = onBack)
+        StepHeader(title = stringResource(R.string.create_agent_title), onBack = onBack)
 
         when {
             state.loading -> Column(
@@ -94,7 +97,7 @@ private fun PresetGallery(
                 }
             }
 
-            state.error != null -> ErrorState(message = state.error, onRetry = onRetry)
+            state.error != null -> ErrorState(message = state.error.resolve(), onRetry = onRetry)
 
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -107,7 +110,7 @@ private fun PresetGallery(
             ) {
                 item {
                     Text(
-                        text = "Роль задаёт характер и привычки агента. Позже её можно поменять.",
+                        text = stringResource(R.string.create_agent_role_hint),
                         style = AgiTheme.typography.secondary,
                         color = colors.textSecondary,
                         modifier = Modifier.padding(bottom = AgiTheme.spacing.sm),
@@ -185,7 +188,7 @@ private fun ConfirmStep(
                 .padding(horizontal = AgiTheme.spacing.screen),
         ) {
             Text(
-                text = "Имя",
+                text = stringResource(R.string.create_agent_name),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
@@ -210,13 +213,16 @@ private fun ConfirmStep(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Инструкция",
+                    text = stringResource(R.string.create_agent_instructions),
                     style = AgiTheme.typography.caption,
                     color = colors.textTertiary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = if (state.instructionsExpanded) "Свернуть" else "Показать полностью",
+                    text = stringResource(
+                        if (state.instructionsExpanded) R.string.create_agent_collapse
+                        else R.string.create_agent_expand
+                    ),
                     style = AgiTheme.typography.caption,
                     color = colors.accent,
                     modifier = Modifier.clickable(onClick = onToggleInstructions),
@@ -257,7 +263,7 @@ private fun ConfirmStep(
             if (state.createError != null) {
                 Spacer(Modifier.height(AgiTheme.spacing.md))
                 Text(
-                    text = state.createError,
+                    text = state.createError.resolve(),
                     style = AgiTheme.typography.secondary,
                     color = colors.danger,
                 )
@@ -273,7 +279,7 @@ private fun ConfirmStep(
                 .padding(AgiTheme.spacing.screen)
         ) {
             PrimaryButton(
-                text = "Завести и написать",
+                text = stringResource(R.string.create_agent_submit),
                 onClick = onCreate,
                 enabled = state.name.isNotBlank(),
                 busy = state.creating,
@@ -300,7 +306,7 @@ private fun StepHeader(title: String, onBack: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Назад",
+                contentDescription = stringResource(R.string.action_back),
                 tint = colors.textPrimary,
             )
         }

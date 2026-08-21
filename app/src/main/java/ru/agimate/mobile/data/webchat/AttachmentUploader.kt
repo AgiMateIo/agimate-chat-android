@@ -7,7 +7,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.network.ApiException
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +23,7 @@ data class PendingAttachment(
     val uri: Uri,
     val fileId: String? = null,
     val uploading: Boolean = true,
-    val error: String? = null,
+    val error: UiText? = null,
 ) {
     val isImage: Boolean get() = mime?.startsWith("image/") == true
 }
@@ -37,7 +40,7 @@ class AttachmentUploader @Inject constructor(
     private val repository: WebchatRepository,
 ) {
     fun describe(uri: Uri, localId: String): PendingAttachment {
-        var name = "файл"
+        var name = context.getString(R.string.file_default_name)
         var size = 0L
         context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -60,10 +63,10 @@ class AttachmentUploader @Inject constructor(
         runCatching {
             if (attachment.sizeBytes > MAX_FILE_BYTES) {
                 // Читать 200 МБ в память, чтобы получить в ответ 400, незачем.
-                throw ApiException.BadRequest("Файл больше 50 МБ — сервер его не примет")
+                throw ApiException.BadRequest(uiText(R.string.error_file_too_big), "file over limit")
             }
             val bytes = context.contentResolver.openInputStream(attachment.uri)?.use { it.readBytes() }
-                ?: throw ApiException.BadRequest("Не удалось прочитать файл")
+                ?: throw ApiException.BadRequest(uiText(R.string.error_file_unreadable), "unreadable uri")
 
             try {
                 repository.upload(attachment.name, attachment.mime, bytes).fileId
@@ -75,7 +78,8 @@ class AttachmentUploader @Inject constructor(
                     repository.upload(attachment.name, attachment.mime, bytes).fileId
                 } catch (_: ApiException.RateLimited) {
                     throw ApiException.RateLimited(
-                        "Слишком много загрузок подряд — попробуйте через минуту"
+                        uiText(R.string.error_upload_rate_limited),
+                        "upload rate limit, retry exhausted",
                     )
                 }
             }

@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.StringRes
 import dagger.hilt.android.qualifiers.ApplicationContext
+import ru.agimate.mobile.R
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,14 +32,15 @@ class Sharing @Inject constructor(
 
     fun copy(text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text))
+        val label = context.getString(R.string.file_clip_label)
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 
     fun shareText(text: String): Intent = chooser(
         Intent(Intent.ACTION_SEND)
             .setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, text),
-        title = "Поделиться сообщением",
+        title = R.string.file_chooser_share_message,
     )
 
     fun shareFile(uri: Uri, mime: String?): Intent = chooser(
@@ -45,14 +48,14 @@ class Sharing @Inject constructor(
             .setType(mime ?: ANY_TYPE)
             .putExtra(Intent.EXTRA_STREAM, uri)
             .grantRead(uri),
-        title = "Поделиться файлом",
+        title = R.string.file_chooser_share_file,
     )
 
     fun openFile(uri: Uri, mime: String?): Intent = chooser(
         Intent(Intent.ACTION_VIEW)
             .setDataAndType(uri, mime ?: ANY_TYPE)
             .grantRead(uri),
-        title = "Открыть файл",
+        title = R.string.file_chooser_open_file,
     )
 
     /**
@@ -72,11 +75,11 @@ class Sharing @Inject constructor(
      * Всегда через диалог выбора: приложения, умеющего открыть этот тип, может не найтись вовсе, и
      * тогда диалог честно скажет об этом, а прямой запуск свалился бы исключением.
      */
-    private fun chooser(intent: Intent, title: String): Intent =
-        Intent.createChooser(intent, title).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    private fun chooser(intent: Intent, @StringRes title: Int): Intent =
+        Intent.createChooser(intent, context.getString(title))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
     private companion object {
-        const val CLIP_LABEL = "Сообщение"
         const val ANY_TYPE = "*/*"
     }
 }

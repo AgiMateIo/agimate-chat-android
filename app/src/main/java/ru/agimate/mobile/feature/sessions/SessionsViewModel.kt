@@ -1,5 +1,8 @@
 package ru.agimate.mobile.feature.sessions
 
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,7 +24,7 @@ data class SessionsUiState(
     val loading: Boolean = true,
     val loadingMore: Boolean = false,
     val endReached: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
     val creating: Boolean = false,
 )
 
@@ -59,7 +62,7 @@ class SessionsViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, error = e.toApiException().message) }
+                _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
     }
@@ -81,7 +84,7 @@ class SessionsViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loadingMore = false, error = e.toApiException().message) }
+                _state.update { it.copy(loadingMore = false, error = e.toApiException().text) }
             }
         }
     }
@@ -97,7 +100,7 @@ class SessionsViewModel @Inject constructor(
                 onCreated(session.sessionId)
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(creating = false, error = e.toApiException().message) }
+                _state.update { it.copy(creating = false, error = e.toApiException().text) }
             }
         }
     }

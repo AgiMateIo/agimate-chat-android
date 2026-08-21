@@ -2,6 +2,8 @@ package ru.agimate.mobile.core.network
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.uiText
 
 /** Успешный ответ обоих сервисов всегда завёрнут: `{"response": …}`. */
 @Serializable
@@ -35,8 +37,11 @@ data class PageEnvelope<T>(
  * Развернуть конверт. Пустой `response` у ответа, от которого ждали тело, — это сломанный контракт,
  * а не «пусто»: списки приходят массивом, страницы — конвертом, и `null` там не бывает.
  */
-fun <T> ApiEnvelope<T>.unwrap(what: String): T =
-    response ?: throw ApiException.Malformed("Пустой ответ сервера: $what")
+fun <T> ApiEnvelope<T>.unwrap(what: String): T = response ?: throw ApiException.Malformed(
+    text = uiText(R.string.error_empty_response),
+    // Метка запроса не переводится: она нужна тому, кто читает логи, а не тому, кто читает экран.
+    message = "empty response: $what",
+)
 
 @Serializable
 data class ProblemMessage(@SerialName("message") val message: String? = null)

@@ -1,5 +1,8 @@
 package ru.agimate.mobile.feature.contacts
 
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +28,7 @@ data class ContactsUiState(
     val query: String = "",
     val loading: Boolean = true,
     val refreshing: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
     /** Агент, для которого прямо сейчас заводится первая переписка. */
     val openingAgentId: String? = null,
@@ -99,7 +102,7 @@ class ContactsViewModel @Inject constructor(
                     it.copy(
                         loading = false,
                         refreshing = false,
-                        error = e.toApiException().message,
+                        error = e.toApiException().text,
                     )
                 }
             }
@@ -133,7 +136,7 @@ class ContactsViewModel @Inject constructor(
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _state.update {
-                    it.copy(openingAgentId = null, error = e.toApiException().message)
+                    it.copy(openingAgentId = null, error = e.toApiException().text)
                 }
             }
         }

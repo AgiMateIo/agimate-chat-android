@@ -15,8 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.FileClient
+import ru.agimate.mobile.core.ui.text.uiText
 import java.io.File
 import java.io.InputStream
 import javax.inject.Inject
@@ -61,10 +63,10 @@ class FileStore @Inject constructor(
 
         val slot = File(shared, cacheKey(file))
         if (!slot.isDirectory && !slot.mkdirs()) {
-            throw ApiException.Malformed("Не удалось подготовить файл")
+            throw ApiException.Malformed(uiText(R.string.error_file_prepare), "cache dir refused")
         }
 
-        val target = File(slot, diskFileName(file.name, extensionOf(file.mime)))
+        val target = File(slot, diskName(file))
         // Файл на сервере неизменен: тот же id — тот же файл, второй раз качать его незачем.
         if (target.length() == 0L) {
             // Пишется рядом и переименовывается: оборвавшаяся закачка оставила бы огрызок, который
@@ -72,7 +74,9 @@ class FileStore @Inject constructor(
             val part = File(slot, PART_FILE)
             try {
                 download(file) { input -> part.outputStream().use(input::copyTo) }
-                if (!part.renameTo(target)) throw ApiException.Malformed("Не удалось сохранить файл")
+                if (!part.renameTo(target)) {
+                    throw ApiException.Malformed(uiText(R.string.error_file_save), "rename failed")
+                }
             } finally {
                 part.delete()
             }
@@ -83,7 +87,7 @@ class FileStore @Inject constructor(
 
     /** Сохранение в общую память: картинки — в галерею, остальное — в «Загрузки». */
     suspend fun save(file: RemoteFile): SavedTo = withContext(Dispatchers.IO) {
-        val name = diskFileName(file.name, extensionOf(file.mime))
+        val name = diskName(file)
         val where = if (file.isImage) SavedTo.GALLERY else SavedTo.DOWNLOADS
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveThroughMediaStore(file, name, where)
@@ -117,11 +121,11 @@ class FileStore @Inject constructor(
         }
 
         val uri = resolver.insert(collection, row)
-            ?: throw ApiException.Malformed("Не удалось создать файл")
+            ?: throw ApiException.Malformed(uiText(R.string.error_file_create), "insert returned null")
         try {
             download(file) { input ->
                 val output = resolver.openOutputStream(uri)
-                    ?: throw ApiException.Malformed("Не удалось записать файл")
+                    ?: throw ApiException.Malformed(uiText(R.string.error_file_write), "no output stream")
                 output.use(input::copyTo)
             }
             resolver.update(
@@ -147,7 +151,7 @@ class FileStore @Inject constructor(
         val root = Environment.getExternalStoragePublicDirectory(publicDir(where))
         val dir = File(root, FOLDER)
         if (!dir.isDirectory && !dir.mkdirs()) {
-            throw ApiException.Malformed("Нет доступа к памяти телефона")
+            throw ApiException.Malformed(uiText(R.string.error_storage_unavailable), "mkdirs failed")
         }
 
         val target = File(dir, uniqueFileName(name) { File(dir, it).exists() })
@@ -181,8 +185,8 @@ class FileStore @Inject constructor(
      * не «нельзя», а «чат открыт давно». Говорить про доступ в этом случае — врать.
      */
     private fun refusal(code: Int): ApiException = when (code) {
-        401, 403 -> ApiException.Forbidden("Ссылка на файл устарела — откройте чат заново")
-        404 -> ApiException.NotFound("Файла больше нет на сервере")
+        401, 403 -> ApiException.Forbidden(uiText(R.string.error_file_link_expired), "file link $code")
+        404 -> ApiException.NotFound(uiText(R.string.error_file_gone), "file gone")
         else -> ApiException.of(code, null)
     }
 
@@ -206,6 +210,13 @@ class FileStore @Inject constructor(
         val deadline = System.currentTimeMillis() - CACHE_TTL_MILLIS
         shared.listFiles()?.forEach { if (it.lastModified() < deadline) it.deleteRecursively() }
     }
+
+    /** Имя на диске. Запасное имя берётся из ресурсов — оно тоже перевод, а не константа. */
+    private fun diskName(file: RemoteFile): String = diskFileName(
+        name = file.name,
+        extension = extensionOf(file.mime),
+        fallback = context.getString(R.string.file_default_name),
+    )
 
     private fun extensionOf(mime: String?): String? =
         mime?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }

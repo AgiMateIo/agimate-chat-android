@@ -12,9 +12,6 @@ package ru.agimate.mobile.core.share
 /** Что ломает путь или запрещено FAT на внешней памяти. */
 private val FORBIDDEN = Regex("""[\\/:*?"<>|]|\p{Cntrl}""")
 
-/** Имя для файла, у которого своего имени не оказалось. */
-private const val FALLBACK = "файл"
-
 /** Дальше имя всё равно обрежет файловая система — лучше обрезать самим и сохранить расширение. */
 private const val MAX_STEM = 80
 
@@ -24,10 +21,13 @@ private const val MAX_STEM = 80
  * [extension] — запасное расширение (без точки), выведенное из mime: у файла, названного на сервере
  * просто «снимок», иначе не будет ни превью в галерее, ни приложения, готового его открыть.
  * Собственное расширение имени всегда главнее: сервер знает про файл больше, чем его mime.
+ *
+ * [fallback] — имя для файла, у которого своего имени не оказалось. Приходит снаружи, из ресурсов:
+ * функция остаётся без Android и проверяется обычным тестом, а «файл» и «file» — это перевод.
  */
-internal fun diskFileName(name: String?, extension: String?): String {
+internal fun diskFileName(name: String?, extension: String?, fallback: String): String {
     val cleaned = sanitize(name)
-    val stem = cleaned.substringBeforeLast('.', cleaned).ifBlank { FALLBACK }.take(MAX_STEM).trim()
+    val stem = cleaned.substringBeforeLast('.', cleaned).ifBlank { fallback }.take(MAX_STEM).trim()
     val own = cleaned.substringAfterLast('.', "")
     val ext = own.ifBlank { sanitize(extension) }
     return if (ext.isBlank()) stem else "$stem.$ext"

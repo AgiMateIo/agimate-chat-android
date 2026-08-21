@@ -36,6 +36,9 @@ import ru.agimate.mobile.core.ui.components.EmptyState
 import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.format.TimeFormat
+import androidx.compose.ui.res.stringResource
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.webchat.ChatSession
 
@@ -81,21 +84,21 @@ fun SessionsScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Назад",
+                    contentDescription = stringResource(R.string.action_back),
                     tint = colors.textPrimary,
                 )
             }
             Spacer(Modifier.width(AgiTheme.spacing.xs))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = state.agentName.ifBlank { "Переписки" },
+                    text = state.agentName.ifBlank { stringResource(R.string.sessions_title) },
                     style = AgiTheme.typography.subtitle,
                     color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "переписки",
+                    text = stringResource(R.string.sessions_subtitle),
                     style = AgiTheme.typography.caption,
                     color = colors.textTertiary,
                 )
@@ -105,11 +108,11 @@ fun SessionsScreen(
         Box(modifier = Modifier.weight(1f)) {
             when {
                 state.error != null && state.sessions.isEmpty() ->
-                    ErrorState(message = state.error, onRetry = onRetry)
+                    ErrorState(message = state.error.resolve(), onRetry = onRetry)
 
                 !state.loading && state.sessions.isEmpty() -> EmptyState(
-                    title = "Переписок пока нет",
-                    description = "Начните первую — она появится здесь.",
+                    title = stringResource(R.string.sessions_empty_title),
+                    description = stringResource(R.string.sessions_empty_description),
                 )
 
                 else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -128,7 +131,7 @@ fun SessionsScreen(
                 .padding(AgiTheme.spacing.screen)
         ) {
             PrimaryButton(
-                text = "Новая переписка",
+                text = stringResource(R.string.sessions_new),
                 onClick = onNew,
                 busy = state.creating,
             )
@@ -151,7 +154,8 @@ private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = session.title?.takeIf { it.isNotBlank() } ?: "Без названия",
+                text = session.title?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.sessions_untitled),
                 style = AgiTheme.typography.subtitle,
                 color = colors.textPrimary,
                 maxLines = 1,
@@ -160,7 +164,7 @@ private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(AgiTheme.spacing.sm))
             Text(
-                text = TimeFormat.listStamp(session.lastMessageAt ?: session.createdAt),
+                text = TimeFormat.listStamp(session.lastMessageAt ?: session.createdAt).resolve(),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
@@ -169,9 +173,9 @@ private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = when {
-                    session.isRunning -> "печатает…"
-                    session.preview != null -> session.preview.displayText
-                    else -> "Пока пусто"
+                    session.isRunning -> stringResource(R.string.chat_status_typing)
+                    session.preview != null -> session.preview.displayText.resolve()
+                    else -> stringResource(R.string.sessions_empty_preview)
                 },
                 style = AgiTheme.typography.secondary,
                 color = if (session.isRunning) colors.accent else colors.textSecondary,
@@ -182,7 +186,7 @@ private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
             if (session.isClosed) {
                 Spacer(Modifier.width(AgiTheme.spacing.sm))
                 Text(
-                    text = "закрыта",
+                    text = stringResource(R.string.sessions_closed),
                     style = AgiTheme.typography.caption,
                     color = colors.textTertiary,
                 )

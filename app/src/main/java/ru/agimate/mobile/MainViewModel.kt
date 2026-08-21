@@ -16,13 +16,15 @@ import ru.agimate.mobile.core.auth.SessionManager
 import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.network.toApiException
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import javax.inject.Inject
 
 enum class LoginPhase { Idle, WaitingForBrowser, Exchanging }
 
 data class LoginUiState(
     val phase: LoginPhase = LoginPhase.Idle,
-    val message: String? = null,
+    val message: UiText? = null,
 )
 
 @HiltViewModel
@@ -63,7 +65,7 @@ class MainViewModel @Inject constructor(
         authRepository.abandonPendingLogin()
         _login.value = LoginUiState(
             phase = LoginPhase.Idle,
-            message = "Не нашли браузер, в котором открыть вход",
+            message = uiText(R.string.login_no_browser),
         )
     }
 
@@ -75,7 +77,7 @@ class MainViewModel @Inject constructor(
                 authRepository.abandonPendingLogin()
                 _login.value = LoginUiState(
                     phase = LoginPhase.Idle,
-                    message = "Вход не удался. Попробуйте ещё раз.",
+                    message = uiText(R.string.login_failed_retry),
                 )
             }
 
@@ -96,7 +98,7 @@ class MainViewModel @Inject constructor(
             authRepository.abandonPendingLogin()
             _login.value = LoginUiState(
                 phase = LoginPhase.Idle,
-                message = "Вход не завершён. Попробуйте ещё раз.",
+                message = uiText(R.string.login_not_finished_retry),
             )
         }
     }
@@ -118,7 +120,7 @@ class MainViewModel @Inject constructor(
             _login.value = _login.value.copy(message = null)
             sessionManager.refresh()
         } else {
-            _login.value = _login.value.copy(message = "Адрес не похож на правильный")
+            _login.value = _login.value.copy(message = uiText(R.string.login_bad_origin))
         }
     }
 
@@ -139,9 +141,11 @@ class MainViewModel @Inject constructor(
                 _login.value = LoginUiState(
                     phase = LoginPhase.Idle,
                     message = when (error) {
-                        is PendingLoginLost -> error.message
-                        else -> error.toApiException().message
-                    } ?: "Вход не удался",
+                        // Своя формулировка: у потерянного verifier'а нет ничего, что стоило бы
+                        // показать, кроме предложения начать заново.
+                        is PendingLoginLost -> uiText(R.string.login_lost)
+                        else -> error.toApiException().text
+                    },
                 )
             }
         }

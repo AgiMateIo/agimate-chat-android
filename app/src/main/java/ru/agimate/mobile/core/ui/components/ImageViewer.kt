@@ -1,6 +1,7 @@
 package ru.agimate.mobile.core.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -9,8 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -36,13 +37,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
-import ru.agimate.mobile.core.ui.theme.AgiTheme
 import kotlin.math.max
 import kotlin.math.min
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.theme.AgiTheme
 
 /** Что показывает просмотрщик: готовый адрес и подпись для screen reader. */
 data class ViewerImage(val url: String, val name: String?)
@@ -155,13 +158,13 @@ fun ImageViewer(
                 modifier = Modifier.padding(AgiTheme.spacing.screen),
             ) {
                 Text(
-                    text = "Не удалось загрузить изображение",
+                    text = stringResource(R.string.viewer_load_failed),
                     style = AgiTheme.typography.body,
                     color = Color.White,
                 )
                 // Ссылки на файлы подписаны и живут 15 минут — у открытого чата они протухают.
                 Text(
-                    text = "Ссылка живёт 15 минут. Откройте чат заново — придёт свежая.",
+                    text = stringResource(R.string.viewer_link_expired_hint),
                     style = AgiTheme.typography.caption,
                     color = Color.White.copy(alpha = 0.7f),
                 )
@@ -177,10 +180,10 @@ fun ImageViewer(
         ) {
             // Действия появляются вместе с картинкой: сохранять и отправлять нечего, пока её нет.
             if (ready) {
-                ViewerAction(Icons.Outlined.Download, "Сохранить", colors.scrim, onSave)
-                ViewerAction(Icons.Outlined.Share, "Поделиться", colors.scrim, onShare)
+                ViewerAction(Icons.Outlined.Download, R.string.action_save, colors.scrim, onSave)
+                ViewerAction(Icons.Outlined.Share, R.string.action_share, colors.scrim, onShare)
             }
-            ViewerAction(Icons.Outlined.Close, "Закрыть", colors.scrim, onClose)
+            ViewerAction(Icons.Outlined.Close, R.string.action_close, colors.scrim, onClose)
         }
 
         if (status != null) {
@@ -203,13 +206,13 @@ fun ImageViewer(
 @Composable
 private fun ViewerAction(
     icon: ImageVector,
-    label: String,
+    @StringRes label: Int,
     background: Color,
     onClick: () -> Unit,
 ) {
     Icon(
         imageVector = icon,
-        contentDescription = label,
+        contentDescription = stringResource(label),
         tint = Color.White,
         modifier = Modifier
             .background(background, CircleShape)

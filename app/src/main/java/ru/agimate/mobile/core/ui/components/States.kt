@@ -27,6 +27,8 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Shape
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import androidx.compose.ui.res.stringResource
+import ru.agimate.mobile.R
 
 @Composable
 fun FullScreenLoading(modifier: Modifier = Modifier) {
@@ -86,7 +88,7 @@ fun ErrorState(
     message: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    retryText: String = "Повторить",
+    retryText: String = stringResource(R.string.action_retry),
 ) {
     Column(
         modifier = modifier

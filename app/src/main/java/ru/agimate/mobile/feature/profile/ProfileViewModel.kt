@@ -1,5 +1,8 @@
 package ru.agimate.mobile.feature.profile
 
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +26,7 @@ import javax.inject.Inject
 
 data class DeviceRow(
     val id: String,
-    val label: String,
+    val label: UiText,
     val web: Boolean,
     val lastSeen: java.time.Instant?,
     val isThisDevice: Boolean,
@@ -42,7 +45,7 @@ data class ProfileUiState(
     val loading: Boolean = true,
     /** Своя строка: `Unknown` — транспорта нет, показывать про уведомления нечего. */
     val pushHealth: PushHealth = PushHealth.Unknown,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 @HiltViewModel
@@ -99,7 +102,7 @@ class ProfileViewModel @Inject constructor(
                 repairPush(health, observedAt)
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, error = e.toApiException().message) }
+                _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
     }
@@ -144,7 +147,7 @@ class ProfileViewModel @Inject constructor(
                     is ApiException.Forbidden -> sessionManager.signOut()
                     else -> {
                         setRevoking(id, false)
-                        _state.update { it.copy(error = api.message) }
+                        _state.update { it.copy(error = api.text) }
                     }
                 }
             }
@@ -171,7 +174,8 @@ class ProfileViewModel @Inject constructor(
         val mine = id == currentSessionId
         return DeviceRow(
             id = id,
-            label = deviceLabel?.takeIf { it.isNotBlank() } ?: "Неизвестное устройство",
+            label = deviceLabel?.takeIf { it.isNotBlank() }?.let(::uiText)
+                ?: uiText(R.string.profile_unknown_device),
             web = client.equals("WEB", ignoreCase = true),
             lastSeen = lastSeenAt ?: createdAt,
             isThisDevice = mine,

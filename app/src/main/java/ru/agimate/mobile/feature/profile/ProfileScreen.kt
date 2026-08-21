@@ -35,6 +35,10 @@ import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
 @Composable
@@ -71,13 +75,13 @@ fun ProfileScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Назад",
+                    contentDescription = stringResource(R.string.action_back),
                     tint = colors.textPrimary,
                 )
             }
             Spacer(Modifier.width(AgiTheme.spacing.xs))
             Text(
-                text = "Профиль",
+                text = stringResource(R.string.profile_title),
                 style = AgiTheme.typography.title,
                 color = colors.textPrimary,
             )
@@ -94,7 +98,7 @@ fun ProfileScreen(
                 Spacer(Modifier.width(AgiTheme.spacing.md))
                 Column {
                     Text(
-                        text = state.displayName.ifBlank { "Без имени" },
+                        text = state.displayName.ifBlank { stringResource(R.string.profile_no_name) },
                         style = AgiTheme.typography.subtitle,
                         color = colors.textPrimary,
                     )
@@ -111,7 +115,7 @@ fun ProfileScreen(
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
 
             Text(
-                text = "Мои устройства",
+                text = stringResource(R.string.profile_devices),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
@@ -128,7 +132,7 @@ fun ProfileScreen(
                 }
 
                 state.devices.isEmpty() -> Text(
-                    text = state.error ?: "Список пуст",
+                    text = state.error?.resolve() ?: stringResource(R.string.profile_devices_empty),
                     style = AgiTheme.typography.secondary,
                     color = colors.textSecondary,
                 )
@@ -147,7 +151,7 @@ fun ProfileScreen(
             if (state.error != null && state.devices.isNotEmpty()) {
                 Spacer(Modifier.height(AgiTheme.spacing.md))
                 Text(
-                    text = state.error,
+                    text = state.error.resolve(),
                     style = AgiTheme.typography.caption,
                     color = colors.danger,
                 )
@@ -156,9 +160,7 @@ fun ProfileScreen(
             Spacer(Modifier.height(AgiTheme.spacing.md))
 
             Text(
-                text = "Уведомления на отозванное устройство перестают приходить сразу, а связь " +
-                    "с сервером пропадёт в течение часа: отзыв бьёт по обновлению токенов, и уже " +
-                    "выданный доживает свой срок.",
+                text = stringResource(R.string.profile_revoke_note),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
@@ -172,13 +174,13 @@ fun ProfileScreen(
                 .navigationBarsPadding()
                 .padding(AgiTheme.spacing.screen)
         ) {
-            SecondaryButton(text = "Выйти", onClick = onSignOut)
+            SecondaryButton(text = stringResource(R.string.action_sign_out), onClick = onSignOut)
         }
     }
 }
 
 /** @param ok строка про порядок, а не про поломку — от этого зависит только цвет. */
-private data class PushNote(val text: String, val ok: Boolean)
+private data class PushNote(@StringRes val text: Int, val ok: Boolean)
 
 /**
  * Признак «уведомления приходят» показываем строкой, а не списком токенов: записей у живого
@@ -189,17 +191,17 @@ private data class PushNote(val text: String, val ok: Boolean)
  */
 private fun pushNote(device: DeviceRow, health: PushHealth, systemAllowed: Boolean): PushNote? = when {
     !device.isThisDevice ->
-        if (device.notifications) PushNote("уведомления приходят", ok = true) else null
+        if (device.notifications) PushNote(R.string.profile_push_on, ok = true) else null
     // Транспорта нет вовсе (сборка без ключей) — говорить не о чем.
     health == PushHealth.Unknown -> null
     // Отказ в разрешении — нормальный исход, но «уведомления приходят» после него было бы враньём:
     // сервер отправит, а шторка промолчит.
-    !systemAllowed -> PushNote("уведомления выключены в настройках телефона", ok = false)
+    !systemAllowed -> PushNote(R.string.profile_push_off_system, ok = false)
     // Токена у транспорта ещё нет: после входа и после ротации SDK отдаёт пустой список несколько
     // секунд. Подписка уедет сама, как только он появится, — «не приходят» здесь пугало бы зря.
-    health == PushHealth.Preparing -> PushNote("настраиваем уведомления", ok = true)
-    device.notifications -> PushNote("уведомления приходят", ok = true)
-    else -> PushNote("уведомления не приходят", ok = false)
+    health == PushHealth.Preparing -> PushNote(R.string.profile_push_preparing, ok = true)
+    device.notifications -> PushNote(R.string.profile_push_on, ok = true)
+    else -> PushNote(R.string.profile_push_off, ok = false)
 }
 
 @Composable
@@ -215,7 +217,7 @@ private fun DeviceRowView(device: DeviceRow, pushNote: PushNote?, onRevoke: () -
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = device.label,
+                    text = device.label.resolve(),
                     style = AgiTheme.typography.body,
                     color = colors.textPrimary,
                     maxLines = 1,
@@ -224,24 +226,22 @@ private fun DeviceRowView(device: DeviceRow, pushNote: PushNote?, onRevoke: () -
                 if (device.isThisDevice) {
                     Spacer(Modifier.width(AgiTheme.spacing.sm))
                     Text(
-                        text = "это устройство",
+                        text = stringResource(R.string.profile_this_device),
                         style = AgiTheme.typography.caption,
                         color = colors.accent,
                     )
                 }
             }
             Text(
-                text = buildString {
-                    append(if (device.web) "браузер" else "приложение")
-                    append(" · ")
-                    append(TimeFormat.dateTime(device.lastSeen))
-                },
+                text = stringResource(
+                    if (device.web) R.string.profile_kind_browser else R.string.profile_kind_app
+                ) + " · " + TimeFormat.dateTime(device.lastSeen),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )
             if (pushNote != null) {
                 Text(
-                    text = pushNote.text,
+                    text = stringResource(pushNote.text),
                     style = AgiTheme.typography.caption,
                     color = if (pushNote.ok) colors.textTertiary else colors.warning,
                 )
@@ -259,7 +259,7 @@ private fun DeviceRowView(device: DeviceRow, pushNote: PushNote?, onRevoke: () -
                 )
             } else {
                 Text(
-                    text = "Отключить",
+                    text = stringResource(R.string.profile_disconnect),
                     style = AgiTheme.typography.secondary,
                     color = colors.danger,
                     modifier = Modifier.clickable(onClick = onRevoke),

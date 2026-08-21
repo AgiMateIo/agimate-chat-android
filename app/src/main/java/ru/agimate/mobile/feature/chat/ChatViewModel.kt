@@ -1,6 +1,8 @@
 package ru.agimate.mobile.feature.chat
 
 import android.content.Intent
+import androidx.annotation.StringRes
+import ru.agimate.mobile.R
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -28,6 +30,8 @@ import ru.agimate.mobile.core.share.FileStore
 import ru.agimate.mobile.core.share.RemoteFile
 import ru.agimate.mobile.core.share.SavedTo
 import ru.agimate.mobile.core.share.Sharing
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.AttachmentUploader
 import ru.agimate.mobile.data.webchat.ChatMessage
@@ -45,7 +49,7 @@ import javax.inject.Inject
  * Отдельно от [ChatUiState.sendError]: та полоска про отправку сообщения и висит, пока человек её
  * не перебьёт, а эта рассказывает про действие, которое уже закончилось, и гаснет сама.
  */
-data class FileNotice(val text: String, val failed: Boolean = false)
+data class FileNotice(val text: UiText, val failed: Boolean = false)
 
 /**
  * Разовое действие, которое экрану нужно совершить за ViewModel.
@@ -68,13 +72,13 @@ data class ChatUiState(
     val loading: Boolean = true,
     val loadingOlder: Boolean = false,
     val endReached: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
     /** Агент сейчас работает. Гаснет приходом ответа или ошибки, а не опросом. */
     val isRunning: Boolean = false,
     val input: String = "",
     val attachments: List<PendingAttachment> = emptyList(),
     val sending: Boolean = false,
-    val sendError: String? = null,
+    val sendError: UiText? = null,
     /** Что сейчас происходит с файлом или буфером обмена. */
     val fileNotice: FileNotice? = null,
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
@@ -84,10 +88,10 @@ data class ChatUiState(
             (input.isNotBlank() || attachments.any { it.fileId != null }) &&
             attachments.none { it.uploading }
 
-    val composerBlockedReason: String?
+    val composerBlockedReason: UiText?
         get() = when {
-            closed -> "Переписка закрыта — начните новую"
-            !agentEnabled -> "Агент выключен"
+            closed -> uiText(R.string.chat_composer_closed)
+            !agentEnabled -> uiText(R.string.chat_composer_agent_disabled)
             else -> null
         }
 }
@@ -179,7 +183,7 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, error = e.toApiException().message) }
+                _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
     }
@@ -205,7 +209,7 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loadingOlder = false, error = e.toApiException().message) }
+                _state.update { it.copy(loadingOlder = false, error = e.toApiException().text) }
             }
         }
     }
@@ -349,7 +353,7 @@ class ChatViewModel @Inject constructor(
                 if (e is CancellationException) throw e
                 val error = e.toApiException()
                 updateLocal(localId) { it.copy(pending = false, failed = true) }
-                _state.update { it.copy(sending = false, sendError = error.message) }
+                _state.update { it.copy(sending = false, sendError = error.text) }
             }
         }
     }
@@ -380,7 +384,7 @@ class ChatViewModel @Inject constructor(
         val current = _state.value.attachments
         val room = AttachmentUploader.MAX_ATTACHMENTS - current.size
         if (room <= 0) {
-            _state.update { it.copy(sendError = "Больше пяти вложений в одном сообщении нельзя") }
+            _state.update { it.copy(sendError = uiText(R.string.chat_attachments_limit)) }
             return
         }
 
@@ -399,7 +403,7 @@ class ChatViewModel @Inject constructor(
                     }
                     .onFailure { error ->
                         updateAttachment(attachment.localId) {
-                            it.copy(uploading = false, error = error.toApiException().message)
+                            it.copy(uploading = false, error = error.toApiException().text)
                         }
                     }
             }
@@ -431,28 +435,30 @@ class ChatViewModel @Inject constructor(
     fun copyMessage(message: ChatMessage) {
         val text = message.text?.takeIf { it.isNotBlank() } ?: return
         sharing.copy(text)
-        if (!sharing.clipboardConfirmsItself) notice("Скопировано")
+        if (!sharing.clipboardConfirmsItself) notice(uiText(R.string.file_copied))
     }
 
-    fun openAttachment(attachment: Attachment) = withFile(attachment, "Открываю файл…") { file ->
+    fun openAttachment(attachment: Attachment) = withFile(attachment, R.string.file_opening) { file ->
         handOff(sharing.openFile(files.cache(file), file.mime))
         null
     }
 
-    fun shareAttachment(attachment: Attachment) = withFile(attachment, "Готовлю файл…") { file ->
+    fun shareAttachment(attachment: Attachment) = withFile(attachment, R.string.file_preparing) { file ->
         handOff(sharing.shareFile(files.cache(file), file.mime))
         null
     }
 
-    fun saveAttachment(attachment: Attachment) = withFile(attachment, "Сохраняю…") { file ->
-        when (files.save(file)) {
-            SavedTo.GALLERY -> "Сохранено в галерею"
-            SavedTo.DOWNLOADS -> "Сохранено в «Загрузки»"
-        }
+    fun saveAttachment(attachment: Attachment) = withFile(attachment, R.string.file_saving) { file ->
+        uiText(
+            when (files.save(file)) {
+                SavedTo.GALLERY -> R.string.file_saved_gallery
+                SavedTo.DOWNLOADS -> R.string.file_saved_downloads
+            }
+        )
     }
 
     /** Разрешения на память не дали. Промолчать нельзя: нажатие осталось бы без всякого ответа. */
-    fun onSaveDenied() = notice("Без доступа к памяти сохранять некуда", failed = true)
+    fun onSaveDenied() = notice(uiText(R.string.file_save_denied), failed = true)
 
     /**
      * Общая обвязка действий с файлом: скачать его нужно всем троим, и все трое делают это не
@@ -463,13 +469,13 @@ class ChatViewModel @Inject constructor(
      */
     private fun withFile(
         attachment: Attachment,
-        progress: String,
-        block: suspend (RemoteFile) -> String?,
+        @StringRes progress: Int,
+        block: suspend (RemoteFile) -> UiText?,
     ) {
         val file = attachment.remote()
         if (file == null) {
             // Ссылки нет у своего же сообщения, пока сервер не подтвердил отправку.
-            notice("Файл ещё не доехал до сервера", failed = true)
+            notice(uiText(R.string.file_not_uploaded_yet), failed = true)
             return
         }
         // Второй тап не запускает вторую закачку: 50 МБ по мобильной сети качаются небыстро.
@@ -482,7 +488,7 @@ class ChatViewModel @Inject constructor(
                 if (done == null) clearNotice() else notice(done)
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                notice(e.toApiException().message.orEmpty(), failed = true)
+                notice(e.toApiException().text, failed = true)
             }
         }
     }
@@ -497,7 +503,7 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Строка о том, что уже случилось: гаснет сама — держать её на экране незачем. */
-    private fun notice(text: String, failed: Boolean = false) {
+    private fun notice(text: UiText, failed: Boolean = false) {
         noticeJob?.cancel()
         _state.update { it.copy(fileNotice = FileNotice(text, failed)) }
         noticeJob = viewModelScope.launch {
@@ -507,9 +513,9 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Строка о том, что происходит прямо сейчас: она и есть признак работы, гаснуть ей нельзя. */
-    private fun working(text: String) {
+    private fun working(@StringRes text: Int) {
         noticeJob?.cancel()
-        _state.update { it.copy(fileNotice = FileNotice(text)) }
+        _state.update { it.copy(fileNotice = FileNotice(uiText(text))) }
     }
 
     private fun clearNotice() {
@@ -527,7 +533,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.cancelSession(sessionId) }
                 .onSuccess { _state.update { it.copy(isRunning = false) } }
-                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().message) } }
+                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().text) } }
         }
     }
 
@@ -537,7 +543,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.startSession(agent) }
                 .onSuccess { onCreated(it.sessionId) }
-                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().message) } }
+                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().text) } }
         }
     }
 
@@ -549,7 +555,7 @@ class ChatViewModel @Inject constructor(
                     _state.update { it.copy(closed = true) }
                     onClosed()
                 }
-                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().message) } }
+                .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().text) } }
         }
     }
 

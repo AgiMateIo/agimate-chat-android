@@ -1,7 +1,9 @@
 package ru.agimate.mobile.core.auth
 
 import android.net.Uri
+import androidx.annotation.StringRes
 import ru.agimate.mobile.BuildConfig
+import ru.agimate.mobile.R
 
 /** Что приехало в адресе возврата из браузера. */
 sealed interface AuthRedirect {
@@ -56,10 +58,15 @@ object AuthConfig {
         get() = if (BuildConfig.USE_APP_LINK) appLinkRedirect else schemeRedirect
 }
 
-/** Провайдеры входа. Отдельного эндпойнта «какие включены» у бэкенда нет — список зашит здесь. */
-enum class AuthProvider(val code: String, val title: String) {
-    GOOGLE("google", "Google"),
-    YANDEX("yandex", "Яндекс"),
-    VK("vk", "VK"),
-    GITHUB("github", "GitHub"),
+/**
+ * Провайдеры входа. Отдельного эндпойнта «какие включены» у бэкенда нет — список зашит здесь.
+ *
+ * Название — ресурс, а не строка: «Яндекс» и «Yandex» это одна и та же компания, написанная на
+ * двух языках, и выбирать между ними должна локаль, а не константа.
+ */
+enum class AuthProvider(val code: String, @param:StringRes val titleRes: Int) {
+    GOOGLE("google", R.string.provider_google),
+    YANDEX("yandex", R.string.provider_yandex),
+    VK("vk", R.string.provider_vk),
+    GITHUB("github", R.string.provider_github),
 }

@@ -1,5 +1,8 @@
 package ru.agimate.mobile.data.webchat
 
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import java.time.Instant
 import java.util.UUID
 
@@ -14,11 +17,11 @@ data class MessagePreview(
      * Что показать в строке. Пустой текст при вложении — не пустая строка: сообщение было только
      * из файлов.
      */
-    val displayText: String
+    val displayText: UiText
         get() = when {
-            !text.isNullOrBlank() -> text
-            hasAttachments -> "Вложение"
-            else -> ""
+            !text.isNullOrBlank() -> uiText(text)
+            hasAttachments -> uiText(R.string.chat_attachment_generic)
+            else -> uiText("")
         }
 
     companion object {

@@ -37,6 +37,9 @@ import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
+import androidx.compose.ui.res.stringResource
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.webchat.Contact
 
@@ -83,15 +86,14 @@ fun ContactsScreen(
             state.loading -> ContactsSkeleton()
 
             state.error != null && state.contacts.isEmpty() ->
-                ErrorState(message = state.error, onRetry = onRetry)
+                ErrorState(message = state.error.resolve(), onRetry = onRetry)
 
             state.isEmpty -> EmptyState(
-                title = "Пока ни одного агента",
-                description = "Агент — это помощник с ролью и памятью: ведёт учёт, следит за почтой, " +
-                    "напоминает о важном. Заведите первого — дальше просто переписка.",
+                title = stringResource(R.string.contacts_empty_title),
+                description = stringResource(R.string.contacts_empty_description),
                 action = {
                     PrimaryButton(
-                        text = "Завести агента",
+                        text = stringResource(R.string.contacts_create),
                         onClick = onCreateAgent,
                         modifier = Modifier.width(240.dp),
                     )
@@ -99,8 +101,8 @@ fun ContactsScreen(
             )
 
             state.visible.isEmpty() -> EmptyState(
-                title = "Никого не нашли",
-                description = "Попробуйте другое слово из имени или описания агента.",
+                title = stringResource(R.string.contacts_not_found_title),
+                description = stringResource(R.string.contacts_not_found_description),
             )
 
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -136,7 +138,7 @@ private fun ContactsHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Агенты",
+                text = stringResource(R.string.contacts_title),
                 style = AgiTheme.typography.title,
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f),
@@ -144,7 +146,7 @@ private fun ContactsHeader(
             HeaderAction(onClick = onCreateAgent) {
                 Icon(
                     imageVector = Icons.Outlined.Add,
-                    contentDescription = "Завести агента",
+                    contentDescription = stringResource(R.string.contacts_create),
                     tint = colors.textPrimary,
                 )
             }
@@ -152,7 +154,7 @@ private fun ContactsHeader(
             HeaderAction(onClick = onProfile) {
                 Icon(
                     imageVector = Icons.Outlined.PersonOutline,
-                    contentDescription = "Профиль",
+                    contentDescription = stringResource(R.string.action_profile),
                     tint = colors.textPrimary,
                 )
             }
@@ -167,7 +169,7 @@ private fun ContactsHeader(
                 .padding(bottom = AgiTheme.spacing.sm),
             placeholder = {
                 Text(
-                    text = "Поиск",
+                    text = stringResource(R.string.contacts_search_hint),
                     style = AgiTheme.typography.body,
                     color = colors.textTertiary,
                 )
@@ -209,7 +211,7 @@ private fun HeaderAction(onClick: () -> Unit, content: @Composable () -> Unit) {
 private fun ConnectionBanner() {
     val colors = AgiTheme.colors
     Text(
-        text = "Связь потеряна — пробуем восстановить",
+        text = stringResource(R.string.chat_realtime_lost),
         style = AgiTheme.typography.caption,
         color = colors.textSecondary,
         modifier = Modifier
@@ -248,14 +250,14 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit) {
                 if (muted) {
                     Spacer(Modifier.width(AgiTheme.spacing.sm))
                     Text(
-                        text = "выключен",
+                        text = stringResource(R.string.contacts_agent_disabled),
                         style = AgiTheme.typography.caption,
                         color = colors.textTertiary,
                     )
                 }
                 Spacer(Modifier.width(AgiTheme.spacing.sm))
                 Text(
-                    text = TimeFormat.listStamp(contact.lastActivityAt),
+                    text = TimeFormat.listStamp(contact.lastActivityAt).resolve(),
                     style = AgiTheme.typography.caption,
                     color = colors.textTertiary,
                 )
@@ -281,15 +283,20 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Вторая строка контакта. Composable, а не чистая функция: собирается она из переводов, а язык
+ * известен только в композиции.
+ */
+@Composable
 private fun secondaryLine(contact: Contact): String = when {
-    contact.isRunning -> "печатает…"
+    contact.isRunning -> stringResource(R.string.chat_status_typing)
     contact.preview != null -> {
-        val text = contact.preview.displayText
-        if (contact.preview.fromAgent) text else "Вы: $text"
+        val text = contact.preview.displayText.resolve()
+        if (contact.preview.fromAgent) text else stringResource(R.string.contacts_preview_own, text)
     }
 
     !contact.description.isNullOrBlank() -> contact.description
-    else -> "Ещё не писали"
+    else -> stringResource(R.string.contacts_never_written)
 }
 
 @Composable

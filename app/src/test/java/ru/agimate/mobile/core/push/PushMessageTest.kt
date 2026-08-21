@@ -49,8 +49,9 @@ class PushMessageTest {
 
         assertNull(message?.agentId)
         assertNull(message?.preview)
-        // Имя подставляется: маршрут чата требует его параметром, и пустая шапка выглядит поломкой.
-        assertEquals("Агент", message?.agentName)
+        // Имени тоже нет. Чем его заменить, решает PushNotifier: запасное имя — перевод, а разбору
+        // пуша про язык знать неоткуда.
+        assertNull(message?.agentName)
     }
 
     @Test

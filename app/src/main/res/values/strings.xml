@@ -1,3 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Базовый язык — английский: он же запасной для любой локали, под которую нет своей папки.
+  Так же устроен и бэкенд: messages.properties английский, messages_ru.properties переопределяет.
+  Русские тексты — в values-ru/strings.xml, и обе папки обязаны быть полными: недостающий ключ
+  ловит lint (MissingTranslation), но только если о нём не забыли здесь.
+-->
 <resources>
-    <string name="app_name">AgiMate</string>
+    <string name="app_name" translatable="false">AgiMate</string>
+
+    <!-- Действия, встречающиеся не на одном экране. -->
+    <string name="action_back">Back</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_share">Share</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_save">Save</string>
+    <string name="action_open">Open</string>
+    <string name="action_close">Close</string>
+    <string name="action_more">More</string>
+    <string name="action_sign_out">Sign out</string>
+    <string name="action_profile">Profile</string>
+
+    <!-- Вход -->
+    <string name="login_tagline">Personal AI agents. Ask — and they get it done.</string>
+    <string name="login_finishing">Finishing sign-in…</string>
+    <string name="login_with_provider">Sign in with %1$s</string>
+    <string name="login_origin_label">Server (debug builds only)</string>
+    <string name="login_no_browser">No browser found to open the sign-in page</string>
+    <string name="login_failed_retry">Sign-in failed. Please try again.</string>
+    <string name="login_not_finished_retry">Sign-in was not finished. Please try again.</string>
+    <string name="login_bad_origin">That address does not look right</string>
+    <string name="login_lost">Sign-in was not finished — start again</string>
+
+    <string name="provider_google" translatable="false">Google</string>
+    <string name="provider_yandex">Yandex</string>
+    <string name="provider_vk" translatable="false">VK</string>
+    <string name="provider_github" translatable="false">GitHub</string>
+
+    <!-- Аккаунт на проверке -->
+    <string name="pending_title">Account under review</string>
+    <string name="pending_body">You are signed in as %1$s. Access is granted by an administrator — usually within a few hours. Once it is granted, the agents will show up here on their own.</string>
+    <string name="pending_refresh">Check again</string>
+
+    <!-- Список агентов -->
+    <string name="contacts_title">Agents</string>
+    <string name="contacts_search_hint">Search</string>
+    <string name="contacts_create">Create an agent</string>
+    <string name="contacts_empty_title">No agents yet</string>
+    <string name="contacts_empty_description">An agent is an assistant with a role and a memory: it keeps your records, watches your mail, reminds you of what matters. Create the first one — after that it is just a conversation.</string>
+    <string name="contacts_not_found_title">Nothing found</string>
+    <string name="contacts_not_found_description">Try another word from the agent\'s name or description.</string>
+    <string name="contacts_agent_disabled">off</string>
+    <string name="contacts_preview_own">You: %1$s</string>
+    <string name="contacts_never_written">No messages yet</string>
+
+    <!-- Переписки агента -->
+    <string name="sessions_title">Conversations</string>
+    <string name="sessions_subtitle">conversations</string>
+    <string name="sessions_new">New conversation</string>
+    <string name="sessions_empty_title">No conversations yet</string>
+    <string name="sessions_empty_description">Start the first one — it will show up here.</string>
+    <string name="sessions_untitled">Untitled</string>
+    <string name="sessions_empty_preview">Nothing yet</string>
+    <string name="sessions_closed">closed</string>
+
+    <!-- Переписка -->
+    <string name="chat_realtime_lost">Connection lost — reconnecting</string>
+    <string name="chat_status_typing">typing…</string>
+    <string name="chat_status_closed">conversation closed</string>
+    <string name="chat_status_agent_disabled">agent is off</string>
+    <string name="chat_menu_all_sessions">All conversations</string>
+    <string name="chat_menu_new_session">New conversation</string>
+    <string name="chat_menu_close_session">Close conversation</string>
+    <string name="chat_message_failed">not sent · retry</string>
+    <string name="chat_message_sending">sending…</string>
+    <string name="chat_attachment_generic">Attachment</string>
+    <string name="chat_attachment_uploading">uploading…</string>
+    <string name="chat_empty_title">Write the first message</string>
+    <string name="chat_empty_description">In plain words — the way you would write to a person. You can attach a photo or a document.</string>
+    <string name="chat_input_hint">Message</string>
+    <string name="chat_composer_closed">The conversation is closed — start a new one</string>
+    <string name="chat_composer_agent_disabled">The agent is off</string>
+    <string name="chat_attachments_limit">No more than five attachments in one message</string>
+    <string name="cd_attach_file">Attach a file</string>
+    <string name="cd_stop">Stop</string>
+    <string name="cd_send">Send</string>
+    <string name="cd_remove">Remove</string>
+
+    <!-- Просмотр изображения -->
+    <string name="viewer_load_failed">Could not load the image</string>
+    <string name="viewer_link_expired_hint">The link lives 15 minutes. Reopen the chat — a fresh one will come.</string>
+
+    <!-- Файлы: поделиться и сохранить -->
+    <string name="file_copied">Copied</string>
+    <string name="file_opening">Opening the file…</string>
+    <string name="file_preparing">Preparing the file…</string>
+    <string name="file_saving">Saving…</string>
+    <string name="file_saved_gallery">Saved to the gallery</string>
+    <string name="file_saved_downloads">Saved to Downloads</string>
+    <string name="file_save_denied">Without access to storage there is nowhere to save</string>
+    <string name="file_not_uploaded_yet">The file has not reached the server yet</string>
+    <string name="file_chooser_share_message">Share the message</string>
+    <string name="file_chooser_share_file">Share the file</string>
+    <string name="file_chooser_open_file">Open the file</string>
+    <string name="file_clip_label">Message</string>
+    <string name="file_default_name">file</string>
+
+    <!-- Создание агента -->
+    <string name="create_agent_title">Who the agent will be</string>
+    <string name="create_agent_role_hint">The role sets the agent\'s character and habits. You can change it later.</string>
+    <string name="create_agent_name">Name</string>
+    <string name="create_agent_instructions">Instructions</string>
+    <string name="create_agent_collapse">Collapse</string>
+    <string name="create_agent_expand">Show in full</string>
+    <string name="create_agent_submit">Create and write</string>
+    <string name="create_agent_missing">The server did not return the created agent</string>
+
+    <!-- Профиль и устройства -->
+    <string name="profile_title">Profile</string>
+    <string name="profile_no_name">No name</string>
+    <string name="profile_devices">My devices</string>
+    <string name="profile_devices_empty">The list is empty</string>
+    <string name="profile_revoke_note">Notifications stop reaching a disconnected device right away, and its connection to the server drops within an hour: disconnecting hits token refresh, and the token already issued lives out its term.</string>
+    <string name="profile_this_device">this device</string>
+    <string name="profile_kind_browser">browser</string>
+    <string name="profile_kind_app">app</string>
+    <string name="profile_disconnect">Disconnect</string>
+    <string name="profile_unknown_device">Unknown device</string>
+    <string name="profile_push_on">notifications arrive</string>
+    <string name="profile_push_off">notifications do not arrive</string>
+    <string name="profile_push_off_system">notifications are off in the phone settings</string>
+    <string name="profile_push_preparing">setting up notifications</string>
+
+    <!-- Уведомления -->
+    <string name="push_channel_name">Agent messages</string>
+    <string name="push_channel_description">Agent replies and messages in conversations</string>
+    <string name="push_default_text">New message</string>
+    <string name="push_unknown_agent">Agent</string>
+
+    <!-- Время -->
+    <string name="time_today">today</string>
+    <string name="time_yesterday">yesterday</string>
+
+    <!-- Ошибки. Текст сервера, если он есть, показывается вместо этих: см. ApiException.of. -->
+    <string name="error_offline">No connection to the server</string>
+    <string name="error_bad_request">Request rejected</string>
+    <string name="error_unauthorized">Please sign in again</string>
+    <string name="error_forbidden">Access closed</string>
+    <string name="error_not_found">Not found</string>
+    <string name="error_rate_limited">Too often — wait a moment</string>
+    <string name="error_server">The server is not responding</string>
+    <string name="error_code">Error %1$d</string>
+    <string name="error_unexpected">Something went wrong</string>
+    <string name="error_empty_response">The server replied with nothing</string>
+
+    <!-- Ошибки работы с файлами -->
+    <string name="error_file_too_big">The file is over 50 MB — the server will not take it</string>
+    <string name="error_file_unreadable">Could not read the file</string>
+    <string name="error_upload_rate_limited">Too many uploads in a row — try again in a minute</string>
+    <string name="error_file_prepare">Could not prepare the file</string>
+    <string name="error_file_save">Could not save the file</string>
+    <string name="error_file_create">Could not create the file</string>
+    <string name="error_file_write">Could not write the file</string>
+    <string name="error_storage_unavailable">No access to the phone storage</string>
+    <string name="error_file_link_expired">The file link has expired — reopen the chat</string>
+    <string name="error_file_gone">The file is no longer on the server</string>
+
+    <!--
+      Число со словом после него — форма, зависящая от количества. В английском и русском «more» и
+      «ещё» не склоняются, и все варианты здесь совпадают; объявлены они всё равно, потому что в
+      следующем языке совпадать перестанут, а место, где это чинить, должно уже существовать.
+    -->
+    <plurals name="chat_progress_more">
+        <item quantity="one">%1$s · %2$d more</item>
+        <item quantity="other">%1$s · %2$d more</item>
+    </plurals>
 </resources>

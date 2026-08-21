@@ -14,8 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.components.BrandMark
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.SecondaryButton
@@ -53,7 +55,7 @@ fun PendingApprovalScreen(
             Spacer(Modifier.height(AgiTheme.spacing.xl))
 
             Text(
-                text = "Аккаунт на проверке",
+                text = stringResource(R.string.pending_title),
                 style = AgiTheme.typography.title,
                 color = colors.textPrimary,
                 textAlign = TextAlign.Center,
@@ -62,9 +64,10 @@ fun PendingApprovalScreen(
             Spacer(Modifier.height(AgiTheme.spacing.md))
 
             Text(
-                text = "Вы вошли как ${displayName.ifBlank { email.orEmpty() }}. " +
-                    "Доступ открывает администратор — обычно это занимает несколько часов. " +
-                    "Как только откроют, агенты появятся здесь сами.",
+                text = stringResource(
+                    R.string.pending_body,
+                    displayName.ifBlank { email.orEmpty() },
+                ),
                 style = AgiTheme.typography.body,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center,
@@ -73,7 +76,7 @@ fun PendingApprovalScreen(
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
 
             PrimaryButton(
-                text = "Проверить снова",
+                text = stringResource(R.string.pending_refresh),
                 onClick = onRefresh,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -83,7 +86,7 @@ fun PendingApprovalScreen(
             // Список входов открыт и до одобрения: потерявшему телефон отзыв нужен раньше, чем
             // администратор дойдёт до заявки.
             SecondaryButton(
-                text = "Мои устройства",
+                text = stringResource(R.string.profile_devices),
                 onClick = onDevices,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -91,7 +94,7 @@ fun PendingApprovalScreen(
             Spacer(Modifier.height(AgiTheme.spacing.md))
 
             SecondaryButton(
-                text = "Выйти",
+                text = stringResource(R.string.action_sign_out),
                 onClick = onSignOut,
                 modifier = Modifier.fillMaxWidth(),
             )

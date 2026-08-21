@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Русский. Ключи и порядок — как в values/strings.xml: расхождение видно глазом при беглом
+  сравнении, а недостающий ключ ловит lint.
+-->
+<resources>
+    <!-- Действия, встречающиеся не на одном экране. -->
+    <string name="action_back">Назад</string>
+    <string name="action_retry">Повторить</string>
+    <string name="action_share">Поделиться</string>
+    <string name="action_copy">Копировать</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_open">Открыть</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_more">Ещё</string>
+    <string name="action_sign_out">Выйти</string>
+    <string name="action_profile">Профиль</string>
+
+    <!-- Вход -->
+    <string name="login_tagline">Личные ИИ-агенты. Напишите — и они сделают.</string>
+    <string name="login_finishing">Завершаем вход…</string>
+    <string name="login_with_provider">Войти через %1$s</string>
+    <string name="login_origin_label">Сервер (только для отладочной сборки)</string>
+    <string name="login_no_browser">Не нашли браузер, в котором открыть вход</string>
+    <string name="login_failed_retry">Вход не удался. Попробуйте ещё раз.</string>
+    <string name="login_not_finished_retry">Вход не завершён. Попробуйте ещё раз.</string>
+    <string name="login_bad_origin">Адрес не похож на правильный</string>
+    <string name="login_lost">Вход не завершён — начните заново</string>
+    <!-- Google, VK и GitHub не переводятся и живут только в базовых ресурсах. -->
+    <string name="provider_yandex">Яндекс</string>
+
+    <!-- Аккаунт на проверке -->
+    <string name="pending_title">Аккаунт на проверке</string>
+    <string name="pending_body">Вы вошли как %1$s. Доступ открывает администратор — обычно это занимает несколько часов. Как только откроют, агенты появятся здесь сами.</string>
+    <string name="pending_refresh">Проверить снова</string>
+
+    <!-- Список агентов -->
+    <string name="contacts_title">Агенты</string>
+    <string name="contacts_search_hint">Поиск</string>
+    <string name="contacts_create">Завести агента</string>
+    <string name="contacts_empty_title">Пока ни одного агента</string>
+    <string name="contacts_empty_description">Агент — это помощник с ролью и памятью: ведёт учёт, следит за почтой, напоминает о важном. Заведите первого — дальше просто переписка.</string>
+    <string name="contacts_not_found_title">Никого не нашли</string>
+    <string name="contacts_not_found_description">Попробуйте другое слово из имени или описания агента.</string>
+    <string name="contacts_agent_disabled">выключен</string>
+    <string name="contacts_preview_own">Вы: %1$s</string>
+    <string name="contacts_never_written">Ещё не писали</string>
+
+    <!-- Переписки агента -->
+    <string name="sessions_title">Переписки</string>
+    <string name="sessions_subtitle">переписки</string>
+    <string name="sessions_new">Новая переписка</string>
+    <string name="sessions_empty_title">Переписок пока нет</string>
+    <string name="sessions_empty_description">Начните первую — она появится здесь.</string>
+    <string name="sessions_untitled">Без названия</string>
+    <string name="sessions_empty_preview">Пока пусто</string>
+    <string name="sessions_closed">закрыта</string>
+
+    <!-- Переписка -->
+    <string name="chat_realtime_lost">Связь потеряна — пробуем восстановить</string>
+    <string name="chat_status_typing">печатает…</string>
+    <string name="chat_status_closed">переписка закрыта</string>
+    <string name="chat_status_agent_disabled">агент выключен</string>
+    <string name="chat_menu_all_sessions">Все переписки</string>
+    <string name="chat_menu_new_session">Новая переписка</string>
+    <string name="chat_menu_close_session">Закрыть переписку</string>
+    <string name="chat_message_failed">не отправлено · повторить</string>
+    <string name="chat_message_sending">отправляется…</string>
+    <string name="chat_attachment_generic">Вложение</string>
+    <string name="chat_attachment_uploading">загружается…</string>
+    <string name="chat_empty_title">Напишите первое сообщение</string>
+    <string name="chat_empty_description">Обычным языком — как человеку. Можно приложить фото или документ.</string>
+    <string name="chat_input_hint">Сообщение</string>
+    <string name="chat_composer_closed">Переписка закрыта — начните новую</string>
+    <string name="chat_composer_agent_disabled">Агент выключен</string>
+    <string name="chat_attachments_limit">Больше пяти вложений в одном сообщении нельзя</string>
+    <string name="cd_attach_file">Прикрепить файл</string>
+    <string name="cd_stop">Остановить</string>
+    <string name="cd_send">Отправить</string>
+    <string name="cd_remove">Убрать</string>
+
+    <!-- Просмотр изображения -->
+    <string name="viewer_load_failed">Не удалось загрузить изображение</string>
+    <string name="viewer_link_expired_hint">Ссылка живёт 15 минут. Откройте чат заново — придёт свежая.</string>
+
+    <!-- Файлы: поделиться и сохранить -->
+    <string name="file_copied">Скопировано</string>
+    <string name="file_opening">Открываю файл…</string>
+    <string name="file_preparing">Готовлю файл…</string>
+    <string name="file_saving">Сохраняю…</string>
+    <string name="file_saved_gallery">Сохранено в галерею</string>
+    <string name="file_saved_downloads">Сохранено в «Загрузки»</string>
+    <string name="file_save_denied">Без доступа к памяти сохранять некуда</string>
+    <string name="file_not_uploaded_yet">Файл ещё не доехал до сервера</string>
+    <string name="file_chooser_share_message">Поделиться сообщением</string>
+    <string name="file_chooser_share_file">Поделиться файлом</string>
+    <string name="file_chooser_open_file">Открыть файл</string>
+    <string name="file_clip_label">Сообщение</string>
+    <string name="file_default_name">файл</string>
+
+    <!-- Создание агента -->
+    <string name="create_agent_title">Кем будет агент</string>
+    <string name="create_agent_role_hint">Роль задаёт характер и привычки агента. Позже её можно поменять.</string>
+    <string name="create_agent_name">Имя</string>
+    <string name="create_agent_instructions">Инструкция</string>
+    <string name="create_agent_collapse">Свернуть</string>
+    <string name="create_agent_expand">Показать полностью</string>
+    <string name="create_agent_submit">Завести и написать</string>
+    <string name="create_agent_missing">Сервер не вернул созданного агента</string>
+
+    <!-- Профиль и устройства -->
+    <string name="profile_title">Профиль</string>
+    <string name="profile_no_name">Без имени</string>
+    <string name="profile_devices">Мои устройства</string>
+    <string name="profile_devices_empty">Список пуст</string>
+    <string name="profile_revoke_note">Уведомления на отозванное устройство перестают приходить сразу, а связь с сервером пропадёт в течение часа: отзыв бьёт по обновлению токенов, и уже выданный доживает свой срок.</string>
+    <string name="profile_this_device">это устройство</string>
+    <string name="profile_kind_browser">браузер</string>
+    <string name="profile_kind_app">приложение</string>
+    <string name="profile_disconnect">Отключить</string>
+    <string name="profile_unknown_device">Неизвестное устройство</string>
+    <string name="profile_push_on">уведомления приходят</string>
+    <string name="profile_push_off">уведомления не приходят</string>
+    <string name="profile_push_off_system">уведомления выключены в настройках телефона</string>
+    <string name="profile_push_preparing">настраиваем уведомления</string>
+
+    <!-- Уведомления -->
+    <string name="push_channel_name">Сообщения агентов</string>
+    <string name="push_channel_description">Ответы агентов и сообщения в переписках</string>
+    <string name="push_default_text">Новое сообщение</string>
+    <string name="push_unknown_agent">Агент</string>
+
+    <!-- Время -->
+    <string name="time_today">сегодня</string>
+    <string name="time_yesterday">вчера</string>
+
+    <!-- Ошибки. Текст сервера, если он есть, показывается вместо этих: см. ApiException.of. -->
+    <string name="error_offline">Нет связи с сервером</string>
+    <string name="error_bad_request">Запрос отклонён</string>
+    <string name="error_unauthorized">Нужно войти заново</string>
+    <string name="error_forbidden">Доступ закрыт</string>
+    <string name="error_not_found">Не найдено</string>
+    <string name="error_rate_limited">Слишком часто — подождите немного</string>
+    <string name="error_server">Сервер не отвечает</string>
+    <string name="error_code">Ошибка %1$d</string>
+    <string name="error_unexpected">Что-то пошло не так</string>
+    <string name="error_empty_response">Сервер ответил пустым</string>
+
+    <!-- Ошибки работы с файлами -->
+    <string name="error_file_too_big">Файл больше 50 МБ — сервер его не примет</string>
+    <string name="error_file_unreadable">Не удалось прочитать файл</string>
+    <string name="error_upload_rate_limited">Слишком много загрузок подряд — попробуйте через минуту</string>
+    <string name="error_file_prepare">Не удалось подготовить файл</string>
+    <string name="error_file_save">Не удалось сохранить файл</string>
+    <string name="error_file_create">Не удалось создать файл</string>
+    <string name="error_file_write">Не удалось записать файл</string>
+    <string name="error_storage_unavailable">Нет доступа к памяти телефона</string>
+    <string name="error_file_link_expired">Ссылка на файл устарела — откройте чат заново</string>
+    <string name="error_file_gone">Файла больше нет на сервере</string>
+
+    <plurals name="chat_progress_more">
+        <item quantity="one">%1$s · ещё %2$d</item>
+        <item quantity="few">%1$s · ещё %2$d</item>
+        <item quantity="many">%1$s · ещё %2$d</item>
+        <item quantity="other">%1$s · ещё %2$d</item>
+    </plurals>
+</resources>

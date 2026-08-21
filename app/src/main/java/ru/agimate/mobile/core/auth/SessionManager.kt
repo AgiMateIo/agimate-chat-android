@@ -17,6 +17,7 @@ import ru.agimate.mobile.core.push.PushSubscriptions
 import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.user.UserProfile
 import javax.inject.Inject
+import ru.agimate.mobile.core.ui.text.UiText
 import javax.inject.Singleton
 
 /** С чем приложение имеет дело прямо сейчас. */
@@ -32,7 +33,7 @@ sealed interface AppSession {
     data class Active(val profile: UserProfile) : AppSession
 
     /** Токены есть, но профиль не удалось получить — обычно нет связи. */
-    data class Unavailable(val message: String) : AppSession
+    data class Unavailable(val text: UiText) : AppSession
 }
 
 /**
@@ -107,9 +108,9 @@ class SessionManager @Inject constructor(
                 is ApiException.Unauthorized -> _state.value = AppSession.SignedOut
                 is ApiException.Offline ->
                     if (_state.value is AppSession.Loading) {
-                        _state.value = AppSession.Unavailable(api.message.orEmpty())
+                        _state.value = AppSession.Unavailable(api.text)
                     }
-                else -> _state.value = AppSession.Unavailable(api.message.orEmpty())
+                else -> _state.value = AppSession.Unavailable(api.text)
             }
         }
     }

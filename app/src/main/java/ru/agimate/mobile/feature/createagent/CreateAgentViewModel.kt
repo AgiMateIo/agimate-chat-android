@@ -3,33 +3,37 @@ package ru.agimate.mobile.feature.createagent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.agimate.mobile.R
+import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.uiText
 import ru.agimate.mobile.data.agents.AgentPresetDto
 import ru.agimate.mobile.data.agents.AgentsApi
 import ru.agimate.mobile.data.agents.BindConnectorRequest
 import ru.agimate.mobile.data.agents.CreateAgentRequest
 import ru.agimate.mobile.data.webchat.WebchatRepository
-import javax.inject.Inject
 
 data class CreateAgentUiState(
     val presets: List<AgentPresetDto> = emptyList(),
     val loading: Boolean = true,
-    val error: String? = null,
+    val error: UiText? = null,
     /** Выбранная роль — второй шаг мастера. */
     val selected: AgentPresetDto? = null,
     val name: String = "",
     val instructions: String = "",
     val instructionsExpanded: Boolean = false,
     val creating: Boolean = false,
-    val createError: String? = null,
+    val createError: UiText? = null,
     /**
      * Уже созданный агент. Создание идёт в несколько запросов, и повтор после ошибки на любом из
      * них не должен плодить агентов: имя у дубля будет ещё и разведено сервером до «… (2)».
@@ -69,7 +73,7 @@ class CreateAgentViewModel @Inject constructor(
                 _state.update { it.copy(presets = presets, loading = false) }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, error = e.toApiException().message) }
+                _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
     }
@@ -151,7 +155,10 @@ class CreateAgentViewModel @Inject constructor(
                     // Ответ содержит ещё и fullKey — программный ключ агента. Мессенджеру он не нужен:
                     // не показываем и не храним.
                     val agent = created.agent
-                        ?: throw IllegalStateException("Сервер не вернул созданного агента")
+                        ?: throw ApiException.Malformed(
+                            text = uiText(R.string.create_agent_missing),
+                            message = "agent missing in create response",
+                        )
                     val id = agent.id
                     val resolvedName = agent.name.ifBlank { name }
                     _state.update { it.copy(createdAgentId = id, createdAgentName = resolvedName) }
@@ -177,7 +184,7 @@ class CreateAgentViewModel @Inject constructor(
                 )
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(creating = false, createError = e.toApiException().message) }
+                _state.update { it.copy(creating = false, createError = e.toApiException().text) }
             }
         }
     }

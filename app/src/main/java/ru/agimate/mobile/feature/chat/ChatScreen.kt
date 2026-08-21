@@ -64,10 +64,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.ImageViewer
@@ -75,6 +78,8 @@ import ru.agimate.mobile.core.ui.components.MarkdownText
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.components.ViewerImage
 import ru.agimate.mobile.core.ui.format.TimeFormat
+import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
@@ -195,7 +200,7 @@ fun ChatScreen(
                 exit = shrinkVertically() + fadeOut(),
             ) {
                 Text(
-                    text = "Связь потеряна — пробуем восстановить",
+                    text = stringResource(R.string.chat_realtime_lost),
                     style = AgiTheme.typography.caption,
                     color = colors.textSecondary,
                     modifier = Modifier
@@ -282,7 +287,7 @@ fun ChatScreen(
                 onShare = { actions.onShareFile(open.attachment) },
                 onClose = { viewer = null },
                 // Полоска чата осталась под слоем просмотрщика: свой ответ ему нужен свой.
-                status = state.fileNotice?.text,
+                status = state.fileNotice?.text?.resolve(),
             )
         }
     }
@@ -348,7 +353,7 @@ private fun ChatHeader(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Назад",
+                contentDescription = stringResource(R.string.action_back),
                 tint = colors.textPrimary,
             )
         }
@@ -366,14 +371,14 @@ private fun ChatHeader(
                 overflow = TextOverflow.Ellipsis,
             )
             val subtitle = when {
-                state.isRunning -> "печатает…"
-                state.closed -> "переписка закрыта"
-                !state.agentEnabled -> "агент выключен"
+                state.isRunning -> R.string.chat_status_typing
+                state.closed -> R.string.chat_status_closed
+                !state.agentEnabled -> R.string.chat_status_agent_disabled
                 else -> null
             }
             if (subtitle != null) {
                 Text(
-                    text = subtitle,
+                    text = stringResource(subtitle),
                     style = AgiTheme.typography.caption,
                     color = if (state.isRunning) colors.accent else colors.textTertiary,
                 )
@@ -389,22 +394,37 @@ private fun ChatHeader(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "Ещё",
+                    contentDescription = stringResource(R.string.action_more),
                     tint = colors.textPrimary,
                 )
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Все переписки", style = AgiTheme.typography.body) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.chat_menu_all_sessions),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
                     onClick = { menuOpen = false; onOpenSessions() },
                 )
                 DropdownMenuItem(
-                    text = { Text("Новая переписка", style = AgiTheme.typography.body) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.chat_menu_new_session),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
                     onClick = { menuOpen = false; onNewSession() },
                 )
                 if (!state.closed) {
                     DropdownMenuItem(
-                        text = { Text("Закрыть переписку", style = AgiTheme.typography.body) },
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_menu_close_session),
+                                style = AgiTheme.typography.body,
+                            )
+                        },
                         onClick = { menuOpen = false; onCloseSession() },
                     )
                 }
@@ -491,14 +511,18 @@ private fun MessageBubble(
                 ) {
                     if (message.failed) {
                         Text(
-                            text = "не отправлено · повторить",
+                            text = stringResource(R.string.chat_message_failed),
                             style = AgiTheme.typography.caption,
                             color = colors.danger,
                             modifier = Modifier.clickable(onClick = onRetry),
                         )
                     } else {
                         Text(
-                            text = if (message.pending) "отправляется…" else TimeFormat.messageStamp(message.createdAt),
+                            text = if (message.pending) {
+                                stringResource(R.string.chat_message_sending)
+                            } else {
+                                TimeFormat.messageStamp(message.createdAt)
+                            },
                             style = AgiTheme.typography.caption,
                             color = colors.textTertiary,
                         )
@@ -508,11 +532,21 @@ private fun MessageBubble(
 
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Поделиться", style = AgiTheme.typography.body) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.action_share),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
                     onClick = { menuOpen = false; actions.onShare(message) },
                 )
                 DropdownMenuItem(
-                    text = { Text("Копировать", style = AgiTheme.typography.body) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.action_copy),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
                     onClick = { menuOpen = false; actions.onCopy(message) },
                 )
             }
@@ -593,7 +627,7 @@ private fun AttachmentView(
                 )
                 Spacer(Modifier.width(AgiTheme.spacing.sm))
                 Text(
-                    text = attachment.name ?: "Вложение",
+                    text = attachment.name ?: stringResource(R.string.chat_attachment_generic),
                     style = AgiTheme.typography.secondary,
                     color = colors.textPrimary,
                     maxLines = 1,
@@ -607,16 +641,31 @@ private fun AttachmentView(
             // чужое приложение говорить незачем.
             if (!attachment.isImage) {
                 DropdownMenuItem(
-                    text = { Text("Открыть", style = AgiTheme.typography.body) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.action_open),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
                     onClick = { menuOpen = false; actions.onOpenFile(attachment) },
                 )
             }
             DropdownMenuItem(
-                text = { Text("Сохранить", style = AgiTheme.typography.body) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.action_save),
+                        style = AgiTheme.typography.body,
+                    )
+                },
                 onClick = { menuOpen = false; actions.onSaveFile(attachment) },
             )
             DropdownMenuItem(
-                text = { Text("Поделиться", style = AgiTheme.typography.body) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.action_share),
+                        style = AgiTheme.typography.body,
+                    )
+                },
                 onClick = { menuOpen = false; actions.onShareFile(attachment) },
             )
         }
@@ -653,7 +702,12 @@ private fun ProgressGroupRow(group: ChatItem.ProgressGroup, modifier: Modifier =
             }
         } else {
             Text(
-                text = if (group.lines.size > 1) "$last · ещё ${group.lines.size - 1}" else last,
+                text = if (group.lines.size > 1) {
+                    val more = group.lines.size - 1
+                    pluralStringResource(R.plurals.chat_progress_more, more, last, more)
+                } else {
+                    last
+                },
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
                 maxLines = 1,
@@ -664,9 +718,9 @@ private fun ProgressGroupRow(group: ChatItem.ProgressGroup, modifier: Modifier =
 }
 
 @Composable
-private fun DaySeparatorRow(label: String, modifier: Modifier = Modifier) {
+private fun DaySeparatorRow(label: UiText, modifier: Modifier = Modifier) {
     Text(
-        text = label,
+        text = label.resolve(),
         style = AgiTheme.typography.caption,
         color = AgiTheme.colors.textTertiary,
         modifier = modifier
@@ -740,13 +794,13 @@ private fun EmptyChatHint(agentName: String) {
         AgentAvatar(name = agentName, size = 64.dp)
         Spacer(Modifier.height(AgiTheme.spacing.lg))
         Text(
-            text = "Напишите первое сообщение",
+            text = stringResource(R.string.chat_empty_title),
             style = AgiTheme.typography.subtitle,
             color = colors.textPrimary,
         )
         Spacer(Modifier.height(AgiTheme.spacing.sm))
         Text(
-            text = "Обычным языком — как человеку. Можно приложить фото или документ.",
+            text = stringResource(R.string.chat_empty_description),
             style = AgiTheme.typography.secondary,
             color = colors.textSecondary,
             textAlign = TextAlign.Center,
@@ -768,7 +822,7 @@ private fun Composer(
 
     // Пока полоска уезжает, ошибки в состоянии уже нет, и текст ей нужен последний показанный —
     // иначе схлопывание шло бы по пустой строке.
-    var lastError by remember { mutableStateOf("") }
+    var lastError by remember { mutableStateOf<UiText?>(null) }
     LaunchedEffect(state.sendError) {
         state.sendError?.let { lastError = it }
     }
@@ -785,7 +839,7 @@ private fun Composer(
             exit = shrinkVertically() + fadeOut(),
         ) {
             Text(
-                text = lastError,
+                text = lastError?.resolve().orEmpty(),
                 style = AgiTheme.typography.caption,
                 color = colors.danger,
                 modifier = Modifier
@@ -809,7 +863,7 @@ private fun Composer(
         ) {
             val failed = lastNotice?.failed == true
             Text(
-                text = lastNotice?.text.orEmpty(),
+                text = lastNotice?.text?.resolve().orEmpty(),
                 style = AgiTheme.typography.caption,
                 color = if (failed) colors.danger else colors.textSecondary,
                 modifier = Modifier
@@ -837,7 +891,7 @@ private fun Composer(
 
         if (blocked != null) {
             Text(
-                text = blocked,
+                text = blocked.resolve(),
                 style = AgiTheme.typography.secondary,
                 color = colors.textTertiary,
                 modifier = Modifier
@@ -867,7 +921,7 @@ private fun Composer(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.AttachFile,
-                    contentDescription = "Прикрепить файл",
+                    contentDescription = stringResource(R.string.cd_attach_file),
                     tint = colors.textSecondary,
                 )
             }
@@ -882,7 +936,7 @@ private fun Composer(
             ) {
                 if (state.input.isEmpty()) {
                     Text(
-                        text = "Сообщение",
+                        text = stringResource(R.string.chat_input_hint),
                         style = AgiTheme.typography.body,
                         color = colors.textTertiary,
                     )
@@ -908,7 +962,7 @@ private fun Composer(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Stop,
-                        contentDescription = "Остановить",
+                        contentDescription = stringResource(R.string.cd_stop),
                         tint = colors.textPrimary,
                     )
                 }
@@ -922,7 +976,7 @@ private fun Composer(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.Send,
-                    contentDescription = "Отправить",
+                    contentDescription = stringResource(R.string.cd_send),
                     tint = if (state.canSend) colors.onAction else colors.textTertiary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -967,8 +1021,8 @@ private fun PendingAttachmentRow(attachment: PendingAttachment, onRemove: () -> 
                 overflow = TextOverflow.Ellipsis,
             )
             val status = when {
-                attachment.error != null -> attachment.error
-                attachment.uploading -> "загружается…"
+                attachment.error != null -> attachment.error.resolve()
+                attachment.uploading -> stringResource(R.string.chat_attachment_uploading)
                 else -> null
             }
             if (status != null) {
@@ -987,7 +1041,7 @@ private fun PendingAttachmentRow(attachment: PendingAttachment, onRemove: () -> 
         ) {
             Icon(
                 imageVector = Icons.Outlined.Close,
-                contentDescription = "Убрать",
+                contentDescription = stringResource(R.string.cd_remove),
                 tint = colors.textSecondary,
                 modifier = Modifier.size(18.dp),
             )

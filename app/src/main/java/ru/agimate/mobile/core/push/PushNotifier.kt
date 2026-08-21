@@ -47,11 +47,11 @@ class PushNotifier @Inject constructor(
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Сообщения агентов",
+            context.getString(R.string.push_channel_name),
             // Ответ агента — то, чего человек ждёт, поэтому со звуком и всплытием.
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "Ответы агентов и сообщения в переписках"
+            description = context.getString(R.string.push_channel_description)
         }
         manager.createNotificationChannel(channel)
     }
@@ -59,13 +59,16 @@ class PushNotifier @Inject constructor(
     fun show(message: PushMessage) {
         if (!allowed()) return
 
+        // Имя нужно и заголовку, и extra: чат, открытый из шторки, должен назваться так же.
+        val agentName = message.agentName ?: context.getString(R.string.push_unknown_agent)
+
         val intent = Intent(context, MainActivity::class.java).apply {
             // Активность объявлена singleTask: intent приедет в onNewIntent уже запущенной, а не
             // поднимет второй экземпляр поверх открытого приложения.
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(PushExtras.SESSION_ID, message.sessionId)
             putExtra(PushExtras.AGENT_ID, message.agentId)
-            putExtra(PushExtras.AGENT_NAME, message.agentName)
+            putExtra(PushExtras.AGENT_NAME, agentName)
         }
         val requestCode = message.sessionId.hashCode()
         val pending = PendingIntent.getActivity(
@@ -75,10 +78,10 @@ class PushNotifier @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val text = message.preview ?: "Новое сообщение"
+        val text = message.preview ?: context.getString(R.string.push_default_text)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(message.agentName)
+            .setContentTitle(agentName)
             .setContentText(text)
             // Ответ агента бывает длиннее строки, и обрезанный он бесполезен.
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

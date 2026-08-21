@@ -25,14 +25,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.agimate.mobile.LoginPhase
 import ru.agimate.mobile.LoginUiState
+import ru.agimate.mobile.R
 import ru.agimate.mobile.core.auth.AuthProvider
 import ru.agimate.mobile.core.ui.components.BrandMark
 import ru.agimate.mobile.core.ui.components.SecondaryButton
+import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
 /**
@@ -77,7 +80,7 @@ fun LoginScreen(
             Spacer(Modifier.height(AgiTheme.spacing.sm))
 
             Text(
-                text = "Личные ИИ-агенты. Напишите — и они сделают.",
+                text = stringResource(R.string.login_tagline),
                 style = AgiTheme.typography.secondary,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center,
@@ -97,7 +100,7 @@ fun LoginScreen(
                     )
                     Spacer(Modifier.height(AgiTheme.spacing.md))
                     Text(
-                        text = "Завершаем вход…",
+                        text = stringResource(R.string.login_finishing),
                         style = AgiTheme.typography.secondary,
                         color = colors.textSecondary,
                     )
@@ -109,7 +112,10 @@ fun LoginScreen(
                 ) {
                     AuthProvider.entries.forEach { provider ->
                         SecondaryButton(
-                            text = "Войти через ${provider.title}",
+                            text = stringResource(
+                                R.string.login_with_provider,
+                                stringResource(provider.titleRes),
+                            ),
                             enabled = state.phase == LoginPhase.Idle,
                             onClick = { onProvider(provider) },
                         )
@@ -120,7 +126,7 @@ fun LoginScreen(
             if (state.message != null) {
                 Spacer(Modifier.height(AgiTheme.spacing.lg))
                 Text(
-                    text = state.message,
+                    text = state.message.resolve(),
                     style = AgiTheme.typography.secondary,
                     color = colors.danger,
                     textAlign = TextAlign.Center,
@@ -149,7 +155,7 @@ private fun DevOriginField(origin: String, onOriginChange: (String) -> Unit) {
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Сервер (только для отладочной сборки)",
+            text = stringResource(R.string.login_origin_label),
             style = AgiTheme.typography.caption,
             color = AgiTheme.colors.textTertiary,
         )

@@ -9,20 +9,26 @@ package ru.agimate.mobile.core.push
 data class PushMessage(
     val sessionId: String,
     val agentId: String?,
-    val agentName: String,
+    /**
+     * Имя агента из пуша. `null` — сервер его не прислал; чем заменить, решает показывающий:
+     * запасное имя это перевод, а разбору пуша про язык знать неоткуда.
+     */
+    val agentName: String?,
     val messageId: String?,
     val preview: String?,
 ) {
-    /** Куда ведёт тап. Отдельно от самого сообщения: навигации нужен только адрес переписки. */
-    val target: PushChatTarget
-        get() = PushChatTarget(sessionId = sessionId, agentId = agentId, agentName = agentName)
+    /**
+     * Куда ведёт тап. Отдельно от самого сообщения: навигации нужен только адрес переписки.
+     *
+     * Имя подставляет вызывающий: у шапки чата, открытого из шторки, и у заголовка уведомления оно
+     * должно быть одно и то же.
+     */
+    fun target(agentName: String) =
+        PushChatTarget(sessionId = sessionId, agentId = agentId, agentName = agentName)
 
     companion object {
         /** Тип события. Совпадает с тем, что бэкенд публикует в Centrifugo. */
         const val TYPE_WEBCHAT_MESSAGE = "webchat_message"
-
-        /** Имя агента приходит в пуше: без него шапка чата, открытого по тапу, осталась бы пустой. */
-        private const val UNKNOWN_AGENT = "Агент"
 
         fun parse(data: Map<String, String>): PushMessage? {
             if (data["type"] != TYPE_WEBCHAT_MESSAGE) return null
@@ -30,7 +36,7 @@ data class PushMessage(
             return PushMessage(
                 sessionId = sessionId,
                 agentId = data["agentId"]?.takeIf { it.isNotBlank() },
-                agentName = data["agentName"]?.takeIf { it.isNotBlank() } ?: UNKNOWN_AGENT,
+                agentName = data["agentName"]?.takeIf { it.isNotBlank() },
                 messageId = data["messageId"]?.takeIf { it.isNotBlank() },
                 preview = data["preview"]?.takeIf { it.isNotBlank() },
             )
