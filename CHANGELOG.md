@@ -1,6 +1,8 @@
 # Changelog
 
-Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
+Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — по
+[semver](https://semver.org/lang/ru/). Номер сборки выводится из версии, по три разряда на
+поле: `0.3.1` → `3001`.
 
 ## [Unreleased]
 

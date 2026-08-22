@@ -30,6 +30,26 @@ val releaseKeystore = localProperties.getProperty("release.storeFile")
     ?.let(::file)
     ?.takeIf { it.exists() }
 
+/**
+ * Версия — единственное место, где её задают руками. Номер сборки из неё выводится: держать два
+ * числа рядом значит однажды поднять одно и забыть второе, а магазин ловит это уже после загрузки.
+ *
+ * Формула — по три разряда на каждое поле semver: 0.3.1 → 3001, 1.0.0 → 1000000. Разрядность
+ * выбрана так, чтобы номер читался глазами: 3001 разбирается обратно в 0.3.1 без калькулятора.
+ * Потолок поля — 999, до потолка `versionCode` (2 100 000 000) отсюда ещё два порядка.
+ *
+ * Переход на формулу поднял номер сразу с 3 до тысяч. Это безопасно: магазины требуют, чтобы
+ * номер рос, а не чтобы рос на единицу.
+ */
+val appVersionName = "0.3.0"
+
+val appVersionCode = appVersionName.split(".").map { it.toIntOrNull() ?: -1 }.let { parts ->
+    require(parts.size == 3 && parts.all { it in 0..999 }) {
+        "versionName «$appVersionName» — не semver из трёх полей до 999, номер сборки не вывести"
+    }
+    parts[0] * 1_000_000 + parts[1] * 1_000 + parts[2]
+}
+
 android {
     namespace = "ru.agimate.mobile"
     compileSdk = 37
@@ -38,8 +58,8 @@ android {
         applicationId = "ru.agimate.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
