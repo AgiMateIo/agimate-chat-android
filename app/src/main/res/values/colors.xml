@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Здесь только то, что нужно системе до старта Compose: фон окна и иконка. Палитра приложения
-  живёт в core/ui/theme/Color.kt и выводится из токенов айдентики, дублировать её сюда не надо.
+  Здесь только то, что нужно системе до старта Compose, — фон окна. Палитра приложения живёт в
+  core/ui/theme/Color.kt и выводится из токенов айдентики, дублировать её сюда не надо; плита
+  иконки — тоже краска бренда, но она в drawable/ic_launcher_background.xml, потому что она
+  градиент, а не цвет.
 -->
 <resources>
-    <color name="brand_accent">#1C6975</color>
     <color name="window_background">#F8F7F5</color>
 </resources>

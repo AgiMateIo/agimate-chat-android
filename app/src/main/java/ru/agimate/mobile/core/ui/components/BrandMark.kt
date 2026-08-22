@@ -6,8 +6,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
@@ -15,50 +17,58 @@ import androidx.compose.ui.unit.dp
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import kotlin.math.min
 
-private const val MARK_MIN_X = -3.54f
-private const val MARK_MIN_Y = -0.68f
-private const val MARK_WIDTH = 87.08f
-private const val MARK_HEIGHT = 78.75f
+private const val MARK_MIN_X = 3.67f
+private const val MARK_MIN_Y = -0.06f
+private const val MARK_WIDTH = 72.66f
+private const val MARK_HEIGHT = 66.09f
 
 /** Отношение сторон знака. Размер задаётся высотой — минимальный размер в бренд-буке дан по ней. */
 const val BRAND_MARK_ASPECT = MARK_WIDTH / MARK_HEIGHT
 
 /**
- * Ниже этого две краски перестают различаться — полосы сливаются, и знак читается грязным пятном.
- * Порог из бренд-бука: ниже него знак ставится в одну краску.
+ * Порог фасетки из бренд-бука. Ниже него перепад светлоты внутри фигуры занимает считанные
+ * пиксели: градиент уже не читается, а его тёмный конец тратит контраст, который на мелком нужен
+ * целиком. Поэтому ниже — одна плоская краска, а не выцветающая.
  */
-private val TWO_INK_MIN = 24.dp
+private val FACET_MIN = 40.dp
 
-/** Вершина и нижний шеврон — та полоса, что несёт акцент. Верхний ромб всегда светлее. */
-private const val BRIGHT_PATH =
-    "M36.46 0.79 A5.0 5.0 0 0 1 43.54 0.79 L50.96 8.21 A5.0 5.0 0 0 1 50.96 15.29 " +
-        "L43.54 22.71 A5.0 5.0 0 0 1 36.46 22.71 L29.04 15.29 A5.0 5.0 0 0 1 29.04 8.21 Z " +
-        "M10.27 43.52 A5.0 5.0 0 0 1 10.27 39.98 L13.98 36.27 A5.0 5.0 0 0 1 17.52 36.27 " +
-        "L38.23 56.98 A5.0 5.0 0 0 0 41.77 56.98 L62.48 36.27 A5.0 5.0 0 0 1 66.02 36.27 " +
-        "L69.73 39.98 A5.0 5.0 0 0 1 69.73 43.52 L41.77 71.48 A5.0 5.0 0 0 1 38.23 71.48 Z"
+/** Тёмный конец фасетки. Столько же берёт блик на плитке приложения — альфа в системе одна. */
+private const val FACET_DIM = 0.62f
 
-/** Верхний шеврон и два нижних ромба — чередующаяся полоса. */
-private const val DIM_PATH =
-    "M10.27 20.02 A5.0 5.0 0 0 1 10.27 16.48 L13.98 12.77 A5.0 5.0 0 0 1 17.52 12.77 " +
-        "L38.23 33.48 A5.0 5.0 0 0 0 41.77 33.48 L62.48 12.77 A5.0 5.0 0 0 1 66.02 12.77 " +
-        "L69.73 16.48 A5.0 5.0 0 0 1 69.73 20.02 L41.77 47.98 A5.0 5.0 0 0 1 38.23 47.98 Z " +
-        "M5.35 54.68 A5.0 5.0 0 0 1 12.43 54.68 L19.85 62.1 A5.0 5.0 0 0 1 19.85 69.18 " +
-        "L12.43 76.6 A5.0 5.0 0 0 1 5.35 76.6 L-2.07 69.18 A5.0 5.0 0 0 1 -2.07 62.1 Z " +
-        "M67.57 54.68 A5.0 5.0 0 0 1 74.65 54.68 L82.07 62.1 A5.0 5.0 0 0 1 82.07 69.18 " +
-        "L74.65 76.6 A5.0 5.0 0 0 1 67.57 76.6 L60.15 69.18 A5.0 5.0 0 0 1 60.15 62.1 Z"
+/**
+ * Четыре контура знака: шеврон, вершина, два ромба основания. Порядок — как в эталонном файле.
+ *
+ * Фигуры рисуются по отдельности не ради удобства: фасетка красит каждую своим градиентом, от её
+ * собственного верхнего левого угла к нижнему правому. Одна заливка на объединённый контур дала бы
+ * знаку общий градиент, у которого светлый угол только один.
+ */
+private val MARK_PATHS = listOf(
+    "M5.57 20.82 A6.5 6.5 0 0 1 5.57 11.63 L6.38 10.82 A6.5 6.5 0 0 1 15.57 10.82 " +
+        "L35.4 30.65 A6.5 6.5 0 0 0 44.6 30.65 L64.43 10.82 A6.5 6.5 0 0 1 73.62 10.82 " +
+        "L74.43 11.63 A6.5 6.5 0 0 1 74.43 20.82 L44.6 50.65 A6.5 6.5 0 0 1 35.4 50.65 Z",
+    "M35.4 1.85 A6.5 6.5 0 0 1 44.6 1.85 L49.9 7.15 A6.5 6.5 0 0 1 49.9 16.35 " +
+        "L44.6 21.65 A6.5 6.5 0 0 1 35.4 21.65 L30.1 16.35 A6.5 6.5 0 0 1 30.1 7.15 Z",
+    "M10.88 44.32 A6.5 6.5 0 0 1 20.07 44.32 L25.38 49.63 A6.5 6.5 0 0 1 25.38 58.82 " +
+        "L20.07 64.13 A6.5 6.5 0 0 1 10.88 64.13 L5.57 58.82 A6.5 6.5 0 0 1 5.57 49.63 Z",
+    "M59.93 44.32 A6.5 6.5 0 0 1 69.12 44.32 L74.43 49.63 A6.5 6.5 0 0 1 74.43 58.82 " +
+        "L69.12 64.13 A6.5 6.5 0 0 1 59.93 64.13 L54.62 58.82 A6.5 6.5 0 0 1 54.62 49.63 Z",
+)
 
 private fun parse(data: String): Path = PathParser().parsePathString(data).toPath()
 
 /**
- * Знак AgiMate: ромб, два шеврона, два ромба на одной диагональной сетке.
+ * Знак AgiMate: вершина, шеврон и два ромба основания на одной диагональной сетке.
  *
  * Контуры — те же, что в эталонном файле айдентики, до последнего знака после запятой. Рисуется
  * кодом, а не картинкой: так он попадает в цвет темы и остаётся резким на любой плотности. Правка
  * знака — правка в айдентике, а не здесь.
  *
- * Компонент принимает **одну** краску и выводит вторую прозрачностью. Иначе нельзя: на акцентной
- * плашке вызывающий передаёт белый, а светлее белого ничего нет. Следствие — на тёмной подложке
- * чередование идёт в сторону фона, а не «всегда светлее», как в двухцветном эталоне.
+ * Компонент принимает **одну** краску и выводит из неё фасетку прозрачностью. Иначе нельзя: на
+ * акцентной плашке вызывающий передаёт белый, а светлее белого ничего нет. Следствие — на тёмной
+ * подложке фасетка уходит в сторону фона, а не «всегда светлее», как в двухцветном эталоне.
+ *
+ * Направление фасетки жёсткое: свет всегда из верхнего левого угла. Это не косметика — одинаковый
+ * угол света и связывает четыре отдельные фигуры в один предмет.
  */
 @Composable
 fun BrandMark(
@@ -67,9 +77,8 @@ fun BrandMark(
     size: Dp = 56.dp,
     color: Color = AgiTheme.colors.accent,
 ) {
-    val bright = remember { parse(BRIGHT_PATH) }
-    val dim = remember { parse(DIM_PATH) }
-    val dimColor = if (size >= TWO_INK_MIN) color.copy(alpha = 0.62f) else color
+    val paths = remember { MARK_PATHS.map { parse(it) } }
+    val faceted = size >= FACET_MIN
 
     Canvas(modifier = modifier.size(width = size * BRAND_MARK_ASPECT, height = size)) {
         val scale = min(this.size.width / MARK_WIDTH, this.size.height / MARK_HEIGHT)
@@ -80,8 +89,21 @@ fun BrandMark(
             translate(dx, dy)
             scale(scale, scale, pivot = Offset.Zero)
         }) {
-            drawPath(dim, dimColor)
-            drawPath(bright, color)
+            paths.forEach { path ->
+                // Кисть задаётся в текущей системе координат, то есть в единицах сетки знака:
+                // границы фигуры можно брать прямо у контура, пересчитывать под масштаб не нужно.
+                val brush = if (faceted) {
+                    val box = path.getBounds()
+                    Brush.linearGradient(
+                        colors = listOf(color, color.copy(alpha = FACET_DIM)),
+                        start = box.topLeft,
+                        end = box.bottomRight,
+                    )
+                } else {
+                    SolidColor(color)
+                }
+                drawPath(path, brush)
+            }
         }
     }
 }

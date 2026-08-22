@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Плашка приложения, слой подложки: плита-градиент по той же диагонали 45°, на которой построен
+  знак, и тёплый блик Mocha Mousse в дальнем углу. Плоского акцента в иконке не бывает.
+
+  Блик лежит поверх плиты, а не подмешан в неё третьим стопом: стоп превратил бы дальний угол в
+  коричневый клин уже к 28 px, а наложение оставляет свечение.
+
+  Краски дублированы шестнадцатеричными — ресурс рисуется системой в чужом процессе, до токенов
+  ему не дотянуться. Взяты значения тёмной темы: она в бренд-буке основная, а иконку в лаунчере
+  переключать вслед за темой телефона нечестно — человек ищет её по виду, а не по настройке.
+
+  Градиент разложен на видимую часть холста, 18..90, а не на все 108: за краями он упирается в
+  свои концы, и параллакс лаунчера уводит плиту в ровный цвет, а не в оборванную ленту.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:pathData="M0,0 h108 v108 h-108 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="18" android:startY="18"
+                android:endX="90" android:endY="90"
+                android:startColor="#FF1FA4B8"
+                android:endColor="#FF1C6975" />
+        </aapt:attr>
+    </path>
+
+    <path android:pathData="M0,0 h108 v108 h-108 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="90" android:centerY="90"
+                android:gradientRadius="57.6"
+                android:startColor="#9EA47764"
+                android:endColor="#00A47764" />
+        </aapt:attr>
+    </path>
+</vector>
