@@ -5,18 +5,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+
 import ru.agimate.mobile.LoginPhase
 import ru.agimate.mobile.LoginUiState
 import ru.agimate.mobile.R
@@ -127,17 +135,6 @@ fun LoginScreen(
                         )
                     }
                 }
-
-                Spacer(Modifier.height(AgiTheme.spacing.sm))
-
-                Text(
-                    text = stringResource(R.string.login_intro),
-                    style = AgiTheme.typography.action,
-                    color = colors.textSecondary,
-                    modifier = Modifier
-                        .clickable(role = Role.Button, onClick = onIntro)
-                        .padding(AgiTheme.spacing.md),
-                )
             }
 
             if (state.message != null) {
@@ -158,6 +155,33 @@ fun LoginScreen(
             }
 
             Spacer(Modifier.height(AgiTheme.spacing.xl))
+        }
+
+        // Указатель влево, а не «открыть»: интро стояло до входа, и ссылка возвращает туда же,
+        // откуда человек пришёл. Поверх прокрутки, а не внутри неё — иначе уедет вместе с ней.
+        // Во время обмена кода прячется: уводить с экрана, который вот-вот доделает вход, незачем.
+        if (state.phase != LoginPhase.Exchanging) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onIntro)
+                    .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(AgiTheme.spacing.xs))
+                Text(
+                    text = stringResource(R.string.login_intro),
+                    style = AgiTheme.typography.action,
+                    color = colors.textSecondary,
+                )
+            }
         }
     }
 }
