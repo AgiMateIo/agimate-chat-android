@@ -118,6 +118,8 @@ class MainViewModel @Inject constructor(
 
     fun finishOnboarding() = onboarding.markSeen()
 
+    fun replayOnboarding() = onboarding.replay()
+
     fun dismissLoginMessage() {
         _login.value = _login.value.copy(message = null)
     }

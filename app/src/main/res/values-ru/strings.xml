@@ -28,7 +28,8 @@
     <string name="onboarding_talk_body">Ставьте задачи и обсуждайте их в чате. Агенты проактивны: сами сообщат о важном и напомнят о делах и планах.</string>
 
     <!-- Вход -->
-    <string name="login_tagline">Личные ИИ-агенты. Напишите — и они сделают.</string>
+    <string name="login_tagline">Личные ИИ-агенты. Избавят вас от рутины.</string>
+    <string name="login_intro">Посмотреть интро</string>
     <string name="login_finishing">Завершаем вход…</string>
     <string name="login_with_provider">Войти через %1$s</string>
     <string name="login_origin_label">Сервер (только для отладочной сборки)</string>

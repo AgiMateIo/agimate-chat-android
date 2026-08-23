@@ -1,6 +1,7 @@
 package ru.agimate.mobile.feature.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +42,9 @@ import ru.agimate.mobile.core.ui.theme.AgiTheme
 
 /**
  * Вход: логотип, строка обещания, кнопки провайдеров. Ни форм, ни паролей, ни отдельной регистрации.
+ *
+ * Ссылка на интро — единственная дорога назад к рассказу о приложении: интро показывается один раз,
+ * и без неё пропустивший его человек не увидит рассказ уже никогда.
  */
 @Composable
 fun LoginScreen(
@@ -48,6 +53,7 @@ fun LoginScreen(
     originEditable: Boolean,
     onProvider: (AuthProvider) -> Unit,
     onOriginChange: (String) -> Unit,
+    onIntro: () -> Unit,
 ) {
     val colors = AgiTheme.colors
 
@@ -121,6 +127,17 @@ fun LoginScreen(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(AgiTheme.spacing.sm))
+
+                Text(
+                    text = stringResource(R.string.login_intro),
+                    style = AgiTheme.typography.action,
+                    color = colors.textSecondary,
+                    modifier = Modifier
+                        .clickable(role = Role.Button, onClick = onIntro)
+                        .padding(AgiTheme.spacing.md),
+                )
             }
 
             if (state.message != null) {

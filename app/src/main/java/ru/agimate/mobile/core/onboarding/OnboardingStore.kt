@@ -36,6 +36,17 @@ class OnboardingStore @Inject constructor(
         _seen.value = true
     }
 
+    /**
+     * Показать рассказ ещё раз — со ссылки на экране входа.
+     *
+     * Отметка на диске при этом не трогается: человек попросил перечитать сейчас, а не забыть, что
+     * уже читал. Поэтому закрытое на середине приложение в следующий раз откроется на входе, а не
+     * снова на интро.
+     */
+    fun replay() {
+        _seen.value = false
+    }
+
     private companion object {
         const val PREFS = "agimate.onboarding"
         const val KEY = "seen_version"

@@ -71,10 +71,15 @@ fun OnboardingScreen(
     val reducedMotion = AgiTheme.reducedMotion
     val last = pager.currentPage == slides.lastIndex
 
-    // Назад — на предыдущий слайд, а не из приложения: интро читается как одна страница, у которой
-    // есть верх. С первого слайда «назад» работает как обычно.
-    BackHandler(enabled = pager.currentPage > 0) {
-        scope.launch { pager.go(pager.currentPage - 1, reducedMotion) }
+    // Назад — на предыдущий слайд: интро читается как одна страница, у которой есть верх. С первого
+    // слайда «назад» означает то же, что «Пропустить», а не выход из приложения: интро открывают и
+    // повторно, ссылкой с экрана входа, и захлопнуть там приложение было бы неожиданным ответом.
+    BackHandler {
+        if (pager.currentPage > 0) {
+            scope.launch { pager.go(pager.currentPage - 1, reducedMotion) }
+        } else {
+            onDone()
+        }
     }
 
     Column(

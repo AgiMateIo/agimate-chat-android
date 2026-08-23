@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     pendingChat = pendingChat,
                     onPendingChatHandled = viewModel::onPendingChatHandled,
                     onOnboardingDone = viewModel::finishOnboarding,
+                    onReplayOnboarding = viewModel::replayOnboarding,
                     onProvider = { provider ->
                         val uri = viewModel.beginLogin(provider)
                         val opened = CustomTabs.open(

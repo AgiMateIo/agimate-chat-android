@@ -42,6 +42,7 @@ fun AppRoot(
     pendingChat: PushChatTarget? = null,
     onPendingChatHandled: () -> Unit = {},
     onOnboardingDone: () -> Unit = {},
+    onReplayOnboarding: () -> Unit = {},
     onProvider: (AuthProvider) -> Unit,
     onOriginChange: (String) -> Unit,
     onRefreshSession: () -> Unit,
@@ -66,6 +67,7 @@ fun AppRoot(
                             originEditable = originEditable,
                             onProvider = onProvider,
                             onOriginChange = onOriginChange,
+                            onIntro = onReplayOnboarding,
                         )
                     } else {
                         OnboardingScreen(onDone = onOnboardingDone)
