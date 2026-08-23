@@ -99,7 +99,8 @@
     <string name="chat_composer_agent_disabled">The agent is off</string>
     <string name="chat_attachments_limit">No more than five attachments in one message</string>
     <string name="chat_attach_photo">Take a photo</string>
-    <string name="chat_attach_file">Choose a file</string>
+    <string name="chat_attach_file">Upload from the device</string>
+    <string name="chat_attach_stored">Choose from uploaded</string>
     <string name="cd_attach_file">Attach a file</string>
     <string name="cd_stop">Stop</string>
     <string name="cd_send">Send</string>

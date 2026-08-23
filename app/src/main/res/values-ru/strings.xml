@@ -92,7 +92,8 @@
     <string name="chat_composer_agent_disabled">Агент выключен</string>
     <string name="chat_attachments_limit">Больше пяти вложений в одном сообщении нельзя</string>
     <string name="chat_attach_photo">Сделать фото</string>
-    <string name="chat_attach_file">Выбрать файл</string>
+    <string name="chat_attach_file">Загрузить с устройства</string>
+    <string name="chat_attach_stored">Выбрать из загруженных</string>
     <string name="cd_attach_file">Прикрепить файл</string>
     <string name="cd_stop">Остановить</string>
     <string name="cd_send">Отправить</string>

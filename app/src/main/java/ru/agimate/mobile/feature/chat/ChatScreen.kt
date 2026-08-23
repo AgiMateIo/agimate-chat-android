@@ -318,6 +318,7 @@ fun ChatScreen(
                 onStop = onStop,
                 onAttachFile = onAttachFile,
                 onTakePhoto = onTakePhoto,
+                onPickStored = onOpenFiles,
                 onRemoveAttachment = onRemoveAttachment,
             )
         }
@@ -960,6 +961,7 @@ private fun Composer(
     onStop: () -> Unit,
     onAttachFile: () -> Unit,
     onTakePhoto: (() -> Unit)?,
+    onPickStored: () -> Unit,
     onRemoveAttachment: (String) -> Unit,
 ) {
     val colors = AgiTheme.colors
@@ -1055,14 +1057,14 @@ private fun Composer(
                 ),
             verticalAlignment = Alignment.Bottom,
         ) {
-            // Со скрепки два пути, и меню появляется только когда их правда два: телефону без
-            // камеры оно предлагало бы выбор из одного пункта.
+            // Со скрепки три пути: снять, загрузить с телефона и взять то, что уже лежит на
+            // сервере. Третий не стоит ни байта трафика — у такого файла идентификатор уже есть.
             var attachMenu by remember { mutableStateOf(false) }
             Box {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clickable { if (onTakePhoto == null) onAttachFile() else attachMenu = true },
+                        .clickable { attachMenu = true },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -1072,26 +1074,12 @@ private fun Composer(
                     )
                 }
                 DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                    // Снимать может быть нечем — тогда пункта нет вовсе, а не «нажми и узнай».
                     onTakePhoto?.let { take ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.chat_attach_photo),
-                                    style = AgiTheme.typography.body,
-                                )
-                            },
-                            onClick = { attachMenu = false; take() },
-                        )
+                        AttachAction(R.string.chat_attach_photo) { attachMenu = false; take() }
                     }
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = stringResource(R.string.chat_attach_file),
-                                style = AgiTheme.typography.body,
-                            )
-                        },
-                        onClick = { attachMenu = false; onAttachFile() },
-                    )
+                    AttachAction(R.string.chat_attach_file) { attachMenu = false; onAttachFile() }
+                    AttachAction(R.string.chat_attach_stored) { attachMenu = false; onPickStored() }
                 }
             }
 
@@ -1152,6 +1140,14 @@ private fun Composer(
             }
         }
     }
+}
+
+@Composable
+private fun AttachAction(textRes: Int, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text = stringResource(textRes), style = AgiTheme.typography.body) },
+        onClick = onClick,
+    )
 }
 
 @Composable
