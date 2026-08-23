@@ -37,7 +37,7 @@
     <string name="settings_bad_origin">That address does not look right</string>
 
     <!-- Вход -->
-    <string name="login_tagline">Personal AI agents. They take the routine off your hands.</string>
+    <string name="login_tagline">Hand your routine over to AI agents</string>
     <string name="login_intro">Intro</string>
     <string name="login_finishing">Finishing sign-in…</string>
     <string name="login_with_provider">Sign in with %1$s</string>
