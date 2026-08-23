@@ -96,6 +96,8 @@
     <string name="chat_composer_closed">The conversation is closed — start a new one</string>
     <string name="chat_composer_agent_disabled">The agent is off</string>
     <string name="chat_attachments_limit">No more than five attachments in one message</string>
+    <string name="chat_attach_photo">Take a photo</string>
+    <string name="chat_attach_file">Choose a file</string>
     <string name="cd_attach_file">Attach a file</string>
     <string name="cd_stop">Stop</string>
     <string name="cd_send">Send</string>
@@ -193,6 +195,7 @@
     <string name="error_file_prepare">Could not prepare the file</string>
     <string name="error_file_save">Could not save the file</string>
     <string name="error_file_create">Could not create the file</string>
+    <string name="error_photo_failed">Could not take the photo</string>
     <string name="error_file_write">Could not write the file</string>
     <string name="error_storage_unavailable">No access to the phone storage</string>
     <string name="error_file_link_expired">The file link has expired — reopen the chat</string>

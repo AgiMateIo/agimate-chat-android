@@ -24,6 +24,13 @@
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
+
+        <!-- Съёмка вложения. Запустить интент видимость пакетов не требует, а вот спросить, есть
+             ли кому его принять, — требует: без этого пункт «сделать фото» пропал бы там, где
+             камера есть. -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
     </queries>
 
     <application

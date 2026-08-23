@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.push.RequestNotificationPermission
+import ru.agimate.mobile.core.share.rememberPhotoCapture
 import ru.agimate.mobile.core.share.rememberSaveGate
 import ru.agimate.mobile.feature.chat.ChatEffect
 import ru.agimate.mobile.feature.chat.ChatScreen
@@ -166,6 +167,13 @@ fun MainGraph(
                 ActivityResultContracts.OpenMultipleDocuments()
             ) { uris -> if (uris.isNotEmpty()) viewModel.addAttachments(uris) }
 
+            // Снимок камерой — такой же источник вложения, как диск: дальше по конвейеру едет
+            // обычный content-адрес, и загрузке всё равно, откуда он взялся.
+            val camera = rememberPhotoCapture(
+                onFailed = viewModel::onPhotoFailed,
+                onPhoto = { uri -> viewModel.addAttachments(listOf(uri)) },
+            )
+
             // Диалог «поделиться» и открытие файла чужим приложением запускает экран: ViewModel
             // собирает интент, но `startActivity` нужен контекст, и держать его во ViewModel
             // значит держать там же утёкшую Activity.
@@ -197,7 +205,8 @@ fun MainGraph(
                 onInputChange = viewModel::onInputChange,
                 onSend = viewModel::send,
                 onStop = viewModel::stop,
-                onAttach = { picker.launch(arrayOf("*/*")) },
+                onAttachFile = { picker.launch(arrayOf("*/*")) },
+                onTakePhoto = camera,
                 onRemoveAttachment = viewModel::removeAttachment,
                 onLoadOlder = viewModel::loadOlder,
                 onReachedBottom = viewModel::onReachedBottom,

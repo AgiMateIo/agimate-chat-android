@@ -89,6 +89,8 @@
     <string name="chat_composer_closed">Переписка закрыта — начните новую</string>
     <string name="chat_composer_agent_disabled">Агент выключен</string>
     <string name="chat_attachments_limit">Больше пяти вложений в одном сообщении нельзя</string>
+    <string name="chat_attach_photo">Сделать фото</string>
+    <string name="chat_attach_file">Выбрать файл</string>
     <string name="cd_attach_file">Прикрепить файл</string>
     <string name="cd_stop">Остановить</string>
     <string name="cd_send">Отправить</string>
@@ -178,6 +180,7 @@
     <string name="error_file_prepare">Не удалось подготовить файл</string>
     <string name="error_file_save">Не удалось сохранить файл</string>
     <string name="error_file_create">Не удалось создать файл</string>
+    <string name="error_photo_failed">Не удалось сделать снимок</string>
     <string name="error_file_write">Не удалось записать файл</string>
     <string name="error_storage_unavailable">Нет доступа к памяти телефона</string>
     <string name="error_file_link_expired">Ссылка на файл устарела — откройте чат заново</string>

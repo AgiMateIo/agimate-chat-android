@@ -460,6 +460,9 @@ class ChatViewModel @Inject constructor(
     /** Разрешения на память не дали. Промолчать нельзя: нажатие осталось бы без всякого ответа. */
     fun onSaveDenied() = notice(uiText(R.string.file_save_denied), failed = true)
 
+    /** Снимок не состоялся: файл негде завести или камеры не нашлось. */
+    fun onPhotoFailed() = notice(uiText(R.string.error_photo_failed), failed = true)
+
     /**
      * Общая обвязка действий с файлом: скачать его нужно всем троим, и все трое делают это не
      * мгновенно.

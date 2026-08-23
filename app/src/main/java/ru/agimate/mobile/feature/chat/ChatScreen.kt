@@ -134,7 +134,9 @@ fun ChatScreen(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onAttach: () -> Unit,
+    onAttachFile: () -> Unit,
+    /** Снять вложение на камеру. `null` — снимать нечем, и предлагать это не нужно. */
+    onTakePhoto: (() -> Unit)?,
     onRemoveAttachment: (String) -> Unit,
     onLoadOlder: () -> Unit,
     onReachedBottom: () -> Unit,
@@ -311,7 +313,8 @@ fun ChatScreen(
                 onInputChange = onInputChange,
                 onSend = { onSend(); sent++ },
                 onStop = onStop,
-                onAttach = onAttach,
+                onAttachFile = onAttachFile,
+                onTakePhoto = onTakePhoto,
                 onRemoveAttachment = onRemoveAttachment,
             )
         }
@@ -940,7 +943,8 @@ private fun Composer(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onAttach: () -> Unit,
+    onAttachFile: () -> Unit,
+    onTakePhoto: (() -> Unit)?,
     onRemoveAttachment: (String) -> Unit,
 ) {
     val colors = AgiTheme.colors
@@ -1036,17 +1040,44 @@ private fun Composer(
                 ),
             verticalAlignment = Alignment.Bottom,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clickable(onClick = onAttach),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.AttachFile,
-                    contentDescription = stringResource(R.string.cd_attach_file),
-                    tint = colors.textSecondary,
-                )
+            // Со скрепки два пути, и меню появляется только когда их правда два: телефону без
+            // камеры оно предлагало бы выбор из одного пункта.
+            var attachMenu by remember { mutableStateOf(false) }
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clickable { if (onTakePhoto == null) onAttachFile() else attachMenu = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AttachFile,
+                        contentDescription = stringResource(R.string.cd_attach_file),
+                        tint = colors.textSecondary,
+                    )
+                }
+                DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                    onTakePhoto?.let { take ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.chat_attach_photo),
+                                    style = AgiTheme.typography.body,
+                                )
+                            },
+                            onClick = { attachMenu = false; take() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_attach_file),
+                                style = AgiTheme.typography.body,
+                            )
+                        },
+                        onClick = { attachMenu = false; onAttachFile() },
+                    )
+                }
             }
 
             Box(
