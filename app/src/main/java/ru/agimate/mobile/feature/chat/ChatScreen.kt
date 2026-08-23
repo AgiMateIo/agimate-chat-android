@@ -89,6 +89,7 @@ import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.components.ViewerImage
 import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.text.UiText
+import ru.agimate.mobile.core.share.FileNotice
 import ru.agimate.mobile.core.ui.text.resolve
 import com.agimate.design.AgimateTokens
 import ru.agimate.mobile.core.ui.theme.AgiMotion
@@ -145,6 +146,7 @@ fun ChatScreen(
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
+    onOpenFiles: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -219,6 +221,7 @@ fun ChatScreen(
                 onOpenSessions = onOpenSessions,
                 onNewSession = onNewSession,
                 onCloseSession = onCloseSession,
+                onOpenFiles = onOpenFiles,
             )
 
             // Полоска забирает высоту у ленты, и появлением встык она сдвигает всё содержимое
@@ -372,6 +375,7 @@ private fun ChatHeader(
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
+    onOpenFiles: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -454,6 +458,17 @@ private fun ChatHeader(
                         )
                     },
                     onClick = { menuOpen = false; onNewSession() },
+                )
+                // Файлы этого агента: то, что он сделал, — и оттуда же их можно приложить к
+                // сообщению, не загружая заново.
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.chat_menu_files),
+                            style = AgiTheme.typography.body,
+                        )
+                    },
+                    onClick = { menuOpen = false; onOpenFiles() },
                 )
                 if (!state.closed) {
                     DropdownMenuItem(
@@ -1168,7 +1183,9 @@ private fun PendingAttachmentRow(attachment: PendingAttachment, onRemove: () -> 
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = attachment.name,
+                // У файла с сервера имени может не быть вовсе — ни у фото из мессенджера, ни у
+                // картинки, которую нарисовал агент.
+                text = attachment.name.ifBlank { stringResource(R.string.chat_attachment_generic) },
                 style = AgiTheme.typography.secondary,
                 color = colors.textPrimary,
                 maxLines = 1,

@@ -51,6 +51,8 @@ fun ProfileScreen(
     state: ProfileUiState,
     onBack: () -> Unit,
     onSettings: () -> Unit,
+    /** Файлы аккаунта. `null` — аккаунт ещё не одобрен, файлов у него взяться неоткуда. */
+    onFiles: (() -> Unit)? = null,
     onRevoke: (String) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -122,25 +124,10 @@ fun ProfileScreen(
 
             // Язык, тема и адрес сервера ушли на свой экран: они принадлежат телефону, а не
             // аккаунту, и нужны ещё до входа — в профиле их было бы не достать.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSettings)
-                    .padding(vertical = AgiTheme.spacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_title),
-                    style = AgiTheme.typography.body,
-                    color = colors.textPrimary,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = colors.textSecondary,
-                    modifier = Modifier.size(18.dp),
-                )
+            NavRow(title = stringResource(R.string.settings_title), onClick = onSettings)
+
+            if (onFiles != null) {
+                NavRow(title = stringResource(R.string.files_title), onClick = onFiles)
             }
 
             Spacer(Modifier.height(AgiTheme.spacing.xl))
@@ -297,5 +284,31 @@ private fun DeviceRowView(device: DeviceRow, pushNote: PushNote?, onRevoke: () -
                 )
             }
         }
+    }
+}
+
+/** Строка-переход в профиле: их стало больше одной. */
+@Composable
+private fun NavRow(title: String, onClick: () -> Unit) {
+    val colors = AgiTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = AgiTheme.spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = AgiTheme.typography.body,
+            color = colors.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = colors.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }

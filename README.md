@@ -194,7 +194,7 @@ com/agimate/     токены айдентики: копия сгенериро�
 data/            DTO, модели и репозитории: контакты, переписки, сообщения,
                  файлы, пресеты, агенты, профиль, устройства
 feature/         экраны: onboarding, login, settings, pending, contacts,
-                 sessions, chat, createagent, profile
+                 sessions, chat, files, createagent, profile
 navigation/      корневая развилка и граф внутри продукта
 ```
 

@@ -1,13 +1,17 @@
 package ru.agimate.mobile.navigation
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -26,10 +30,15 @@ import ru.agimate.mobile.feature.chat.ChatEffect
 import ru.agimate.mobile.feature.chat.ChatScreen
 import ru.agimate.mobile.feature.chat.ChatViewModel
 import ru.agimate.mobile.feature.chat.MessageActions
+import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.feature.contacts.ContactsScreen
 import ru.agimate.mobile.feature.contacts.ContactsViewModel
 import ru.agimate.mobile.feature.createagent.CreateAgentScreen
 import ru.agimate.mobile.feature.createagent.CreateAgentViewModel
+import ru.agimate.mobile.feature.files.FileActions
+import ru.agimate.mobile.feature.files.FilesEffect
+import ru.agimate.mobile.feature.files.FilesScreen
+import ru.agimate.mobile.feature.files.FilesViewModel
 import ru.agimate.mobile.feature.profile.ProfileScreen
 import ru.agimate.mobile.feature.profile.ProfileViewModel
 import ru.agimate.mobile.feature.settings.SettingsScreen
@@ -42,6 +51,7 @@ object Routes {
     const val CREATE_AGENT = "create-agent"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
+    const val FILES = "files"
 
     const val SESSIONS = "sessions/{agentId}?agentName={agentName}&agentEnabled={agentEnabled}"
     fun sessions(agentId: String, agentName: String, agentEnabled: Boolean = true) =
@@ -198,6 +208,18 @@ fun MainGraph(
                 )
             }
 
+            // Файлы открываются поверх переписки, а не отдельным маршрутом: назад надо вернуть не
+            // строку, а выбранный файл, и маршруту пришлось бы возить его сериализованным.
+            var filesOpen by rememberSaveable { mutableStateOf(false) }
+            if (filesOpen) {
+                BackHandler { filesOpen = false }
+                Files(
+                    onBack = { filesOpen = false },
+                    onPick = { file -> viewModel.attachStored(file); filesOpen = false },
+                )
+                return@composable
+            }
+
             ChatScreen(
                 state = state,
                 fileUrl = viewModel::fileUrl,
@@ -231,6 +253,7 @@ fun MainGraph(
                 onCloseSession = {
                     viewModel.closeSession { navController.popBackStack() }
                 },
+                onOpenFiles = { filesOpen = true },
             )
         }
 
@@ -268,6 +291,7 @@ fun MainGraph(
                 state = state,
                 onBack = { navController.popBackStack() },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
+                onFiles = { navController.navigate(Routes.FILES) },
                 onRevoke = viewModel::revoke,
                 onSignOut = onSignOut,
             )
@@ -276,5 +300,54 @@ fun MainGraph(
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { navController.popBackStack() })
         }
+
+        // Из профиля — все файлы: аргумента `agentId` у этого маршрута нет, и фильтру неоткуда
+        // взяться. Из переписки тот же экран открывается внутри её маршрута — и фильтр там есть.
+        composable(Routes.FILES) {
+            Files(onBack = { navController.popBackStack() })
+        }
     }
+}
+
+/**
+ * Экран файлов со всей обвязкой: запуск чужого приложения, разрешение на память, действия строки.
+ * Общий для двух мест, откуда он открывается, — иначе обвязку пришлось бы писать дважды.
+ *
+ * Фильтр по агенту берётся из аргументов маршрута, в котором экран оказался: [FilesViewModel]
+ * читает `agentId` из своего `SavedStateHandle`.
+ */
+@Composable
+private fun Files(onBack: () -> Unit, onPick: ((StoredFile) -> Unit)? = null) {
+    val viewModel: FilesViewModel = hiltViewModel()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is FilesEffect.Launch -> context.startActivity(effect.intent)
+            }
+        }
+    }
+
+    val save = rememberSaveGate(onDenied = viewModel::onSaveDenied)
+    val actions = remember(viewModel, save) {
+        FileActions(
+            onOpen = viewModel::open,
+            onSave = { file -> save { viewModel.save(file) } },
+            onShare = viewModel::share,
+            onDelete = viewModel::delete,
+        )
+    }
+
+    FilesScreen(
+        state = state,
+        fileUrl = viewModel::fileUrl,
+        onBack = onBack,
+        onQueryChange = viewModel::onQueryChange,
+        onLoadMore = viewModel::loadMore,
+        onRetry = viewModel::load,
+        actions = actions,
+        onPick = onPick,
+    )
 }

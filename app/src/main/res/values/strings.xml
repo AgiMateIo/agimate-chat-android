@@ -17,6 +17,7 @@
     <string name="action_open">Open</string>
     <string name="action_close">Close</string>
     <string name="action_more">More</string>
+    <string name="action_delete">Delete</string>
     <string name="action_sign_out">Sign out</string>
     <string name="action_profile">Profile</string>
 
@@ -86,6 +87,7 @@
     <string name="chat_menu_all_sessions">All conversations</string>
     <string name="chat_menu_new_session">New conversation</string>
     <string name="chat_menu_close_session">Close conversation</string>
+    <string name="chat_menu_files">Files</string>
     <string name="chat_message_failed">not sent · retry</string>
     <string name="chat_message_sending">sending…</string>
     <string name="chat_attachment_generic">Attachment</string>
@@ -121,6 +123,19 @@
     <string name="file_chooser_open_file">Open the file</string>
     <string name="file_clip_label">Message</string>
     <string name="file_default_name">file</string>
+
+    <!-- Файлы пользователя -->
+    <string name="files_title">Files</string>
+    <string name="files_search_hint">Search by name</string>
+    <string name="files_search_note">Files with no name are left out of the search</string>
+    <string name="files_unnamed">Unnamed</string>
+    <string name="files_deleted">File deleted</string>
+    <string name="files_expires_soon">expires today</string>
+    <string name="files_empty_title">No files yet</string>
+    <string name="files_empty_description">Here you will find what you have sent to agents and what they have made for you.</string>
+    <string name="files_empty_agent_description">Here you will find what this agent has made for you.</string>
+    <string name="files_not_found_title">Nothing found</string>
+    <string name="files_not_found_description">Try another part of the name.</string>
 
     <!-- Создание агента -->
     <string name="create_agent_title">Who the agent will be</string>

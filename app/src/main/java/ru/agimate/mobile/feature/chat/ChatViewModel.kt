@@ -26,12 +26,14 @@ import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.realtime.SessionEvent
 import ru.agimate.mobile.core.realtime.WebchatMessagePayload
+import ru.agimate.mobile.core.share.FileNotice
 import ru.agimate.mobile.core.share.FileStore
 import ru.agimate.mobile.core.share.RemoteFile
 import ru.agimate.mobile.core.share.SavedTo
 import ru.agimate.mobile.core.share.Sharing
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.AttachmentUploader
 import ru.agimate.mobile.data.webchat.ChatMessage
@@ -42,14 +44,6 @@ import ru.agimate.mobile.data.webchat.WebchatRepository
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
-
-/**
- * Короткая строка о файле: «сохраняю…», «сохранено в галерею», «ссылка устарела».
- *
- * Отдельно от [ChatUiState.sendError]: та полоска про отправку сообщения и висит, пока человек её
- * не перебьёт, а эта рассказывает про действие, которое уже закончилось, и гаснет сама.
- */
-data class FileNotice(val text: UiText, val failed: Boolean = false)
 
 /**
  * Разовое действие, которое экрану нужно совершить за ViewModel.
@@ -407,6 +401,34 @@ class ChatViewModel @Inject constructor(
                         }
                     }
             }
+        }
+    }
+
+    /**
+     * Прикрепить файл, который уже лежит на сервере: `fileId` у него есть, загружать нечего.
+     *
+     * Лимит общий с локальными вложениями — считает их сервер, а не экран. Повтор молча
+     * игнорируется: один и тот же файл двумя частями одного сообщения смысла не имеет.
+     */
+    fun attachStored(file: StoredFile) {
+        val current = _state.value.attachments
+        if (current.any { it.fileId == file.id }) return
+        if (current.size >= AttachmentUploader.MAX_ATTACHMENTS) {
+            _state.update { it.copy(sendError = uiText(R.string.chat_attachments_limit)) }
+            return
+        }
+        _state.update {
+            it.copy(
+                attachments = it.attachments + PendingAttachment(
+                    localId = UUID.randomUUID().toString(),
+                    name = file.name.orEmpty(),
+                    mime = file.mime,
+                    sizeBytes = file.size,
+                    uri = null,
+                    fileId = file.id,
+                    uploading = false,
+                )
+            )
         }
     }
 

@@ -17,10 +17,15 @@ import javax.inject.Singleton
 /** Выбранный файл, ещё не отправленный. */
 data class PendingAttachment(
     val localId: String,
+    /** Пусто у файла с сервера, которому имени никто не дал: подпись подставит экран. */
     val name: String,
     val mime: String?,
     val sizeBytes: Long,
-    val uri: Uri,
+    /**
+     * Адрес на устройстве. Пуст у файла, который уже лежит на сервере: у такого сразу есть
+     * [fileId], загружать нечего, и локальной копии не существует.
+     */
+    val uri: Uri?,
     val fileId: String? = null,
     val uploading: Boolean = true,
     val error: UiText? = null,
@@ -65,7 +70,9 @@ class AttachmentUploader @Inject constructor(
                 // Читать 200 МБ в память, чтобы получить в ответ 400, незачем.
                 throw ApiException.BadRequest(uiText(R.string.error_file_too_big), "file over limit")
             }
-            val bytes = context.contentResolver.openInputStream(attachment.uri)?.use { it.readBytes() }
+            val uri = attachment.uri
+                ?: throw ApiException.BadRequest(uiText(R.string.error_file_unreadable), "no local uri")
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: throw ApiException.BadRequest(uiText(R.string.error_file_unreadable), "unreadable uri")
 
             try {
