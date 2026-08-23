@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -60,18 +59,20 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
-            .safeDrawingPadding()
-            .imePadding(),
+            .safeDrawingPadding(),
     ) {
+        // Знак и кнопки стоят посередине экрана. Прокрутка при этом никуда не делась:
+        // `fillMaxSize` до `verticalScroll` задаёт колонке минимальную высоту в экран, поэтому
+        // центрирование работает, пока содержимое помещается, и уступает прокрутке само, когда
+        // крупный системный шрифт его перерастает.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = AgiTheme.spacing.xl),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(72.dp))
-
             BrandMark(size = 64.dp, color = colors.accent)
 
             Spacer(Modifier.height(AgiTheme.spacing.lg))
@@ -139,7 +140,6 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(Modifier.height(AgiTheme.spacing.xxl))
         }
 
         // Две дороги в стороне от главного действия: назад к рассказу и в настройки телефона.
