@@ -58,7 +58,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
             .safeDrawingPadding(),
     ) {
         // Знак и кнопки стоят посередине экрана. Прокрутка при этом никуда не делась:

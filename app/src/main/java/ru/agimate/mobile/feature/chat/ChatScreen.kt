@@ -204,7 +204,7 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colors.background)
+                .background(colors.backdrop)
                 // Объединение, а не imePadding с navigationBarsPadding под ним: клавиатура
                 // рисуется поверх навигационной панели, и её вставка панель уже включает.
                 // Два отступа подряд давали лишнюю полосу фона между клавиатурой и полем ввода.
@@ -375,7 +375,6 @@ private fun ChatHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.background)
             .statusBarsPadding()
             .padding(horizontal = AgiTheme.spacing.sm, vertical = AgiTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -954,9 +953,7 @@ private fun Composer(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.background)
+        modifier = Modifier.fillMaxWidth()
     ) {
         AnimatedVisibility(
             visible = state.sendError != null,

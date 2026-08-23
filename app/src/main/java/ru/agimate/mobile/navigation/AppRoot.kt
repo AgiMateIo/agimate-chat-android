@@ -49,7 +49,7 @@ fun AppRoot(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AgiTheme.colors.background)
+            .background(AgiTheme.colors.backdrop)
     ) {
         Crossfade(targetState = session, label = "session") { current ->
             when (current) {

@@ -77,7 +77,7 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
             // Клавиатура и навигационная полоса претендуют на один и тот же низ: берём большее из
             // двух, а не сумму. Два отдельных отступа дали бы под клавиатурой лишнюю полосу.
             .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),

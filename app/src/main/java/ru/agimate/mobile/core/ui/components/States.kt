@@ -35,7 +35,7 @@ fun FullScreenLoading(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(AgiTheme.colors.background),
+            .background(AgiTheme.colors.backdrop),
         contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(

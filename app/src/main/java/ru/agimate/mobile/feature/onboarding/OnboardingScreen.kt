@@ -85,7 +85,7 @@ fun OnboardingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
             .safeDrawingPadding(),
     ) {
         Box(

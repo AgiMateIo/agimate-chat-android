@@ -69,7 +69,7 @@ fun ContactsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
     ) {
         ContactsHeader(
             query = state.query,
@@ -127,7 +127,6 @@ private fun ContactsHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.background)
             .statusBarsPadding()
             .padding(horizontal = AgiTheme.spacing.screen)
     ) {

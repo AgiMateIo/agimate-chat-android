@@ -40,7 +40,7 @@ fun PendingApprovalScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
             .safeDrawingPadding(),
     ) {
         Column(

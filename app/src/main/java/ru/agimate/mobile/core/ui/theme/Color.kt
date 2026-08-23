@@ -1,6 +1,7 @@
 package ru.agimate.mobile.core.ui.theme
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import com.agimate.design.AgimateTokens
@@ -19,6 +20,15 @@ import com.agimate.design.AgimateTokens
 @Immutable
 data class AgiColors(
     val background: Color,
+    /**
+     * Земля приложения. Не поверхность и не роль карточки: в айдентике подложка — своя плоскость,
+     * намеренно отвязанная от `surface`, иначе она уезжала бы каждый раз, когда меняются карточки.
+     *
+     * Кисть, а не цвет: концы градиента — два отдельных токена, и собирать их на каждом экране
+     * значило бы иметь столько же мнений о том, куда он течёт. Растягивается по высоте того, на
+     * чём нарисована, поэтому красить ею полагается корень экрана, а не полосу внутри него.
+     */
+    val backdrop: Brush,
     val surface: Color,
     val surfaceMuted: Color,
     val hairline: Color,
@@ -70,6 +80,7 @@ private fun quiet(ink: Color, over: Color, alpha: Float) = ink.copy(alpha = alph
 val LightColors = with(AgimateTokens.Colors.Light) {
     AgiColors(
         background = background,
+        backdrop = Brush.verticalGradient(listOf(backdropStart, backdropEnd)),
         surface = surface,
         surfaceMuted = surfaceSecondary,
         hairline = border,
@@ -98,6 +109,7 @@ val LightColors = with(AgimateTokens.Colors.Light) {
 val DarkColors = with(AgimateTokens.Colors.Dark) {
     AgiColors(
         background = background,
+        backdrop = Brush.verticalGradient(listOf(backdropStart, backdropEnd)),
         surface = surface,
         surfaceMuted = surfaceSecondary,
         hairline = border,

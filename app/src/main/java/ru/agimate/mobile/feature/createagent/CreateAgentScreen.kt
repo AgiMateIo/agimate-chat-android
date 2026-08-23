@@ -83,7 +83,7 @@ private fun PresetGallery(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
     ) {
         StepHeader(title = stringResource(R.string.create_agent_title), onBack = onBack)
 
@@ -176,7 +176,7 @@ private fun ConfirmStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
             .imePadding()
     ) {
         StepHeader(title = preset.title?.takeIf { it.isNotBlank() } ?: preset.name, onBack = onBack)

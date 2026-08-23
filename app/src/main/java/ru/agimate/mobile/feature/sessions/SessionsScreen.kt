@@ -67,7 +67,7 @@ fun SessionsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(colors.backdrop)
     ) {
         Row(
             modifier = Modifier
