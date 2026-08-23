@@ -22,6 +22,7 @@ import ru.agimate.mobile.core.ui.components.FullScreenLoading
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.feature.login.LoginScreen
+import ru.agimate.mobile.feature.onboarding.OnboardingScreen
 import ru.agimate.mobile.feature.pending.PendingApprovalScreen
 import ru.agimate.mobile.feature.profile.ProfileScreen
 import ru.agimate.mobile.feature.profile.ProfileViewModel
@@ -37,8 +38,10 @@ fun AppRoot(
     login: LoginUiState,
     origin: String,
     originEditable: Boolean,
+    onboardingSeen: Boolean,
     pendingChat: PushChatTarget? = null,
     onPendingChatHandled: () -> Unit = {},
+    onOnboardingDone: () -> Unit = {},
     onProvider: (AuthProvider) -> Unit,
     onOriginChange: (String) -> Unit,
     onRefreshSession: () -> Unit,
@@ -53,13 +56,21 @@ fun AppRoot(
             when (current) {
                 AppSession.Loading -> FullScreenLoading()
 
-                AppSession.SignedOut -> LoginScreen(
-                    state = login,
-                    origin = origin,
-                    originEditable = originEditable,
-                    onProvider = onProvider,
-                    onOriginChange = onOriginChange,
-                )
+                // Интро живёт внутри «не вошёл», а не рядом с ним: вошедшему оно поперёк
+                // сессии не встанет, даже если отметка о просмотре потерялась с данными.
+                AppSession.SignedOut -> Crossfade(targetState = onboardingSeen, label = "onboarding") { seen ->
+                    if (seen) {
+                        LoginScreen(
+                            state = login,
+                            origin = origin,
+                            originEditable = originEditable,
+                            onProvider = onProvider,
+                            onOriginChange = onOriginChange,
+                        )
+                    } else {
+                        OnboardingScreen(onDone = onOnboardingDone)
+                    }
+                }
 
                 is AppSession.AwaitingApproval -> AwaitingApproval(
                     displayName = current.profile.displayName,

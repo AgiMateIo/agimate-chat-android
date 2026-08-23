@@ -20,6 +20,17 @@
     <string name="action_sign_out">Sign out</string>
     <string name="action_profile">Profile</string>
 
+    <!-- Рассказ о приложении перед входом -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_guide_title">Your guide to AI</string>
+    <string name="onboarding_guide_body">AgiMate helps you set up AI agents — for your business and for everyday things.</string>
+    <string name="onboarding_build_title">A ready agent, or your own</string>
+    <string name="onboarding_build_body">Take an agent that already knows the job, or build one: give it connectors to your systems and the skills it needs.</string>
+    <string name="onboarding_talk_title">Tasks live in the chat</string>
+    <string name="onboarding_talk_body">Set tasks and talk them through. Agents are proactive: they tell you what matters and remind you what is due.</string>
+
     <!-- Вход -->
     <string name="login_tagline">Personal AI agents. Ask — and they get it done.</string>
     <string name="login_finishing">Finishing sign-in…</string>

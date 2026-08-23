@@ -16,6 +16,17 @@
     <string name="action_sign_out">Выйти</string>
     <string name="action_profile">Профиль</string>
 
+    <!-- Рассказ о приложении перед входом -->
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_start">Начать</string>
+    <string name="onboarding_guide_title">Проводник в мир ИИ</string>
+    <string name="onboarding_guide_body">AgiMate помогает настроить ИИ-агентов — для бизнеса и для повседневных дел.</string>
+    <string name="onboarding_build_title">Готовый агент или свой</string>
+    <string name="onboarding_build_body">Возьмите агента, который уже умеет работать, или соберите своего: дайте ему коннекторы к вашим системам и нужные навыки.</string>
+    <string name="onboarding_talk_title">Задачи — в переписке</string>
+    <string name="onboarding_talk_body">Ставьте задачи и обсуждайте их в чате. Агенты проактивны: сами сообщат о важном и напомнят о делах и планах.</string>
+
     <!-- Вход -->
     <string name="login_tagline">Личные ИИ-агенты. Напишите — и они сделают.</string>
     <string name="login_finishing">Завершаем вход…</string>

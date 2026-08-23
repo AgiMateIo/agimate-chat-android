@@ -176,11 +176,12 @@ core/auth/       PKCE, хранилище токенов (Keystore), single-flig
                  состояние сессии и гейт «ждём одобрения»
 core/realtime/   Centrifugo: личный канал и канал переписки
 core/ui/         тема, роли цвета и типографики, общие компоненты
+core/onboarding/ отметка о том, что рассказ о приложении уже прочитан
 com/agimate/     токены айдентики: копия сгенерированного файла, руками не правят
 data/            DTO, модели и репозитории: контакты, переписки, сообщения,
                  файлы, пресеты, агенты, профиль, устройства
-feature/         экраны: login, pending, contacts, sessions, chat,
-                 createagent, profile
+feature/         экраны: onboarding, login, pending, contacts, sessions,
+                 chat, createagent, profile
 navigation/      корневая развилка и граф внутри продукта
 ```
 

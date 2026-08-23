@@ -54,14 +54,17 @@ class MainActivity : ComponentActivity() {
                 val login by viewModel.login.collectAsStateWithLifecycle()
                 val origin by viewModel.origin.collectAsStateWithLifecycle()
                 val pendingChat by viewModel.pendingChat.collectAsStateWithLifecycle()
+                val onboardingSeen by viewModel.onboardingSeen.collectAsStateWithLifecycle()
 
                 AppRoot(
                     session = session,
                     login = login,
                     origin = origin,
                     originEditable = viewModel.originEditable,
+                    onboardingSeen = onboardingSeen,
                     pendingChat = pendingChat,
                     onPendingChatHandled = viewModel::onPendingChatHandled,
+                    onOnboardingDone = viewModel::finishOnboarding,
                     onProvider = { provider ->
                         val uri = viewModel.beginLogin(provider)
                         val opened = CustomTabs.open(

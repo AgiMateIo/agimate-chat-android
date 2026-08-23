@@ -14,6 +14,7 @@ import ru.agimate.mobile.core.auth.AuthRepository
 import ru.agimate.mobile.core.auth.PendingLoginLost
 import ru.agimate.mobile.core.auth.SessionManager
 import ru.agimate.mobile.core.network.OriginProvider
+import ru.agimate.mobile.core.onboarding.OnboardingStore
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.ui.text.UiText
@@ -32,9 +33,13 @@ class MainViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val authRepository: AuthRepository,
     private val origins: OriginProvider,
+    private val onboarding: OnboardingStore,
 ) : ViewModel() {
 
     val session = sessionManager.state
+
+    /** Рассказ о приложении уже прочитан или пропущен. */
+    val onboardingSeen: StateFlow<Boolean> = onboarding.seen
 
     private val _login = MutableStateFlow(LoginUiState())
     val login: StateFlow<LoginUiState> = _login.asStateFlow()
@@ -110,6 +115,8 @@ class MainViewModel @Inject constructor(
     fun onPendingChatHandled() {
         _pendingChat.value = null
     }
+
+    fun finishOnboarding() = onboarding.markSeen()
 
     fun dismissLoginMessage() {
         _login.value = _login.value.copy(message = null)
