@@ -52,15 +52,12 @@ class MainActivity : ComponentActivity() {
             AgiMateTheme {
                 val session by viewModel.session.collectAsStateWithLifecycle()
                 val login by viewModel.login.collectAsStateWithLifecycle()
-                val origin by viewModel.origin.collectAsStateWithLifecycle()
                 val pendingChat by viewModel.pendingChat.collectAsStateWithLifecycle()
                 val onboardingSeen by viewModel.onboardingSeen.collectAsStateWithLifecycle()
 
                 AppRoot(
                     session = session,
                     login = login,
-                    origin = origin,
-                    originEditable = viewModel.originEditable,
                     onboardingSeen = onboardingSeen,
                     pendingChat = pendingChat,
                     onPendingChatHandled = viewModel::onPendingChatHandled,
@@ -76,7 +73,6 @@ class MainActivity : ComponentActivity() {
                         )
                         if (!opened) viewModel.onBrowserUnavailable()
                     },
-                    onOriginChange = viewModel::changeOrigin,
                     onRefreshSession = viewModel::onAppResumed,
                     onSignOut = viewModel::signOut,
                 )

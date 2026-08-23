@@ -26,6 +26,7 @@ import ru.agimate.mobile.feature.onboarding.OnboardingScreen
 import ru.agimate.mobile.feature.pending.PendingApprovalScreen
 import ru.agimate.mobile.feature.profile.ProfileScreen
 import ru.agimate.mobile.feature.profile.ProfileViewModel
+import ru.agimate.mobile.feature.settings.SettingsScreen
 
 /**
  * Корневая развилка приложения. Навигация внутри продукта начинается только у одобренного
@@ -36,15 +37,12 @@ import ru.agimate.mobile.feature.profile.ProfileViewModel
 fun AppRoot(
     session: AppSession,
     login: LoginUiState,
-    origin: String,
-    originEditable: Boolean,
     onboardingSeen: Boolean,
     pendingChat: PushChatTarget? = null,
     onPendingChatHandled: () -> Unit = {},
     onOnboardingDone: () -> Unit = {},
     onReplayOnboarding: () -> Unit = {},
     onProvider: (AuthProvider) -> Unit,
-    onOriginChange: (String) -> Unit,
     onRefreshSession: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -57,22 +55,13 @@ fun AppRoot(
             when (current) {
                 AppSession.Loading -> FullScreenLoading()
 
-                // Интро живёт внутри «не вошёл», а не рядом с ним: вошедшему оно поперёк
-                // сессии не встанет, даже если отметка о просмотре потерялась с данными.
-                AppSession.SignedOut -> Crossfade(targetState = onboardingSeen, label = "onboarding") { seen ->
-                    if (seen) {
-                        LoginScreen(
-                            state = login,
-                            origin = origin,
-                            originEditable = originEditable,
-                            onProvider = onProvider,
-                            onOriginChange = onOriginChange,
-                            onIntro = onReplayOnboarding,
-                        )
-                    } else {
-                        OnboardingScreen(onDone = onOnboardingDone)
-                    }
-                }
+                AppSession.SignedOut -> SignedOut(
+                    login = login,
+                    onboardingSeen = onboardingSeen,
+                    onProvider = onProvider,
+                    onOnboardingDone = onOnboardingDone,
+                    onReplayOnboarding = onReplayOnboarding,
+                )
 
                 is AppSession.AwaitingApproval -> AwaitingApproval(
                     displayName = current.profile.displayName,
@@ -97,6 +86,45 @@ fun AppRoot(
 }
 
 /**
+ * Экран входа и всё, что открывается с него: интро и настройки.
+ *
+ * Интро живёт внутри «не вошёл», а не рядом с ним: вошедшему оно поперёк сессии не встанет, даже
+ * если отметка о просмотре потерялась вместе с данными приложения.
+ *
+ * Навигации здесь нет — до входа маршрутов не существует, и заводить граф ради двух ответвлений
+ * незачем: у обоих одна дорога назад.
+ */
+@Composable
+private fun SignedOut(
+    login: LoginUiState,
+    onboardingSeen: Boolean,
+    onProvider: (AuthProvider) -> Unit,
+    onOnboardingDone: () -> Unit,
+    onReplayOnboarding: () -> Unit,
+) {
+    var settings by rememberSaveable { mutableStateOf(false) }
+
+    if (settings) {
+        BackHandler { settings = false }
+        SettingsScreen(onBack = { settings = false })
+        return
+    }
+
+    Crossfade(targetState = onboardingSeen, label = "onboarding") { seen ->
+        if (seen) {
+            LoginScreen(
+                state = login,
+                onProvider = onProvider,
+                onIntro = onReplayOnboarding,
+                onSettings = { settings = true },
+            )
+        } else {
+            OnboardingScreen(onDone = onOnboardingDone)
+        }
+    }
+}
+
+/**
  * Ожидание одобрения плюс список входов. Навигации здесь нет и заводить её ради одного экрана
  * незачем: `GUEST` до продукта не доходит, а отозвать потерянный телефон ему нужно уже сейчас —
  * иначе придётся ждать администратора, чтобы дотянуться до чужого устройства.
@@ -108,27 +136,37 @@ private fun AwaitingApproval(
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
 ) {
-    var devices by rememberSaveable { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf(Pending.Root) }
 
-    if (!devices) {
-        PendingApprovalScreen(
+    when (open) {
+        Pending.Root -> PendingApprovalScreen(
             displayName = displayName,
             email = email,
             onRefresh = onRefresh,
-            onDevices = { devices = true },
+            onDevices = { open = Pending.Devices },
             onSignOut = onSignOut,
         )
-        return
+
+        Pending.Settings -> {
+            BackHandler { open = Pending.Devices }
+            SettingsScreen(onBack = { open = Pending.Devices })
+        }
+
+        Pending.Devices -> {
+            val viewModel: ProfileViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            BackHandler { open = Pending.Root }
+            ProfileScreen(
+                state = state,
+                onBack = { open = Pending.Root },
+                onSettings = { open = Pending.Settings },
+                onRevoke = viewModel::revoke,
+                onSignOut = onSignOut,
+            )
+        }
     }
-
-    val viewModel: ProfileViewModel = hiltViewModel()
-    val state by viewModel.state.collectAsStateWithLifecycle()
-
-    BackHandler { devices = false }
-    ProfileScreen(
-        state = state,
-        onBack = { devices = false },
-        onRevoke = viewModel::revoke,
-        onSignOut = onSignOut,
-    )
 }
+
+/** Три экрана вместо булева флага: с настройками их стало больше, чем «здесь или там». */
+private enum class Pending { Root, Devices, Settings }

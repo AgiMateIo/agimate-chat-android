@@ -17,25 +17,18 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -57,11 +50,9 @@ import ru.agimate.mobile.core.ui.theme.AgiTheme
 @Composable
 fun LoginScreen(
     state: LoginUiState,
-    origin: String,
-    originEditable: Boolean,
     onProvider: (AuthProvider) -> Unit,
-    onOriginChange: (String) -> Unit,
     onIntro: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val colors = AgiTheme.colors
 
@@ -149,17 +140,13 @@ fun LoginScreen(
             }
 
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
-
-            if (originEditable) {
-                DevOriginField(origin = origin, onOriginChange = onOriginChange)
-            }
-
-            Spacer(Modifier.height(AgiTheme.spacing.xl))
         }
 
-        // Указатель влево, а не «открыть»: интро стояло до входа, и ссылка возвращает туда же,
-        // откуда человек пришёл. Поверх прокрутки, а не внутри неё — иначе уедет вместе с ней.
-        // Во время обмена кода прячется: уводить с экрана, который вот-вот доделает вход, незачем.
+        // Две дороги в стороне от главного действия: назад к рассказу и в настройки телефона.
+        // Указатель влево, а не «открыть», — интро стояло до входа, и ссылка ведёт туда, откуда
+        // человек пришёл. Обе лежат поверх прокрутки, а не внутри неё, иначе уедут вместе со
+        // списком провайдеров, и обе прячутся на время обмена кода: уводить с экрана, который
+        // вот-вот доделает вход, незачем.
         if (state.phase != LoginPhase.Exchanging) {
             Row(
                 modifier = Modifier
@@ -182,33 +169,21 @@ fun LoginScreen(
                     color = colors.textSecondary,
                 )
             }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(48.dp)
+                    .clickable(role = Role.Button, onClick = onSettings),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.settings_title),
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
-    }
-}
-
-/**
- * Только для dev-сборки: с эмулятора бэкенд живёт на 10.0.2.2, с реального телефона — на LAN-IP
- * машины, и перебилживать приложение ради смены адреса незачем.
- */
-@Composable
-private fun DevOriginField(origin: String, onOriginChange: (String) -> Unit) {
-    var value by remember(origin) { mutableStateOf(origin) }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.login_origin_label),
-            style = AgiTheme.typography.caption,
-            color = AgiTheme.colors.textTertiary,
-        )
-        Spacer(Modifier.height(AgiTheme.spacing.xs))
-        OutlinedTextField(
-            value = value,
-            onValueChange = { value = it },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = AgiTheme.typography.secondary,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onOriginChange(value) }),
-        )
     }
 }

@@ -1,6 +1,5 @@
 package ru.agimate.mobile.feature.profile
 
-import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,11 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,10 +42,6 @@ import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
-import ru.agimate.mobile.core.ui.locale.AppLanguage
-import ru.agimate.mobile.core.ui.locale.AppLanguages
-import ru.agimate.mobile.core.ui.theme.AppTheme
-import ru.agimate.mobile.core.ui.theme.AppThemes
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 
@@ -57,6 +49,7 @@ import ru.agimate.mobile.core.ui.theme.AgiTheme
 fun ProfileScreen(
     state: ProfileUiState,
     onBack: () -> Unit,
+    onSettings: () -> Unit,
     onRevoke: (String) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -126,23 +119,28 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
 
-            Text(
-                text = stringResource(R.string.language_title),
-                style = AgiTheme.typography.caption,
-                color = colors.textTertiary,
-            )
-
-            LanguagePicker()
-
-            Spacer(Modifier.height(AgiTheme.spacing.lg))
-
-            Text(
-                text = stringResource(R.string.theme_title),
-                style = AgiTheme.typography.caption,
-                color = colors.textTertiary,
-            )
-
-            ThemePicker()
+            // Язык, тема и адрес сервера ушли на свой экран: они принадлежат телефону, а не
+            // аккаунту, и нужны ещё до входа — в профиле их было бы не достать.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSettings)
+                    .padding(vertical = AgiTheme.spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_title),
+                    style = AgiTheme.typography.body,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
 
             Spacer(Modifier.height(AgiTheme.spacing.xl))
 
@@ -207,120 +205,6 @@ fun ProfileScreen(
                 .padding(AgiTheme.spacing.screen)
         ) {
             SecondaryButton(text = stringResource(R.string.action_sign_out), onClick = onSignOut)
-        }
-    }
-}
-
-/**
- * Выбор языка интерфейса.
- *
- * Состояние держит не ViewModel: выбранный язык — это состояние системы (Android 13+) или
- * SharedPreferences, а не экрана, и пережить пересоздание оно должно само, без чьей-либо помощи.
- *
- * Пересоздать экран после выбора приходится только до Android 13 — дальше это делает система, и
- * своё `recreate()` дало бы второй перезапуск подряд, заметный морганием.
- */
-@Composable
-private fun LanguagePicker() {
-    val context = LocalContext.current
-    val activity = LocalActivity.current
-    var current by remember { mutableStateOf(AppLanguages.current(context)) }
-
-    ChoicePicker(
-        current = current,
-        entries = AppLanguage.entries,
-        titleRes = { it.titleRes },
-        onChoose = { language ->
-            current = language
-            if (AppLanguages.choose(context, language)) activity?.recreate()
-        },
-    )
-}
-
-/**
- * Выбор темы.
- *
- * Пересоздание нужно всегда: конфигурацию подменяет `attachBaseContext`, а он отрабатывает на
- * создании активности. Своей ветки «система сделает сама», как у языка, здесь нет — темы
- * приложения система не знает.
- */
-@Composable
-private fun ThemePicker() {
-    val context = LocalContext.current
-    val activity = LocalActivity.current
-    var current by remember { mutableStateOf(AppThemes.current(context)) }
-
-    ChoicePicker(
-        current = current,
-        entries = AppTheme.entries,
-        titleRes = { it.titleRes },
-        onChoose = { theme ->
-            current = theme
-            if (AppThemes.choose(context, theme)) activity?.recreate()
-        },
-    )
-}
-
-/** Строка настройки с выпадающим списком из трёх-четырёх значений. */
-@Composable
-private fun <T> ChoicePicker(
-    current: T,
-    entries: List<T>,
-    titleRes: (T) -> Int,
-    onChoose: (T) -> Unit,
-) {
-    val colors = AgiTheme.colors
-    var open by remember { mutableStateOf(false) }
-
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { open = true }
-                .padding(vertical = AgiTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(titleRes(current)),
-                style = AgiTheme.typography.body,
-                color = colors.textPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                imageVector = Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = colors.textSecondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            entries.forEach { entry ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = stringResource(titleRes(entry)),
-                            style = AgiTheme.typography.body,
-                        )
-                    },
-                    trailingIcon = {
-                        // Галочка только у выбранного: список из трёх строк без неё не говорит,
-                        // на чём человек стоит сейчас.
-                        if (entry == current) {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = colors.accent,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    },
-                    onClick = {
-                        open = false
-                        onChoose(entry)
-                    },
-                )
-            }
         }
     }
 }

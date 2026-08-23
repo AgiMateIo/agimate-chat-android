@@ -31,16 +31,19 @@
     <string name="onboarding_talk_title">Tasks live in the chat</string>
     <string name="onboarding_talk_body">Set tasks and talk them through. Agents are proactive: they tell you what matters and remind you what is due.</string>
 
+    <!-- Настройки: язык, тема, адрес сервера -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_origin_label">Server (debug builds only)</string>
+    <string name="settings_bad_origin">That address does not look right</string>
+
     <!-- Вход -->
     <string name="login_tagline">Personal AI agents. They take the routine off your hands.</string>
     <string name="login_intro">Intro</string>
     <string name="login_finishing">Finishing sign-in…</string>
     <string name="login_with_provider">Sign in with %1$s</string>
-    <string name="login_origin_label">Server (debug builds only)</string>
     <string name="login_no_browser">No browser found to open the sign-in page</string>
     <string name="login_failed_retry">Sign-in failed — try again</string>
     <string name="login_not_finished_retry">Sign-in was not finished — try again</string>
-    <string name="login_bad_origin">That address does not look right</string>
     <string name="login_lost">Sign-in was not finished — start again</string>
 
     <string name="provider_google" translatable="false">Google</string>

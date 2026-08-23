@@ -27,16 +27,19 @@
     <string name="onboarding_talk_title">Задачи — в переписке</string>
     <string name="onboarding_talk_body">Ставьте задачи и обсуждайте их в чате. Агенты проактивны: сами сообщат о важном и напомнят о делах и планах.</string>
 
+    <!-- Настройки: язык, тема, адрес сервера -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_origin_label">Сервер (только для отладочной сборки)</string>
+    <string name="settings_bad_origin">Адрес не похож на правильный</string>
+
     <!-- Вход -->
     <string name="login_tagline">Личные ИИ-агенты. Избавят вас от рутины.</string>
     <string name="login_intro">Интро</string>
     <string name="login_finishing">Завершаем вход…</string>
     <string name="login_with_provider">Войти через %1$s</string>
-    <string name="login_origin_label">Сервер (только для отладочной сборки)</string>
     <string name="login_no_browser">Не нашли браузер, в котором открыть вход</string>
     <string name="login_failed_retry">Вход не удался. Попробуйте ещё раз.</string>
     <string name="login_not_finished_retry">Вход не завершён. Попробуйте ещё раз.</string>
-    <string name="login_bad_origin">Адрес не похож на правильный</string>
     <string name="login_lost">Вход не завершён — начните заново</string>
     <!-- Google, VK и GitHub не переводятся и живут только в базовых ресурсах. -->
     <string name="provider_yandex">Яндекс</string>

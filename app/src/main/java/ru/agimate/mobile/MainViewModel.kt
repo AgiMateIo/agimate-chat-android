@@ -13,7 +13,6 @@ import ru.agimate.mobile.core.auth.AuthRedirect
 import ru.agimate.mobile.core.auth.AuthRepository
 import ru.agimate.mobile.core.auth.PendingLoginLost
 import ru.agimate.mobile.core.auth.SessionManager
-import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.onboarding.OnboardingStore
 import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.network.toApiException
@@ -32,7 +31,6 @@ data class LoginUiState(
 class MainViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val authRepository: AuthRepository,
-    private val origins: OriginProvider,
     private val onboarding: OnboardingStore,
 ) : ViewModel() {
 
@@ -52,10 +50,6 @@ class MainViewModel @Inject constructor(
      */
     private val _pendingChat = MutableStateFlow<PushChatTarget?>(null)
     val pendingChat: StateFlow<PushChatTarget?> = _pendingChat.asStateFlow()
-
-    val origin: StateFlow<String> = origins.origin
-
-    val originEditable: Boolean = BuildConfig.ALLOW_ORIGIN_OVERRIDE
 
     /**
      * Адрес входа для Custom Tabs. Возвращаем наружу, а не открываем сами: запуск браузера — дело
@@ -122,15 +116,6 @@ class MainViewModel @Inject constructor(
 
     fun dismissLoginMessage() {
         _login.value = _login.value.copy(message = null)
-    }
-
-    fun changeOrigin(value: String) {
-        if (origins.override(value)) {
-            _login.value = _login.value.copy(message = null)
-            sessionManager.refresh()
-        } else {
-            _login.value = _login.value.copy(message = uiText(R.string.login_bad_origin))
-        }
     }
 
     fun signOut() {

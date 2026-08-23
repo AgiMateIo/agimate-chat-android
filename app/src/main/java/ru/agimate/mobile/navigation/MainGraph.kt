@@ -31,6 +31,7 @@ import ru.agimate.mobile.feature.createagent.CreateAgentScreen
 import ru.agimate.mobile.feature.createagent.CreateAgentViewModel
 import ru.agimate.mobile.feature.profile.ProfileScreen
 import ru.agimate.mobile.feature.profile.ProfileViewModel
+import ru.agimate.mobile.feature.settings.SettingsScreen
 import ru.agimate.mobile.feature.sessions.SessionsScreen
 import ru.agimate.mobile.feature.sessions.SessionsViewModel
 
@@ -39,6 +40,7 @@ object Routes {
     const val CONTACTS = "contacts"
     const val CREATE_AGENT = "create-agent"
     const val PROFILE = "profile"
+    const val SETTINGS = "settings"
 
     const val SESSIONS = "sessions/{agentId}?agentName={agentName}&agentEnabled={agentEnabled}"
     fun sessions(agentId: String, agentName: String, agentEnabled: Boolean = true) =
@@ -256,9 +258,14 @@ fun MainGraph(
             ProfileScreen(
                 state = state,
                 onBack = { navController.popBackStack() },
+                onSettings = { navController.navigate(Routes.SETTINGS) },
                 onRevoke = viewModel::revoke,
                 onSignOut = onSignOut,
             )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
