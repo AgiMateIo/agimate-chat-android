@@ -146,7 +146,10 @@ fun ChatScreen(
     onOpenSessions: () -> Unit,
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
+    /** Файлы агента — посмотреть. Прикладывать оттуда нечего: смотрят и убирают. */
     onOpenFiles: () -> Unit,
+    /** Файлы агента — выбрать вложение. Тот же список, но тап заканчивается прикреплением. */
+    onPickStored: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -318,7 +321,7 @@ fun ChatScreen(
                 onStop = onStop,
                 onAttachFile = onAttachFile,
                 onTakePhoto = onTakePhoto,
-                onPickStored = onOpenFiles,
+                onPickStored = onPickStored,
                 onRemoveAttachment = onRemoveAttachment,
             )
         }

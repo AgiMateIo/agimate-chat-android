@@ -210,12 +210,19 @@ fun MainGraph(
 
             // Файлы открываются поверх переписки, а не отдельным маршрутом: назад надо вернуть не
             // строку, а выбранный файл, и маршруту пришлось бы возить его сериализованным.
-            var filesOpen by rememberSaveable { mutableStateOf(false) }
-            if (filesOpen) {
-                BackHandler { filesOpen = false }
+            //
+            // Поводов два, и они разные. Со скрепки файл выбирают, чтобы приложить. Из меню
+            // переписки на файлы агента смотрят — прикладывать там нечего, и тап открывает файл.
+            var files by rememberSaveable { mutableStateOf<FilesMode?>(null) }
+            if (files != null) {
+                BackHandler { files = null }
                 Files(
-                    onBack = { filesOpen = false },
-                    onPick = { file -> viewModel.attachStored(file); filesOpen = false },
+                    onBack = { files = null },
+                    onPick = if (files == FilesMode.Pick) {
+                        { file -> viewModel.attachStored(file); files = null }
+                    } else {
+                        null
+                    },
                 )
                 return@composable
             }
@@ -253,7 +260,8 @@ fun MainGraph(
                 onCloseSession = {
                     viewModel.closeSession { navController.popBackStack() }
                 },
-                onOpenFiles = { filesOpen = true },
+                onOpenFiles = { files = FilesMode.Browse },
+                onPickStored = { files = FilesMode.Pick },
             )
         }
 
@@ -351,3 +359,6 @@ private fun Files(onBack: () -> Unit, onPick: ((StoredFile) -> Unit)? = null) {
         onPick = onPick,
     )
 }
+
+/** Зачем открыт список файлов: приложить к сообщению или просто посмотреть. */
+private enum class FilesMode { Browse, Pick }
