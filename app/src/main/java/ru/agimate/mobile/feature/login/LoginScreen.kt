@@ -39,6 +39,7 @@ import ru.agimate.mobile.core.ui.components.BrandMark
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.auroraBackdrop
 
 /**
  * Вход: логотип, строка обещания, кнопки провайдеров. Ни форм, ни паролей, ни отдельной регистрации.
@@ -58,7 +59,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .auroraBackdrop()
             .safeDrawingPadding(),
     ) {
         // Знак и кнопки стоят посередине экрана. Прокрутка при этом никуда не делась:

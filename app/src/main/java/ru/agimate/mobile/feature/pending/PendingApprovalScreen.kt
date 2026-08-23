@@ -22,6 +22,7 @@ import ru.agimate.mobile.core.ui.components.BrandMark
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.auroraBackdrop
 
 /**
  * Роль `GUEST`. Это **не** ошибка авторизации: вход прошёл, токены выданы, а агентов завести пока
@@ -40,7 +41,7 @@ fun PendingApprovalScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .auroraBackdrop()
             .safeDrawingPadding(),
     ) {
         Column(

@@ -93,6 +93,7 @@ import ru.agimate.mobile.core.ui.text.resolve
 import com.agimate.design.AgimateTokens
 import ru.agimate.mobile.core.ui.theme.AgiMotion
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
@@ -204,7 +205,7 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colors.backdrop)
+                .backdrop()
                 // Объединение, а не imePadding с navigationBarsPadding под ним: клавиатура
                 // рисуется поверх навигационной панели, и её вставка панель уже включает.
                 // Два отступа подряд давали лишнюю полосу фона между клавиатурой и полем ввода.

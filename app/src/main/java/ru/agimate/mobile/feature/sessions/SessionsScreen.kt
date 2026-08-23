@@ -40,6 +40,7 @@ import androidx.compose.ui.res.stringResource
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.data.webchat.ChatSession
 
 @Composable
@@ -67,7 +68,7 @@ fun SessionsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .backdrop()
     ) {
         Row(
             modifier = Modifier

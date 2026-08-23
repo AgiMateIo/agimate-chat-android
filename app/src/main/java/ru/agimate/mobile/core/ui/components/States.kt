@@ -27,6 +27,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Shape
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import androidx.compose.ui.res.stringResource
 import ru.agimate.mobile.R
 
@@ -35,7 +36,7 @@ fun FullScreenLoading(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(AgiTheme.colors.backdrop),
+            .backdrop(),
         contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(

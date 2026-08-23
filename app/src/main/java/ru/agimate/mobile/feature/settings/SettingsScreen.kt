@@ -50,6 +50,7 @@ import ru.agimate.mobile.core.ui.locale.AppLanguage
 import ru.agimate.mobile.core.ui.locale.AppLanguages
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.core.ui.theme.AppTheme
 import ru.agimate.mobile.core.ui.theme.AppThemes
 
@@ -77,7 +78,7 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .backdrop()
             // Клавиатура и навигационная полоса претендуют на один и тот же низ: берём большее из
             // двух, а не сумму. Два отдельных отступа дали бы под клавиатурой лишнюю полосу.
             .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),

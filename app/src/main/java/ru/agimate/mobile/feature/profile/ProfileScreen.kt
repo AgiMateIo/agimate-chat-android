@@ -44,6 +44,7 @@ import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 
 @Composable
 fun ProfileScreen(
@@ -63,7 +64,7 @@ fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .backdrop()
     ) {
         Row(
             modifier = Modifier

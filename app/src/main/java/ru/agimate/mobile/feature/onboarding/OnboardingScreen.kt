@@ -35,6 +35,7 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.components.BrandMark
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.auroraBackdrop
 
 /**
  * Слайд интро. Порядок объявления — порядок показа.
@@ -85,7 +86,7 @@ fun OnboardingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .auroraBackdrop()
             .safeDrawingPadding(),
     ) {
         Box(

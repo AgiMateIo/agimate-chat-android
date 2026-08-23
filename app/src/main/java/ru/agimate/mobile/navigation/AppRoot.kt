@@ -21,6 +21,7 @@ import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.FullScreenLoading
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.feature.login.LoginScreen
 import ru.agimate.mobile.feature.onboarding.OnboardingScreen
 import ru.agimate.mobile.feature.pending.PendingApprovalScreen
@@ -49,7 +50,7 @@ fun AppRoot(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AgiTheme.colors.backdrop)
+            .backdrop()
     ) {
         Crossfade(targetState = session, label = "session") { current ->
             when (current) {

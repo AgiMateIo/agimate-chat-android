@@ -41,6 +41,7 @@ import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
+import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.data.agents.AgentPresetDto
 
 @Composable
@@ -83,7 +84,7 @@ private fun PresetGallery(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .backdrop()
     ) {
         StepHeader(title = stringResource(R.string.create_agent_title), onBack = onBack)
 
@@ -176,7 +177,7 @@ private fun ConfirmStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.backdrop)
+            .backdrop()
             .imePadding()
     ) {
         StepHeader(title = preset.title?.takeIf { it.isNotBlank() } ?: preset.name, onBack = onBack)

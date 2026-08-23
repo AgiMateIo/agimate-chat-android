@@ -29,6 +29,16 @@ data class AgiColors(
      * чём нарисована, поэтому красить ею полагается корень экрана, а не полосу внутри него.
      */
     val backdrop: Brush,
+    /**
+     * Холодное пятно света на земле. В айдентике это «ореол активации агента» — краска
+     * акцента с зашитой прозрачностью; свечению подложки она годится ровно тем же.
+     */
+    val glow: Color,
+    /**
+     * Тёплое пятно на земле, пиковый тон одного слоя сияния. На светлой теме краска гуще:
+     * светлому грунту нужно больше тона, чтобы намыв был виден так же.
+     */
+    val aurora: Color,
     val surface: Color,
     val surfaceMuted: Color,
     val hairline: Color,
@@ -81,6 +91,8 @@ val LightColors = with(AgimateTokens.Colors.Light) {
     AgiColors(
         background = background,
         backdrop = Brush.verticalGradient(listOf(backdropStart, backdropEnd)),
+        glow = accentGlow,
+        aurora = auroraTint,
         surface = surface,
         surfaceMuted = surfaceSecondary,
         hairline = border,
@@ -110,6 +122,8 @@ val DarkColors = with(AgimateTokens.Colors.Dark) {
     AgiColors(
         background = background,
         backdrop = Brush.verticalGradient(listOf(backdropStart, backdropEnd)),
+        glow = accentGlow,
+        aurora = auroraTint,
         surface = surface,
         surfaceMuted = surfaceSecondary,
         hairline = border,
