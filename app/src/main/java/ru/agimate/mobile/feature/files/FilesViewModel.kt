@@ -2,7 +2,6 @@ package ru.agimate.mobile.feature.files
 
 import android.content.Intent
 import androidx.annotation.StringRes
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,9 +39,24 @@ data class FilesUiState(
     val endReached: Boolean = false,
     val error: UiText? = null,
     val notice: FileNotice? = null,
-    /** Список ограничен одним агентом: пустой экран тогда объясняется иначе. */
-    val agentScoped: Boolean = false,
+    /** Список ограничен одной перепиской: пустой экран тогда объясняется иначе. */
+    val sessionScoped: Boolean = false,
 )
+
+/**
+ * Что показывает список.
+ *
+ * Область приходит вызовом, а не из аргументов маршрута: экран файлов открывается **внутри**
+ * маршрута переписки, и оба его повода — «посмотреть вложения» и «выбрать файл» — делят один
+ * экземпляр [FilesViewModel]. Из аргументов два разных фильтра не достать.
+ */
+sealed interface FilesScope {
+    /** Все файлы пользователя: так список открывают из профиля и когда выбирают файл к отправке. */
+    data object All : FilesScope
+
+    /** Вложения одной переписки: присланные человеком, отданные агентом, сделанные инструментом. */
+    data class Session(val sessionId: String) : FilesScope
+}
 
 /** Разовое действие экрана: запуск чужого приложения. `startActivity` нужен контекст, а не ViewModel. */
 sealed interface FilesEffect {
@@ -52,12 +66,12 @@ sealed interface FilesEffect {
 /**
  * Файлы пользователя.
  *
- * Фильтр по агенту берётся из маршрута, в котором экран открыт: в переписке аргумент `agentId` есть,
- * в профиле его нет — и список получается общим. Отдельного флага «режим» поэтому не нужно.
+ * Область задаётся [scope] и до неё список не грузится: экран один на два повода, и какой из них
+ * сейчас, знает только тот, кто его открыл.
  *
- * Важное следствие фильтра: `agentId` на сервере значит «кто произвёл файл», а у загруженного
- * руками вложения он пуст. В переписке видно то, что сделал агент, а не то, что человек туда
- * отправил.
+ * Фильтр по агенту не используется вовсе. На сервере он значит «связан с агентом» — произвёл файл
+ * или видел его, — и такую границу в интерфейсе не объяснить: у переписки есть свой фильтр, точнее
+ * и понятнее.
  */
 @HiltViewModel
 class FilesViewModel @Inject constructor(
@@ -65,12 +79,9 @@ class FilesViewModel @Inject constructor(
     private val store: FileStore,
     private val sharing: Sharing,
     private val origins: OriginProvider,
-    savedState: SavedStateHandle,
 ) : ViewModel() {
 
-    private val agentId: String? = savedState.get<String>("agentId")?.takeIf { it.isNotBlank() }
-
-    private val _state = MutableStateFlow(FilesUiState(agentScoped = agentId != null))
+    private val _state = MutableStateFlow(FilesUiState())
     val state: StateFlow<FilesUiState> = _state.asStateFlow()
 
     private val _effects = Channel<FilesEffect>(Channel.BUFFERED)
@@ -81,11 +92,20 @@ class FilesViewModel @Inject constructor(
     private var fileJob: Job? = null
     private var noticeJob: Job? = null
 
-    init {
-        load()
-    }
+    private var scope: FilesScope? = null
 
     fun fileUrl(url: String): String = origins.fileUrl(url)
+
+    /**
+     * Область списка. Первый вызов и загружает экран; повторный с той же областью ничего не делает —
+     * иначе поворот экрана перечитывал бы список заново.
+     */
+    fun scope(value: FilesScope) {
+        if (scope == value) return
+        scope = value
+        _state.update { it.copy(sessionScoped = value is FilesScope.Session) }
+        load()
+    }
 
     fun load() {
         searchJob?.cancel()
@@ -164,7 +184,7 @@ class FilesViewModel @Inject constructor(
 
     private suspend fun fetch(page: Int) {
         try {
-            val result = repository.files(agentId, _state.value.query, page)
+            val result = repository.files(sessionId(), _state.value.query, page)
             nextPage = page + 1
             _state.update {
                 it.copy(
@@ -234,6 +254,8 @@ class FilesViewModel @Inject constructor(
         noticeJob?.cancel()
         _state.update { it.copy(notice = null) }
     }
+
+    private fun sessionId(): String? = (scope as? FilesScope.Session)?.sessionId
 
     private companion object {
         const val SEARCH_DEBOUNCE_MILLIS = 300L

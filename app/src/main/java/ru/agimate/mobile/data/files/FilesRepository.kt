@@ -50,13 +50,13 @@ class FilesRepository @Inject constructor(
 ) {
     /** Пустой фильтр не отправляется вовсе: сервер трактует его как отсутствие, но зачем гадать. */
     suspend fun files(
-        agentId: String?,
+        sessionId: String?,
         name: String?,
         page: Int,
         size: Int = PAGE_SIZE,
     ): Paged<StoredFile> = apiCall {
         api.files(
-            agentId = agentId?.takeIf { it.isNotBlank() },
+            sessionId = sessionId?.takeIf { it.isNotBlank() },
             name = name?.takeIf { it.isNotBlank() },
             page = page,
             size = size,

@@ -195,7 +195,7 @@
     <string name="files_expires_soon">expires today</string>
     <string name="files_empty_title">No files yet</string>
     <string name="files_empty_description">Here you will find what you have sent to agents and what they have made for you.</string>
-    <string name="files_empty_agent_description">Here you will find what this agent has made for you.</string>
+    <string name="files_empty_session_description">Here you will find what was sent in this conversation and what the agent made in it.</string>
     <string name="files_not_found_title">Nothing found</string>
     <string name="files_not_found_description">Try another part of the name.</string>
 

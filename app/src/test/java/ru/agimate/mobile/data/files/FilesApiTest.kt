@@ -50,16 +50,17 @@ class FilesApiTest {
     @Test
     fun `listing keeps its trailing slash and drops empty filters`() = runTest {
         server.enqueue(emptyPage())
-        repository.files(agentId = "", name = "   ", page = 0, size = 30)
+        repository.files(sessionId = "", name = "   ", page = 0, size = 30)
         assertEquals("/control/manage/files/?page=0&size=30", server.takeRequest().target)
     }
 
+    /** Фильтр по переписке — готовая панель вложений: и присланное, и произведённое в ней. */
     @Test
     fun `filters travel as query parameters`() = runTest {
         server.enqueue(emptyPage())
-        repository.files(agentId = "a-1", name = "report", page = 2, size = 30)
+        repository.files(sessionId = "s-1", name = "report", page = 2, size = 30)
         assertEquals(
-            "/control/manage/files/?agentId=a-1&name=report&page=2&size=30",
+            "/control/manage/files/?sessionId=s-1&name=report&page=2&size=30",
             server.takeRequest().target,
         )
     }
@@ -125,7 +126,7 @@ class FilesApiTest {
             )
         )
 
-        val page = repository.files(agentId = null, name = null, page = 0)
+        val page = repository.files(sessionId = null, name = null, page = 0)
         val file = page.items.single()
 
         assertNull(file.name)

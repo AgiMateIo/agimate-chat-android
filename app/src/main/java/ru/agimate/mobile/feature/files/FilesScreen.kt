@@ -139,7 +139,7 @@ fun FilesScreen(
                 !state.loading && state.files.isEmpty() -> EmptyState(
                     title = stringResource(R.string.files_empty_title),
                     description = stringResource(
-                        if (state.agentScoped) R.string.files_empty_agent_description
+                        if (state.sessionScoped) R.string.files_empty_session_description
                         else R.string.files_empty_description
                     ),
                 )

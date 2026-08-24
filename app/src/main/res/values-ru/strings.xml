@@ -188,7 +188,7 @@
     <string name="files_expires_soon">истекает сегодня</string>
     <string name="files_empty_title">Файлов пока нет</string>
     <string name="files_empty_description">Здесь будет то, что вы отправляли агентам, и то, что они сделали для вас.</string>
-    <string name="files_empty_agent_description">Здесь будет то, что этот агент сделал для вас.</string>
+    <string name="files_empty_session_description">Здесь будет то, что отправлено в этой переписке, и то, что агент в ней сделал.</string>
     <string name="files_not_found_title">Ничего не нашлось</string>
     <string name="files_not_found_description">Попробуйте другую часть имени.</string>
 

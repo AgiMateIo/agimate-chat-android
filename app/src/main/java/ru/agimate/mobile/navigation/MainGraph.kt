@@ -38,6 +38,7 @@ import ru.agimate.mobile.feature.createagent.CreateAgentScreen
 import ru.agimate.mobile.feature.createagent.CreateAgentViewModel
 import ru.agimate.mobile.feature.files.FileActions
 import ru.agimate.mobile.feature.files.FilesEffect
+import ru.agimate.mobile.feature.files.FilesScope
 import ru.agimate.mobile.feature.files.FilesScreen
 import ru.agimate.mobile.feature.files.FilesViewModel
 import ru.agimate.mobile.feature.profile.ProfileScreen
@@ -213,12 +214,18 @@ fun MainGraph(
             // Файлы открываются поверх переписки, а не отдельным маршрутом: назад надо вернуть не
             // строку, а выбранный файл, и маршруту пришлось бы возить его сериализованным.
             //
-            // Поводов два, и они разные. Со скрепки файл выбирают, чтобы приложить. Из меню
-            // переписки на файлы агента смотрят — прикладывать там нечего, и тап открывает файл.
+            // Поводов два, и области у них разные. Из меню переписки смотрят её вложения — там
+            // фильтр по этой переписке, и тап открывает файл. Со скрепки выбирают, что приложить, —
+            // а приложить можно любой свой файл, и фильтра там нет.
             var files by rememberSaveable { mutableStateOf<FilesMode?>(null) }
             if (files != null) {
                 BackHandler { files = null }
                 Files(
+                    scope = if (files == FilesMode.Pick) {
+                        FilesScope.All
+                    } else {
+                        FilesScope.Session(viewModel.sessionId)
+                    },
                     onBack = { files = null },
                     onPick = if (files == FilesMode.Pick) {
                         { file -> viewModel.attachStored(file); files = null }
@@ -316,10 +323,9 @@ fun MainGraph(
             AuthMethodsScreen(onBack = { navController.popBackStack() })
         }
 
-        // Из профиля — все файлы: аргумента `agentId` у этого маршрута нет, и фильтру неоткуда
-        // взяться. Из переписки тот же экран открывается внутри её маршрута — и фильтр там есть.
+        // Из профиля — все файлы: сужать их здесь не до чего.
         composable(Routes.FILES) {
-            Files(onBack = { navController.popBackStack() })
+            Files(scope = FilesScope.All, onBack = { navController.popBackStack() })
         }
     }
 }
@@ -328,13 +334,20 @@ fun MainGraph(
  * Экран файлов со всей обвязкой: запуск чужого приложения, разрешение на память, действия строки.
  * Общий для двух мест, откуда он открывается, — иначе обвязку пришлось бы писать дважды.
  *
- * Фильтр по агенту берётся из аргументов маршрута, в котором экран оказался: [FilesViewModel]
- * читает `agentId` из своего `SavedStateHandle`.
+ * Область передаётся вызовом, а не берётся из аргументов маршрута: внутри переписки экран
+ * открывается по двум разным поводам, а `hiltViewModel` отдаёт им один и тот же [FilesViewModel] —
+ * он привязан к записи маршрута, а не к месту вызова.
  */
 @Composable
-private fun Files(onBack: () -> Unit, onPick: ((StoredFile) -> Unit)? = null) {
+private fun Files(
+    scope: FilesScope,
+    onBack: () -> Unit,
+    onPick: ((StoredFile) -> Unit)? = null,
+) {
     val viewModel: FilesViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel, scope) { viewModel.scope(scope) }
 
     val context = LocalContext.current
     LaunchedEffect(viewModel) {
