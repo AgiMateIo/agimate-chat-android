@@ -58,6 +58,20 @@ class TokenRefresher @Inject constructor(
         perform(current)
     }
 
+    /**
+     * Обновиться заранее, не дожидаясь 401. Зовётся при возвращении в приложение: часовой токен
+     * успевает протухнуть, пока телефон спит, и первый же запрос после сна иначе платит лишним
+     * кругом «401 — обновление — повтор».
+     *
+     * Ничего не делает, пока до конца срока больше десятой части: обновление ротирует пару, и
+     * будить его чаще, чем нужно, значит без повода менять то, что работает.
+     */
+    suspend fun refreshIfDue(): Outcome = mutex.withLock {
+        val current = store.load() ?: return Outcome.NotSignedIn
+        if (!current.renewalDue(clock.nowMillis())) return Outcome.Refreshed(current.accessToken)
+        perform(current)
+    }
+
     private suspend fun perform(tokens: AuthTokens): Outcome {
         val startedAt = clock.nowMillis()
         var attempt = 0
@@ -79,7 +93,7 @@ class TokenRefresher @Inject constructor(
                 200 -> {
                     val dto = response.body()?.response
                         ?: return Outcome.SessionDead
-                    val fresh = AuthTokens(dto.accessToken, dto.refreshToken, dto.sessionId)
+                    val fresh = dto.toTokens(clock.nowMillis())
                     store.save(fresh)
                     return Outcome.Refreshed(fresh.accessToken)
                 }

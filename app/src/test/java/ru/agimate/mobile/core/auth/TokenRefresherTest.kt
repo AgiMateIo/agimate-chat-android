@@ -63,6 +63,39 @@ class TokenRefresherTest {
     )
 
     @Test
+    fun `renewal ahead of time waits for nine tenths of the lifetime`() = runTest {
+        // Час жизни: обновляться пора в 3 240 000, не раньше.
+        val store = FakeTokenStore(initial.copy(renewAtMillis = 3_240_000))
+        val refresher = refresher(store, clock = { 3_239_000 })
+
+        val outcome = refresher.refreshIfDue()
+
+        assertEquals(0, server.requestCount)
+        assertEquals(TokenRefresher.Outcome.Refreshed("access-1"), outcome)
+    }
+
+    @Test
+    fun `renewal ahead of time happens once the moment has come`() = runTest {
+        val store = FakeTokenStore(initial.copy(renewAtMillis = 3_240_000))
+        server.enqueue(tokenResponse("access-2", "refresh-2"))
+
+        val outcome = refresher(store, clock = { 3_240_001 }).refreshIfDue()
+
+        assertEquals(1, server.requestCount)
+        assertEquals(TokenRefresher.Outcome.Refreshed("access-2"), outcome)
+    }
+
+    @Test
+    fun `a pair saved without a lifetime is left to the 401 path`() = runTest {
+        // Так выглядит пара, сохранённая прошлой версией приложения: срока рядом с ней нет, и
+        // выдумывать его нельзя — обновление по 401 работало и без него.
+        val outcome = refresher(FakeTokenStore(initial), clock = { Long.MAX_VALUE }).refreshIfDue()
+
+        assertEquals(0, server.requestCount)
+        assertEquals(TokenRefresher.Outcome.Refreshed("access-1"), outcome)
+    }
+
+    @Test
     fun `parallel 401s produce a single refresh request`() = runTest {
         val store = FakeTokenStore(initial)
         server.enqueue(tokenResponse("access-2", "refresh-2"))

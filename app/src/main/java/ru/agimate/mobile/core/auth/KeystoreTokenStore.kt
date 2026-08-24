@@ -39,8 +39,18 @@ class KeystoreTokenStore @Inject constructor(
         state.value = encoded
             ?.let(cipher::decrypt)
             ?.split(SEPARATOR)
-            ?.takeIf { it.size == 3 }
-            ?.let { AuthTokens(it[0], it[1], it[2]) }
+            // Три поля — пара, сохранённая до того, как рядом лёг срок обновления. Читается как
+            // «срок неизвестен»: обновление по 401 работало и без него, и выбрасывать живой вход
+            // ради нового поля незачем.
+            ?.takeIf { it.size == 3 || it.size == 4 }
+            ?.let {
+                AuthTokens(
+                    accessToken = it[0],
+                    refreshToken = it[1],
+                    sessionId = it[2],
+                    renewAtMillis = it.getOrNull(3)?.toLongOrNull() ?: 0,
+                )
+            }
 
         if (encoded != null && state.value == null) {
             // Расшифровать не смогли — держать нечитаемый мусор незачем.
@@ -52,8 +62,12 @@ class KeystoreTokenStore @Inject constructor(
 
     @Synchronized
     override fun save(tokens: AuthTokens) {
-        val packed = listOf(tokens.accessToken, tokens.refreshToken, tokens.sessionId)
-            .joinToString(SEPARATOR)
+        val packed = listOf(
+            tokens.accessToken,
+            tokens.refreshToken,
+            tokens.sessionId,
+            tokens.renewAtMillis.toString(),
+        ).joinToString(SEPARATOR)
         // commit(), а не apply(): новая пара обязана лежать на диске до следующего запроса —
         // потерять её при ротации значит остаться с токеном, которого на сервере уже нет.
         prefs.edit(commit = true) { putString(KEY_PAYLOAD, cipher.encrypt(packed)) }

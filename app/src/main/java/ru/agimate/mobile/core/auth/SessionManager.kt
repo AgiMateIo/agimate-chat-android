@@ -44,6 +44,7 @@ sealed interface AppSession {
 @Singleton
 class SessionManager @Inject constructor(
     private val tokenStore: TokenStore,
+    private val refresher: TokenRefresher,
     private val userApi: UserApi,
     private val authRepository: AuthRepository,
     private val realtime: RealtimeClient,
@@ -73,9 +74,19 @@ class SessionManager @Inject constructor(
         }
     }
 
-    /** Позвать при возвращении в приложение. */
+    /**
+     * Позвать при возвращении в приложение.
+     *
+     * Обновление здесь — вторая половина политики токенов, к обработке 401 в придачу. Часовой
+     * access успевает протухнуть, пока телефон спит, и без этого первый же запрос после
+     * пробуждения платил бы лишним кругом «401 — обновление — повтор». [TokenRefresher.refreshIfDue]
+     * сам решает, пора ли: до девяти десятых срока он не делает ничего.
+     */
     fun refresh() {
-        scope.launch { loadProfile() }
+        scope.launch {
+            refresher.refreshIfDue()
+            loadProfile()
+        }
     }
 
     /**
