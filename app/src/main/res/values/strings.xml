@@ -47,6 +47,67 @@
     <string name="login_not_finished_retry">Sign-in was not finished — try again</string>
     <string name="login_lost">Sign-in was not finished — start again</string>
 
+    <!-- Вход по паролю и письма рядом с ним -->
+    <string name="login_email_label">Email</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_submit">Sign in</string>
+    <string name="login_forgot">Forgot your password?</string>
+    <string name="login_or">or</string>
+    <string name="login_no_account">No account yet?</string>
+    <string name="login_register">Sign up</string>
+
+    <string name="password_show">Show password</string>
+    <string name="password_hide">Hide password</string>
+    <string name="password_too_short">At least %1$d characters</string>
+    <string name="password_too_long">Longer than the server takes: 72 bytes at most, and a non-Latin letter takes two of them</string>
+
+    <string name="register_title">Sign up</string>
+    <string name="register_subtitle">We send a link to the address. The password is set from the letter — and after that you sign in here.</string>
+    <string name="register_name_label">Name (optional)</string>
+    <string name="register_sent_note">If %1$s can be registered, a letter with the link is on its way. Open it, set a password, and come back here to sign in.</string>
+    <string name="register_resend">Send the letter again</string>
+
+    <string name="forgot_title">Password by mail</string>
+    <string name="forgot_subtitle">The link from the letter sets a password — both for an account that forgot one and for an account that never had one.</string>
+    <string name="forgot_sent_note">If %1$s belongs to an account, a letter with the link is on its way. Set the password from it and come back here to sign in.</string>
+
+    <string name="letter_submit">Send the letter</string>
+    <string name="letter_sent_title">Check your mail</string>
+
+    <!-- Способы входа -->
+    <string name="methods_title">Ways to sign in</string>
+    <string name="methods_password">Password</string>
+    <string name="methods_email_unknown">Address not reported</string>
+    <string name="methods_added">added %1$s</string>
+    <string name="methods_unlink">Unlink</string>
+    <string name="methods_remove_password">Remove</string>
+    <string name="methods_last_note">The only way in cannot be removed — add another one first.</string>
+    <string name="methods_add">Add a way in</string>
+    <string name="methods_link_provider">Link %1$s</string>
+    <string name="methods_add_password">Add a password</string>
+    <string name="methods_change_password">Change the password</string>
+    <string name="methods_letters_note">Every change here is announced by mail to the address of the account.</string>
+    <string name="methods_unlinked">%1$s unlinked</string>
+    <string name="methods_password_removed">Password removed</string>
+    <string name="methods_password_letter">A letter with the link is on its way to %1$s</string>
+    <string name="methods_password_changed">Password changed. The other devices were signed out.</string>
+
+    <string name="password_change_note">The other devices will be signed out; this one keeps working.</string>
+    <string name="password_current_label">Current password</string>
+    <string name="password_new_label">New password</string>
+    <string name="password_change_submit">Change the password</string>
+
+    <!-- Привязка провайдера -->
+    <string name="link_working">Finishing the link…</string>
+    <string name="link_linked">%1$s linked</string>
+    <string name="link_already_yours">%1$s was already linked</string>
+    <string name="link_taken">This %1$s account is already linked to another user</string>
+    <string name="link_occupied">Another %1$s account is already linked — unlink it first</string>
+    <string name="link_unknown_outcome">The server replied with an outcome this version does not know</string>
+    <string name="link_failed_retry">The link was not finished — try again</string>
+    <string name="link_proof_expired">The confirmation is no longer valid — start the link again</string>
+    <string name="provider_other">The provider</string>
+
     <string name="provider_google" translatable="false">Google</string>
     <string name="provider_yandex">Yandex</string>
     <string name="provider_vk" translatable="false">VK</string>

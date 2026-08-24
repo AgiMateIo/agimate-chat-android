@@ -42,6 +42,67 @@
     <string name="login_failed_retry">Вход не удался. Попробуйте ещё раз.</string>
     <string name="login_not_finished_retry">Вход не завершён. Попробуйте ещё раз.</string>
     <string name="login_lost">Вход не завершён — начните заново</string>
+
+    <!-- Вход по паролю и письма рядом с ним -->
+    <string name="login_email_label">Почта</string>
+    <string name="login_password_label">Пароль</string>
+    <string name="login_submit">Войти</string>
+    <string name="login_forgot">Забыли пароль?</string>
+    <string name="login_or">или</string>
+    <string name="login_no_account">Ещё нет аккаунта?</string>
+    <string name="login_register">Зарегистрироваться</string>
+
+    <string name="password_show">Показать пароль</string>
+    <string name="password_hide">Скрыть пароль</string>
+    <string name="password_too_short">Не короче %1$d символов</string>
+    <string name="password_too_long">Длиннее, чем примет сервер: не больше 72 байт, а кириллическая буква занимает два</string>
+
+    <string name="register_title">Регистрация</string>
+    <string name="register_subtitle">Пришлём на адрес ссылку. Пароль задаётся по ней — и после этого вы входите здесь.</string>
+    <string name="register_name_label">Имя (необязательно)</string>
+    <string name="register_sent_note">Если адрес %1$s можно зарегистрировать, письмо со ссылкой уже в пути. Откройте её, задайте пароль и возвращайтесь сюда — войти.</string>
+    <string name="register_resend">Отправить письмо ещё раз</string>
+
+    <string name="forgot_title">Пароль по почте</string>
+    <string name="forgot_subtitle">Ссылка из письма задаёт пароль — и тому, кто его забыл, и тому, у кого его не было.</string>
+    <string name="forgot_sent_note">Если адрес %1$s принадлежит аккаунту, письмо со ссылкой уже в пути. Задайте по ней пароль и возвращайтесь сюда — войти.</string>
+
+    <string name="letter_submit">Отправить письмо</string>
+    <string name="letter_sent_title">Проверьте почту</string>
+
+    <!-- Способы входа -->
+    <string name="methods_title">Способы входа</string>
+    <string name="methods_password">Пароль</string>
+    <string name="methods_email_unknown">Адрес не сообщён</string>
+    <string name="methods_added">добавлен %1$s</string>
+    <string name="methods_unlink">Отвязать</string>
+    <string name="methods_remove_password">Убрать</string>
+    <string name="methods_last_note">Единственный способ входа не убрать — сначала добавьте другой.</string>
+    <string name="methods_add">Добавить способ</string>
+    <string name="methods_link_provider">Привязать %1$s</string>
+    <string name="methods_add_password">Добавить пароль</string>
+    <string name="methods_change_password">Сменить пароль</string>
+    <string name="methods_letters_note">О каждом изменении здесь на почту аккаунта уходит письмо.</string>
+    <string name="methods_unlinked">%1$s отвязан</string>
+    <string name="methods_password_removed">Пароль убран</string>
+    <string name="methods_password_letter">Письмо со ссылкой ушло на %1$s</string>
+    <string name="methods_password_changed">Пароль изменён. Остальные устройства вышли.</string>
+
+    <string name="password_change_note">Остальные устройства выйдут, это — останется.</string>
+    <string name="password_current_label">Текущий пароль</string>
+    <string name="password_new_label">Новый пароль</string>
+    <string name="password_change_submit">Сменить пароль</string>
+
+    <!-- Привязка провайдера -->
+    <string name="link_working">Завершаем привязку…</string>
+    <string name="link_linked">%1$s привязан</string>
+    <string name="link_already_yours">%1$s уже был привязан</string>
+    <string name="link_taken">Этот аккаунт %1$s уже привязан к другому пользователю</string>
+    <string name="link_occupied">У вас уже привязан другой аккаунт %1$s — сначала отвяжите его</string>
+    <string name="link_unknown_outcome">Сервер ответил исходом, которого эта версия не знает</string>
+    <string name="link_failed_retry">Привязка не завершена — попробуйте ещё раз</string>
+    <string name="link_proof_expired">Подтверждение больше не годится — начните привязку заново</string>
+    <string name="provider_other">Провайдер</string>
     <!-- Google, VK и GitHub не переводятся и живут только в базовых ресурсах. -->
     <string name="provider_yandex">Яндекс</string>
 

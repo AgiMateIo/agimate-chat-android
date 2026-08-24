@@ -10,11 +10,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Вход: authorization code flow с PKCE, где сервером авторизации выступает наш же бэкенд.
+ * Три пути внутрь: провайдер через браузер, пароль и письмо, заводящее пароль.
  *
- * Веб держит refresh в httpOnly-cookie; приложению так нельзя — у внешнего браузера свой cookie jar,
- * до которого HTTP-клиент приложения не дотягивается. Поэтому вход заканчивается одноразовым кодом
- * в редиректе, который приложение меняет на пару токенов в теле ответа.
+ * Провайдерский путь — authorization code flow с PKCE, где сервером авторизации выступает наш же
+ * бэкенд. Веб держит refresh в httpOnly-cookie; приложению так нельзя — у внешнего браузера свой
+ * cookie jar, до которого HTTP-клиент приложения не дотягивается. Поэтому вход заканчивается
+ * одноразовым кодом в редиректе, который приложение меняет на пару токенов в теле ответа.
+ *
+ * Путь по паролю проще ровно потому, что браузера в нём нет: одна форма, один запрос, та же пара
+ * токенов в ответе.
  */
 @Singleton
 class AuthRepository @Inject constructor(
@@ -34,19 +38,35 @@ class AuthRepository @Inject constructor(
         val verifier = Pkce.createVerifier()
         pendingVerifier.set(verifier)
 
-        return Uri.parse(origins.userBase)
-            .buildUpon()
-            .appendPath("oauth2")
-            .appendPath("authorization")
-            .appendPath(provider.code)
-            .appendQueryParameter("redirect_to", AuthConfig.redirectUri)
-            .appendQueryParameter("code_challenge", Pkce.challengeOf(verifier))
-            .apply {
-                referralCode?.takeIf { it.isNotBlank() }
-                    ?.let { appendQueryParameter("ref", it) }
-            }
-            .build()
+        return authorizationUri(provider) {
+            appendQueryParameter("code_challenge", Pkce.challengeOf(verifier))
+            referralCode?.takeIf { it.isNotBlank() }
+                ?.let { appendQueryParameter("ref", it) }
+        }
     }
+
+    /**
+     * Тот же круг, прочитанный как привязка: `link=1` — ровно эта строка, иначе сервер поймёт его
+     * как обычный вход и заведёт второй аккаунт вместо второй двери в этот.
+     *
+     * PKCE здесь не нужен и не бывает: круг не выдаёт ни кода, ни токенов — только доказательство,
+     * которое без `Authorization` владельца не обменивается ни на что.
+     */
+    fun linkingUri(provider: AuthProvider): Uri = authorizationUri(provider) {
+        appendQueryParameter("link", "1")
+    }
+
+    private fun authorizationUri(
+        provider: AuthProvider,
+        extras: Uri.Builder.() -> Unit,
+    ): Uri = Uri.parse(origins.userBase)
+        .buildUpon()
+        .appendPath("oauth2")
+        .appendPath("authorization")
+        .appendPath(provider.code)
+        .appendQueryParameter("redirect_to", AuthConfig.redirectUri)
+        .apply(extras)
+        .build()
 
     fun abandonPendingLogin() {
         pendingVerifier.set(null)
@@ -74,14 +94,57 @@ class AuthRepository @Inject constructor(
                 )
             }.unwrap("обмен кода на токены")
 
-            store.save(
-                AuthTokens(
-                    accessToken = response.accessToken,
-                    refreshToken = response.refreshToken,
-                    sessionId = response.sessionId,
+            keep(response)
+        }
+    }
+
+    /**
+     * Вход по паролю. Неизвестный адрес и неверный пароль приходят одинаковым 401 — различать их
+     * на экране нечем, и пробовать не надо: разный текст на два случая и был бы той самой
+     * проверялкой, кто здесь зарегистрирован.
+     */
+    suspend fun signIn(email: String, password: String): Result<Unit> = runCatching {
+        val response = apiCall {
+            api.login(
+                PasswordLoginRequest(
+                    email = email.trim(),
+                    password = password,
+                    deviceName = deviceName(),
+                )
+            )
+        }.unwrap("вход по паролю")
+
+        keep(response)
+    }
+
+    /**
+     * Заявка на регистрацию: аккаунта после неё ещё нет, есть письмо. Пароль назовёт тот, кто
+     * письмо откроет, — и потому вход в приложение продолжится уже обычной формой входа.
+     */
+    suspend fun register(email: String, displayName: String?): Result<Unit> = runCatching {
+        apiCall {
+            api.register(
+                RegisterRequest(
+                    email = email.trim(),
+                    displayName = displayName?.trim()?.takeIf { it.isNotBlank() },
                 )
             )
         }
+        Unit
+    }
+
+    suspend fun resendConfirmation(email: String): Result<Unit> = runCatching {
+        apiCall { api.resendConfirmation(EmailRequest(email.trim())) }
+        Unit
+    }
+
+    /**
+     * Письмо со ссылкой на пароль. Одна операция на два случая: «забыли пароль» на входе и
+     * «добавить пароль» в способах входа шлют ровно это.
+     */
+    suspend fun requestPasswordLetter(email: String): Result<Unit> = runCatching {
+        apiCall { api.forgotPassword(EmailRequest(email.trim())) }
+        Unit
     }
 
     /**
@@ -95,6 +158,11 @@ class AuthRepository @Inject constructor(
             runCatching { api.logout(LogoutRequest(tokens.refreshToken)) }
         }
         store.clear()
+    }
+
+    /** Момент обновления считается от `expiresIn` ответа, а не от константы в коде. */
+    private fun keep(response: AuthResponseDto) {
+        store.save(response.toTokens(System.currentTimeMillis()))
     }
 
     /**
