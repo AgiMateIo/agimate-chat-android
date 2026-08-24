@@ -12,6 +12,7 @@ import ru.agimate.mobile.core.auth.AuthProvider
 import ru.agimate.mobile.core.auth.AuthRedirect
 import ru.agimate.mobile.core.auth.AuthRepository
 import ru.agimate.mobile.core.auth.PendingLoginLost
+import ru.agimate.mobile.core.auth.ProviderLinking
 import ru.agimate.mobile.core.auth.SessionManager
 import ru.agimate.mobile.core.onboarding.OnboardingStore
 import ru.agimate.mobile.core.push.PushChatTarget
@@ -31,6 +32,7 @@ data class LoginUiState(
 class MainViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val authRepository: AuthRepository,
+    private val linking: ProviderLinking,
     private val onboarding: OnboardingStore,
 ) : ViewModel() {
 
@@ -68,17 +70,31 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    /** Пришли из браузера. Разбираем: код — меняем, ошибка — показываем «войти ещё раз». */
+    /**
+     * Пришли из браузера. Вход и привязка возвращаются в один и тот же адрес, и различать их
+     * приходится по параметру: `code` — это вход, `link_proof` — это привязка.
+     *
+     * `?error=` в обоих путях выглядит одинаково, поэтому решает, кто ушёл в браузер последним:
+     * привязка знает, что круг за ней, а вход — что за ним.
+     */
     fun onRedirect(uri: Uri?) {
         when (val redirect = AuthRedirect.parse(uri)) {
             null -> Unit
             is AuthRedirect.Failed -> {
-                authRepository.abandonPendingLogin()
-                _login.value = LoginUiState(
-                    phase = LoginPhase.Idle,
-                    message = uiText(R.string.login_failed_retry),
-                )
+                if (linking.awaiting) {
+                    linking.failed()
+                } else {
+                    authRepository.abandonPendingLogin()
+                    _login.value = LoginUiState(
+                        phase = LoginPhase.Idle,
+                        message = uiText(R.string.login_failed_retry),
+                    )
+                }
             }
+
+            // Гасим доказательство сразу по возвращении, не дожидаясь действий человека: пять минут
+            // его жизни отведены на дорогу от колбэка до запроса, а не на раздумья.
+            is AuthRedirect.LinkProof -> linking.redeem(redirect.value, redirect.provider)
 
             is AuthRedirect.Code -> exchange(redirect.value)
         }
@@ -93,6 +109,9 @@ class MainViewModel @Inject constructor(
      */
     fun onAppResumed() {
         sessionManager.refresh()
+        // Вернулись без доказательства — значит вкладку закрыли. Молча: закрыть её человек решил
+        // сам, и отчитываться ему об этом отказом незачем.
+        if (linking.awaiting) linking.abandon()
         if (_login.value.phase == LoginPhase.WaitingForBrowser) {
             authRepository.abandonPendingLogin()
             _login.value = LoginUiState(

@@ -51,6 +51,7 @@ fun ProfileScreen(
     state: ProfileUiState,
     onBack: () -> Unit,
     onSettings: () -> Unit,
+    onAuthMethods: () -> Unit,
     /** Файлы аккаунта. `null` — аккаунт ещё не одобрен, файлов у него взяться неоткуда. */
     onFiles: (() -> Unit)? = null,
     onRevoke: (String) -> Unit,
@@ -121,6 +122,9 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(AgiTheme.spacing.xxl))
+
+            // Способы входа — первыми: они про аккаунт, а настройки под ними — про телефон.
+            NavRow(title = stringResource(R.string.methods_title), onClick = onAuthMethods)
 
             // Язык, тема и адрес сервера ушли на свой экран: они принадлежат телефону, а не
             // аккаунту, и нужны ещё до входа — в профиле их было бы не достать.

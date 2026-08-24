@@ -22,6 +22,7 @@ import ru.agimate.mobile.core.ui.components.FullScreenLoading
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
+import ru.agimate.mobile.feature.authmethods.AuthMethodsScreen
 import ru.agimate.mobile.feature.login.LetterMode
 import ru.agimate.mobile.feature.login.LetterScreen
 import ru.agimate.mobile.feature.login.LoginScreen
@@ -187,6 +188,11 @@ private fun AwaitingApproval(
             SettingsScreen(onBack = { open = Pending.Devices })
         }
 
+        Pending.Methods -> {
+            BackHandler { open = Pending.Devices }
+            AuthMethodsScreen(onBack = { open = Pending.Devices })
+        }
+
         Pending.Devices -> {
             val viewModel: ProfileViewModel = hiltViewModel()
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -196,6 +202,7 @@ private fun AwaitingApproval(
                 state = state,
                 onBack = { open = Pending.Root },
                 onSettings = { open = Pending.Settings },
+                onAuthMethods = { open = Pending.Methods },
                 onRevoke = viewModel::revoke,
                 onSignOut = onSignOut,
             )
@@ -203,5 +210,9 @@ private fun AwaitingApproval(
     }
 }
 
-/** Три экрана вместо булева флага: с настройками их стало больше, чем «здесь или там». */
-private enum class Pending { Root, Devices, Settings }
+/**
+ * Экраны, доступные до одобрения. Способы входа здесь не роскошь: у `GUEST` та же причина
+ * распоряжаться дверями в свой аккаунт, что и у одобренного, а ждать ради этого администратора —
+ * плохой ответ.
+ */
+private enum class Pending { Root, Devices, Methods, Settings }

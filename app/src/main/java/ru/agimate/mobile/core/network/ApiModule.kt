@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
+import ru.agimate.mobile.core.auth.AuthMethodsApi
 import ru.agimate.mobile.data.agents.AgentsApi
 import ru.agimate.mobile.data.files.FilesApi
 import ru.agimate.mobile.data.push.PushApi
@@ -16,6 +17,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ApiModule {
+
+    /**
+     * Способы входа — единственная часть авторизации, ходящая с токеном: остальное живёт в
+     * [ru.agimate.mobile.core.auth.AuthApi] на клиенте без авторизации.
+     */
+    @Provides
+    @Singleton
+    fun authMethodsApi(@AuthedClient retrofit: Retrofit): AuthMethodsApi =
+        retrofit.create(AuthMethodsApi::class.java)
 
     @Provides
     @Singleton

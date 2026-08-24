@@ -36,9 +36,17 @@ fun uiText(@StringRes id: Int, vararg args: Any): UiText = UiText.Res(id, args.t
 /** Обёртка над готовой строкой. Отдельным именем — чтобы `Raw` в коде бросался в глаза. */
 fun uiText(value: String): UiText = UiText.Raw(value)
 
+/**
+ * Аргументом строки бывает другая строка из ресурсов — название провайдера в «%s привязан»,
+ * например. Вложенный [UiText] разворачивается тем же контекстом, а не подставляется как есть:
+ * иначе в тексте оказалось бы `UiText.Res(id=…)`.
+ */
 fun UiText.resolve(context: Context): String = when (this) {
     is UiText.Raw -> value
-    is UiText.Res -> context.getString(id, *args.toTypedArray())
+    is UiText.Res -> context.getString(
+        id,
+        *args.map { if (it is UiText) it.resolve(context) else it }.toTypedArray(),
+    )
 }
 
 @Composable

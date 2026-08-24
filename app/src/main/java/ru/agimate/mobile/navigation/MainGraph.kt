@@ -26,6 +26,7 @@ import ru.agimate.mobile.core.push.PushChatTarget
 import ru.agimate.mobile.core.push.RequestNotificationPermission
 import ru.agimate.mobile.core.share.rememberPhotoCapture
 import ru.agimate.mobile.core.share.rememberSaveGate
+import ru.agimate.mobile.feature.authmethods.AuthMethodsScreen
 import ru.agimate.mobile.feature.chat.ChatEffect
 import ru.agimate.mobile.feature.chat.ChatScreen
 import ru.agimate.mobile.feature.chat.ChatViewModel
@@ -51,6 +52,7 @@ object Routes {
     const val CREATE_AGENT = "create-agent"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
+    const val AUTH_METHODS = "auth-methods"
     const val FILES = "files"
 
     const val SESSIONS = "sessions/{agentId}?agentName={agentName}&agentEnabled={agentEnabled}"
@@ -299,6 +301,7 @@ fun MainGraph(
                 state = state,
                 onBack = { navController.popBackStack() },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
+                onAuthMethods = { navController.navigate(Routes.AUTH_METHODS) },
                 onFiles = { navController.navigate(Routes.FILES) },
                 onRevoke = viewModel::revoke,
                 onSignOut = onSignOut,
@@ -307,6 +310,10 @@ fun MainGraph(
 
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.AUTH_METHODS) {
+            AuthMethodsScreen(onBack = { navController.popBackStack() })
         }
 
         // Из профиля — все файлы: аргумента `agentId` у этого маршрута нет, и фильтру неоткуда
