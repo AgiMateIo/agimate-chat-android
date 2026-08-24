@@ -64,7 +64,7 @@ data class AuthMethodsUiState(
 
     /** Провайдеры, которых у аккаунта ещё нет: один провайдер — одна дверь. */
     val linkable: List<AuthProvider>
-        get() = AuthProvider.entries.filter { entry -> methods.none { it.provider == entry } }
+        get() = AuthProvider.offered.filter { entry -> methods.none { it.provider == entry } }
 }
 
 /**

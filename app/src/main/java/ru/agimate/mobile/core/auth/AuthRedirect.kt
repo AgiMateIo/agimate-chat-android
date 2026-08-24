@@ -84,14 +84,25 @@ object AuthConfig {
  * Регистр имени значим в путях API: [code] — идентификатор регистрации у самого провайдера
  * (строчными, им начинается круг), [name] — значение перечисления (заглавными, им провайдера
  * отвязывают).
+ *
+ * @param offered предлагаем ли этого провайдера как новую дверь. Невыключенный провайдер из
+ *                перечисления не исчезает: у кого он уже привязан, тот должен видеть его в списке
+ *                способов входа под нормальным названием и уметь отвязать.
  */
-enum class AuthProvider(val code: String, @param:StringRes val titleRes: Int) {
+enum class AuthProvider(
+    val code: String,
+    @param:StringRes val titleRes: Int,
+    val offered: Boolean = true,
+) {
     GOOGLE("google", R.string.provider_google),
     YANDEX("yandex", R.string.provider_yandex),
-    VK("vk", R.string.provider_vk),
+    VK("vk", R.string.provider_vk, offered = false),
     GITHUB("github", R.string.provider_github);
 
     companion object {
+        /** Что показывать кнопками — и на входе, и в привязке. */
+        val offered: List<AuthProvider> get() = entries.filter { it.offered }
+
         /** Понимает оба написания: `github` из редиректа и `GITHUB` из тела ответа. */
         fun of(raw: String?): AuthProvider? {
             val value = raw?.trim().orEmpty()

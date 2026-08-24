@@ -193,7 +193,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.md),
                 ) {
-                    AuthProvider.entries.forEach { provider ->
+                    AuthProvider.offered.forEach { provider ->
                         SecondaryButton(
                             text = stringResource(
                                 R.string.login_with_provider,
