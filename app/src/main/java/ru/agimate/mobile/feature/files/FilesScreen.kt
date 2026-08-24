@@ -86,6 +86,8 @@ fun FilesScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     actions: FileActions,
+    /** Превью не нарисовалось: скорее всего протухла подпись, и за ссылкой надо сходить заново. */
+    onImageFailed: (StoredFile) -> Unit,
     /** Прикрепить файл к сообщению. `null` — экран открыт не из переписки, прикреплять некуда. */
     onPick: ((StoredFile) -> Unit)? = null,
 ) {
@@ -150,6 +152,7 @@ fun FilesScreen(
                             file = file,
                             fileUrl = fileUrl,
                             actions = actions,
+                            onImageFailed = { onImageFailed(file) },
                             onClick = {
                                 if (onPick != null) onPick(file) else actions.onOpen(file)
                             },
@@ -255,6 +258,7 @@ private fun FileRow(
     file: StoredFile,
     fileUrl: (String) -> String,
     actions: FileActions,
+    onImageFailed: () -> Unit,
     onClick: () -> Unit,
 ) {
     val colors = AgiTheme.colors
@@ -288,6 +292,7 @@ private fun FileRow(
                     model = url,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    onError = { onImageFailed() },
                     modifier = Modifier
                         .size(44.dp)
                         .background(Color.Transparent, AgiTheme.shapes.control),

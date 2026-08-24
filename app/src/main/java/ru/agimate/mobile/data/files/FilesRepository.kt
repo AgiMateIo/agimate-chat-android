@@ -89,6 +89,28 @@ class FilesRepository @Inject constructor(
         }.unwrap("загрузка файла")
     )
 
+    /**
+     * Свежая подпись файла.
+     *
+     * Ссылка живёт пятнадцать минут, и `403` на ней означает не потерянный доступ, а протухшую
+     * подпись: правильная реакция — перезапросить выдачу, где ссылка подписывается заново каждый
+     * раз. `null` возвращается, только если файла нет и в листинге, — вот тогда он действительно
+     * ушёл по сроку.
+     *
+     * Запроса за одним файлом в API нет, поэтому листинг просматривается страницами. Известные
+     * фильтры сужают выдачу до нескольких строк, но на случай, когда их нет, поиск ограничен
+     * [FRESH_URL_PAGES] страницами: файл дальше них считается ненайденным. Это потолок, а не
+     * гарантия — и он честнее, чем листать всё хранилище ради одной картинки.
+     */
+    suspend fun freshUrl(fileId: String, sessionId: String? = null, name: String? = null): String? {
+        repeat(FRESH_URL_PAGES) { page ->
+            val result = files(sessionId, name, page, size = MAX_PAGE_SIZE)
+            result.items.firstOrNull { it.id == fileId }?.let { return it.url }
+            if (result.isLast) return null
+        }
+        return null
+    }
+
     suspend fun delete(fileId: String) {
         apiCall { api.deleteFile(fileId) }
     }
@@ -107,5 +129,11 @@ class FilesRepository @Inject constructor(
         const val ORIGIN_CHAT = "chat"
 
         private const val PAGE_SIZE = 30
+
+        /** Потолок страницы на сервере: `size=500` не ошибка, вернётся всё равно сотня. */
+        private const val MAX_PAGE_SIZE = 100
+
+        /** Сколько страниц просматривается в поисках одного файла. */
+        private const val FRESH_URL_PAGES = 5
     }
 }

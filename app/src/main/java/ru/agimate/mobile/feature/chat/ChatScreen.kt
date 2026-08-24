@@ -113,6 +113,11 @@ data class MessageActions(
     val onOpenFile: (Attachment) -> Unit,
     val onSaveFile: (Attachment) -> Unit,
     val onShareFile: (Attachment) -> Unit,
+    /**
+     * Картинка не нарисовалась — не действие человека, а сообщение пузыря о себе: подпись живёт
+     * пятнадцать минут, и за свежей надо сходить, иначе на месте вложения так и останется скол.
+     */
+    val onImageFailed: (Attachment) -> Unit,
 )
 
 /**
@@ -731,6 +736,7 @@ private fun AttachmentView(
                         )
                     }
                 },
+                onError = { actions.onImageFailed(attachment) },
                 onSuccess = { state ->
                     val measured = state.painter.intrinsicSize
                     if (measured.isSpecified && measured.width > 0f && measured.height > 0f) {

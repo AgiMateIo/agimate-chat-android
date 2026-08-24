@@ -208,6 +208,7 @@ fun MainGraph(
                     onOpenFile = viewModel::openAttachment,
                     onSaveFile = { attachment -> save { viewModel.saveAttachment(attachment) } },
                     onShareFile = viewModel::shareAttachment,
+                    onImageFailed = viewModel::onImageFailed,
                 )
             }
 
@@ -376,6 +377,7 @@ private fun Files(
         onLoadMore = viewModel::loadMore,
         onRetry = viewModel::load,
         actions = actions,
+        onImageFailed = viewModel::onImageFailed,
         onPick = onPick,
     )
 }

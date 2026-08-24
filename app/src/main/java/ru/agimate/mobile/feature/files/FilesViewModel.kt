@@ -94,6 +94,9 @@ class FilesViewModel @Inject constructor(
 
     private var scope: FilesScope? = null
 
+    /** Файлы, за свежей подписью которых уже ходили ради картинки. */
+    private val refreshedImages = mutableSetOf<String>()
+
     fun fileUrl(url: String): String = origins.fileUrl(url)
 
     /**
@@ -182,6 +185,22 @@ class FilesViewModel @Inject constructor(
     /** Разрешения на память не дали. Промолчать нельзя: нажатие осталось бы без ответа. */
     fun onSaveDenied() = notice(uiText(R.string.file_save_denied), failed = true)
 
+    /**
+     * Картинка не нарисовалась. Почти всегда это протухшая за пятнадцать минут подпись, а не
+     * потерянный доступ, — идём за свежей, и строка перерисуется сама по новому адресу.
+     *
+     * Загрузчик картинок не сообщает код отказа, поэтому от бесконечного круга спасает только
+     * память о том, за какими файлами уже ходили: оборванная сеть иначе гоняла бы перезапрос
+     * столько раз, сколько список успеет перерисоваться.
+     */
+    fun onImageFailed(file: StoredFile) {
+        if (!refreshedImages.add(file.id)) return
+        viewModelScope.launch {
+            val fresh = runCatching { freshUrl(file) }.getOrNull() ?: return@launch
+            patchUrl(file.id, fresh)
+        }
+    }
+
     private suspend fun fetch(page: Int) {
         try {
             val result = repository.files(sessionId(), _state.value.query, page)
@@ -211,18 +230,12 @@ class FilesViewModel @Inject constructor(
         @StringRes progress: Int,
         block: suspend (RemoteFile) -> UiText?,
     ) {
-        val address = file.url?.takeIf { it.isNotBlank() }?.let(origins::fileUrl)
-        if (address == null) {
-            notice(uiText(R.string.error_file_gone), failed = true)
-            return
-        }
         if (fileJob?.isActive == true) return
 
-        val remote = RemoteFile(id = file.id, url = address, name = file.name, mime = file.mime)
         fileJob = viewModelScope.launch {
             working(progress)
             try {
-                val done = block(remote)
+                val done = withFreshLink(file, block)
                 if (done == null) clearNotice() else notice(done)
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
@@ -230,6 +243,49 @@ class FilesViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Одна повторная попытка со свежей подписью.
+     *
+     * `403` на скачивании означает, что список открыт давно: подпись живёт пятнадцать минут. Файл
+     * при этом никуда не делся, и говорить человеку про доступ — врать. Отсутствие файла в
+     * листинге — вот это уже конец: значит, ушёл по сроку.
+     */
+    private suspend fun withFreshLink(
+        file: StoredFile,
+        block: suspend (RemoteFile) -> UiText?,
+    ): UiText? {
+        val address = file.url?.takeIf { it.isNotBlank() }?.let(origins::fileUrl)
+        if (address != null) {
+            try {
+                return block(file.remote(address))
+            } catch (_: ApiException.Forbidden) {
+                // Ниже — вторая и последняя попытка.
+            }
+        }
+
+        val fresh = freshUrl(file) ?: throw ApiException.NotFound(
+            uiText(R.string.error_file_gone),
+            "file ${file.id} gone from listing",
+        )
+        // Строка запоминает новый адрес: следующему действию ходить за ним второй раз незачем.
+        patchUrl(file.id, fresh)
+        return block(file.remote(origins.fileUrl(fresh)))
+    }
+
+    private suspend fun freshUrl(file: StoredFile): String? =
+        repository.freshUrl(file.id, sessionId(), file.name)
+
+    private fun patchUrl(fileId: String, url: String) {
+        _state.update { state ->
+            state.copy(
+                files = state.files.map { if (it.id == fileId) it.copy(url = url) else it }
+            )
+        }
+    }
+
+    private fun StoredFile.remote(address: String) =
+        RemoteFile(id = id, url = address, name = name, mime = mime)
 
     private fun handOff(intent: Intent) {
         _effects.trySend(FilesEffect.Launch(intent))

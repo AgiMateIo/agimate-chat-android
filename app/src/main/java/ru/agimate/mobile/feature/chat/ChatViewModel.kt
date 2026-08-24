@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.realtime.OpenChatTracker
@@ -33,6 +34,7 @@ import ru.agimate.mobile.core.share.SavedTo
 import ru.agimate.mobile.core.share.Sharing
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.files.FilesRepository
 import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.AttachmentUploader
@@ -95,6 +97,7 @@ class ChatViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
     private val uploader: AttachmentUploader,
+    private val storedFiles: FilesRepository,
     private val files: FileStore,
     private val sharing: Sharing,
     private val origins: OriginProvider,
@@ -126,6 +129,9 @@ class ChatViewModel @Inject constructor(
 
     /** Дело с файлом — одно за раз; строка о нём — тоже одна. */
     private var fileJob: Job? = null
+
+    /** Вложения, за свежей подписью которых уже ходили ради картинки. */
+    private val refreshedImages = mutableSetOf<String>()
     private var noticeJob: Job? = null
 
     /** Чем в последний раз двигали указатель прочтения — чтобы не звать сервер на каждый скролл. */
@@ -497,9 +503,8 @@ class ChatViewModel @Inject constructor(
         @StringRes progress: Int,
         block: suspend (RemoteFile) -> UiText?,
     ) {
-        val file = attachment.remote()
-        if (file == null) {
-            // Ссылки нет у своего же сообщения, пока сервер не подтвердил отправку.
+        if (attachment.fileId == null) {
+            // Своё сообщение, пока сервер не подтвердил отправку: файла на той стороне ещё нет.
             notice(uiText(R.string.file_not_uploaded_yet), failed = true)
             return
         }
@@ -509,7 +514,7 @@ class ChatViewModel @Inject constructor(
         fileJob = viewModelScope.launch {
             working(progress)
             try {
-                val done = block(file)
+                val done = withFreshLink(attachment, block)
                 if (done == null) clearNotice() else notice(done)
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
@@ -518,10 +523,77 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun Attachment.remote(): RemoteFile? {
-        val address = url?.takeIf { it.isNotBlank() }?.let(origins::fileUrl) ?: return null
-        return RemoteFile(id = fileId, url = address, name = name, mime = mime)
+    /**
+     * Одна повторная попытка со свежей подписью.
+     *
+     * `403` на скачивании значит, что переписка открыта давно: подпись живёт пятнадцать минут. Файл
+     * при этом на месте, и говорить человеку про доступ — врать. Ссылки нет вовсе у только что
+     * отправленного своего вложения — там она и не приходила, и путь ровно тот же.
+     *
+     * Не нашлось в листинге переписки — вот тогда файл действительно ушёл по сроку.
+     */
+    private suspend fun withFreshLink(
+        attachment: Attachment,
+        block: suspend (RemoteFile) -> UiText?,
+    ): UiText? {
+        val fileId = checkNotNull(attachment.fileId)
+        val address = attachment.url?.takeIf { it.isNotBlank() }?.let(origins::fileUrl)
+        if (address != null) {
+            try {
+                return block(attachment.remote(address))
+            } catch (_: ApiException.Forbidden) {
+                // Ниже — вторая и последняя попытка.
+            }
+        }
+
+        val fresh = freshUrl(attachment) ?: throw ApiException.NotFound(
+            uiText(R.string.error_file_gone),
+            "file $fileId gone from listing",
+        )
+        // Вложение запоминает новый адрес: следующему действию ходить за ним второй раз незачем.
+        patchUrl(fileId, fresh)
+        return block(attachment.remote(origins.fileUrl(fresh)))
     }
+
+    /**
+     * Картинка не нарисовалась. Почти всегда это протухшая подпись, а не потерянный доступ, — идём
+     * за свежей, и пузырь перерисуется сам по новому адресу.
+     *
+     * Загрузчик картинок не сообщает код отказа, поэтому от бесконечного круга спасает только
+     * память о том, за какими файлами уже ходили: оборванная сеть иначе гоняла бы перезапрос
+     * столько раз, сколько лента успеет перерисоваться.
+     */
+    fun onImageFailed(attachment: Attachment) {
+        val fileId = attachment.fileId ?: return
+        if (!refreshedImages.add(fileId)) return
+        viewModelScope.launch {
+            val fresh = runCatching { freshUrl(attachment) }.getOrNull() ?: return@launch
+            patchUrl(fileId, fresh)
+        }
+    }
+
+    /** Файлы переписки — та же выдача, что открывает вложения экраном файлов, только фильтром. */
+    private suspend fun freshUrl(attachment: Attachment): String? =
+        storedFiles.freshUrl(
+            fileId = attachment.fileId ?: return null,
+            sessionId = sessionId,
+            name = attachment.name,
+        )
+
+    private fun patchUrl(fileId: String, url: String) {
+        messages = messages.map { message ->
+            if (message.attachments.none { it.fileId == fileId }) return@map message
+            message.copy(
+                attachments = message.attachments.map {
+                    if (it.fileId == fileId) it.copy(url = url) else it
+                }
+            )
+        }
+        publishItems()
+    }
+
+    private fun Attachment.remote(address: String) =
+        RemoteFile(id = fileId, url = address, name = name, mime = mime)
 
     private fun handOff(intent: Intent) {
         _effects.trySend(ChatEffect.Launch(intent))

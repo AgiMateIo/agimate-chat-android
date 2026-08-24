@@ -110,6 +110,41 @@ class FilesApiTest {
         assertEquals("DELETE", request.method)
     }
 
+    /**
+     * Протухшая подпись лечится перезапросом выдачи: ссылка подписывается заново на каждую отдачу.
+     * Фильтры сужают поиск, и в запрос уезжают оба.
+     */
+    @Test
+    fun `a fresh link is looked up in the listing`() = runTest {
+        server.enqueue(
+            MockResponse(
+                code = 200,
+                body = """{"response":{"content":[
+                    {"id":"agf_other","url":"/files/agf_other?exp=2&sig=b"},
+                    {"id":"agf_1","url":"/files/agf_1?exp=2&sig=a"}],
+                    "number":0,"size":100,"totalElements":2,"totalPages":1}}"""
+                    .trimIndent().replace("\n", ""),
+            )
+        )
+
+        val url = repository.freshUrl("agf_1", sessionId = "s-1", name = "чек.png")
+
+        assertEquals("/files/agf_1?exp=2&sig=a", url)
+        assertEquals(
+            "/control/manage/files/?sessionId=s-1&name=%D1%87%D0%B5%D0%BA.png&page=0&size=100",
+            server.takeRequest().target,
+        )
+    }
+
+    /** Файла нет и в листинге — вот это уже не подпись, а ушедший по сроку файл. */
+    @Test
+    fun `a file missing from the listing has no fresh link`() = runTest {
+        server.enqueue(emptyPage())
+        assertNull(repository.freshUrl("agf_1", sessionId = "s-1"))
+        // Пустая страница — последняя, и дальше листать нечего.
+        assertEquals(1, server.requestCount)
+    }
+
     @Test
     fun `a row without a name and without a zone in dates still parses`() = runTest {
         server.enqueue(
