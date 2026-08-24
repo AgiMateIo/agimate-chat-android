@@ -1,8 +1,12 @@
 package ru.agimate.mobile.data.files
 
 import kotlinx.serialization.Serializable
+import okhttp3.MultipartBody
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import ru.agimate.mobile.core.network.ApiEnvelope
@@ -20,6 +24,29 @@ import java.time.Instant
  * **Слэш в конце пути значим**, как и в вебчате: путь, отдающий список, заканчивается слэшем.
  */
 interface FilesApi {
+
+    /**
+     * Загрузка. **Без слэша на конце** — это создание, а не листинг.
+     *
+     * Отдаёт то же представление файла, что и листинг, и ключ там `id`. Внутри `parts` сообщения
+     * ключ по-прежнему `fileId`: это контракт отправки, он не менялся, и совпадать эти два имени
+     * не обязаны — не «причёсывать».
+     *
+     * Загрузка ничего ни к чему не привязывает: файл лежит в аккаунте, пока его куда-нибудь не
+     * приложат. Так и задумано — загрузка предшествует отправке, получателя на этот момент ещё нет.
+     *
+     * @param file   часть называется ровно `file`.
+     * @param origin метка места в интерфейсе, откуда файл пришёл; сохранится как `user:<метка>` и
+     *               вернётся в листинге. Алфавит узкий (`[a-z0-9][a-z0-9_-]{0,31}`), иначе 400:
+     *               колонка общая с серверным провенансом (`telegram:<id>`, `media:<модель>`), и
+     *               префикс `user:` — то, что не даёт загрузке представиться коннектором.
+     */
+    @Multipart
+    @POST("control/manage/files")
+    suspend fun upload(
+        @Part file: MultipartBody.Part,
+        @Part origin: MultipartBody.Part,
+    ): ApiEnvelope<StoredFileDto>
 
     /**
      * @param agentId файлы, произведённые этим агентом. У загруженных руками и у входящих

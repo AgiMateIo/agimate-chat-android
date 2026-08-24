@@ -64,6 +64,42 @@ class FilesApiTest {
         )
     }
 
+    /**
+     * Путь загрузки — общий файловый и **без слэша**: со слэшем это листинг. Вебчатовский
+     * `POST /manage/webchat/files` удалён, и вернуться туда нельзя.
+     */
+    @Test
+    fun `upload goes to the shared files endpoint without a trailing slash`() = runTest {
+        server.enqueue(
+            MockResponse(
+                code = 200,
+                body = """{"response":{"id":"agf_1","name":"чек.png","type":"image",
+                    "mime":"image/png","size":3,"url":"/files/agf_1?exp=1&sig=x"}}"""
+                    .trimIndent().replace("\n", ""),
+            )
+        )
+
+        val file = repository.upload("чек.png", "image/png", byteArrayOf(1, 2, 3))
+
+        val request = server.takeRequest()
+        assertEquals("/control/manage/files", request.target)
+        assertEquals("POST", request.method)
+        // Ключ ответа — `id`; `fileId` остался только внутри `parts` сообщения.
+        assertEquals("agf_1", file.id)
+    }
+
+    @Test
+    fun `upload names its parts file and origin`() = runTest {
+        server.enqueue(MockResponse(code = 200, body = """{"response":{"id":"agf_1"}}"""))
+        repository.upload("чек.png", "image/png", byteArrayOf(1, 2, 3), origin = "chat")
+
+        val body = server.takeRequest().body?.utf8().orEmpty()
+        assertTrue(body.contains("""name="file""""))
+        assertTrue(body.contains("""name="origin""""))
+        // Метка уезжает голой: префикс `user:` приставляет сервер.
+        assertTrue(body.contains("chat"))
+    }
+
     @Test
     fun `deleting addresses one file`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"response":null}"""))

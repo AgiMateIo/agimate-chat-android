@@ -5,8 +5,6 @@ import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -115,18 +113,6 @@ class WebchatApiPathsTest {
         server.enqueue(ok("""{"response":{"connectionToken":"c","subscriptionToken":"s","channel":"user:1","wsUrl":"ws://x/connection/websocket"}}"""))
         api.userToken()
         assertEquals("/control/manage/centrifugo/token", target())
-    }
-
-    @Test
-    fun `file upload part is named file`() = runTest {
-        server.enqueue(ok("""{"response":{"fileId":"agf_1","size":1}}"""))
-        val body = byteArrayOf(1, 2, 3).toRequestBody(null)
-        api.uploadFile(MultipartBody.Part.createFormData("file", "чек.png", body))
-
-        val request = server.takeRequest()
-        assertEquals("/control/manage/webchat/files", request.target)
-        val text = request.body?.utf8().orEmpty()
-        assertEquals(true, text.contains("""name="file""""))
     }
 
     @Test

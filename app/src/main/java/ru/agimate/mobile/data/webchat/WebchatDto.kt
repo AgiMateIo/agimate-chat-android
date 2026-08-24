@@ -138,16 +138,6 @@ data class SendMessageResponseDto(
 data class MarkReadRequest(val lastReadMessageId: String? = null)
 
 @Serializable
-data class WebchatFileDto(
-    val fileId: String,
-    val mime: String? = null,
-    val size: Long = 0,
-    val name: String? = null,
-    @Serializable(with = InstantSerializer::class)
-    val expiresAt: Instant? = null,
-)
-
-@Serializable
 data class CentrifugoTokenDto(
     val connectionToken: String,
     val subscriptionToken: String,

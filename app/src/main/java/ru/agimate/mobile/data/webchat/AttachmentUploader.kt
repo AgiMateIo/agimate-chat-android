@@ -11,6 +11,7 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.files.FilesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,13 +37,17 @@ data class PendingAttachment(
 /**
  * Загрузка вложений.
  *
+ * Файл кладётся в общее хранилище файлов пользователя, а не в вебчат: своего эндпойнта загрузки у
+ * переписки больше нет. Из этого следует, что загруженное вложение остаётся в аккаунте, даже если
+ * сообщение так и не отправили, — и находится потом в списке файлов.
+ *
  * Ограничения сервера: 50 МБ на файл и 500 МБ в сутки (оба приходят как 400 с числами в тексте),
  * 30 загрузок в минуту (429; заголовка `Retry-After` нет — паузу подбираем сами).
  */
 @Singleton
 class AttachmentUploader @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val repository: WebchatRepository,
+    private val repository: FilesRepository,
 ) {
     fun describe(uri: Uri, localId: String): PendingAttachment {
         var name = context.getString(R.string.file_default_name)
@@ -76,13 +81,13 @@ class AttachmentUploader @Inject constructor(
                 ?: throw ApiException.BadRequest(uiText(R.string.error_file_unreadable), "unreadable uri")
 
             try {
-                repository.upload(attachment.name, attachment.mime, bytes).fileId
+                repository.upload(attachment.name, attachment.mime, bytes).id
             } catch (rateLimited: ApiException.RateLimited) {
                 // 30 загрузок в минуту; заголовка Retry-After сервер не шлёт, паузу подбираем сами.
                 // Одна попытка — дальше это уже не заминка, а разговор с человеком.
                 delay(RATE_LIMIT_PAUSE_MILLIS)
                 try {
-                    repository.upload(attachment.name, attachment.mime, bytes).fileId
+                    repository.upload(attachment.name, attachment.mime, bytes).id
                 } catch (_: ApiException.RateLimited) {
                     throw ApiException.RateLimited(
                         uiText(R.string.error_upload_rate_limited),

@@ -1,5 +1,8 @@
 package ru.agimate.mobile.data.files
 
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import ru.agimate.mobile.core.network.PageEnvelope
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.unwrap
@@ -60,6 +63,32 @@ class FilesRepository @Inject constructor(
         )
     }.unwrap("список файлов").toPaged(StoredFile::from)
 
+    /**
+     * Загрузка. Возвращает файл целиком, а не один идентификатор: сервер отдаёт то же
+     * представление, что и листинг, и терять его незачем — по нему видно и срок, и выведенный тип.
+     *
+     * Подписанная ссылка в ответе такая же пятнадцатиминутная, как везде, поэтому для превью сразу
+     * после выбора она не годится: там показывается локальный файл, а не сеть.
+     */
+    suspend fun upload(
+        fileName: String,
+        mime: String?,
+        bytes: ByteArray,
+        origin: String = ORIGIN_CHAT,
+    ): StoredFile = StoredFile.from(
+        apiCall {
+            api.upload(
+                // Имя части — ровно `file`.
+                file = MultipartBody.Part.createFormData(
+                    "file",
+                    fileName,
+                    bytes.toRequestBody(mime?.toMediaTypeOrNull()),
+                ),
+                origin = MultipartBody.Part.createFormData("origin", origin),
+            )
+        }.unwrap("загрузка файла")
+    )
+
     suspend fun delete(fileId: String) {
         apiCall { api.deleteFile(fileId) }
     }
@@ -70,7 +99,13 @@ class FilesRepository @Inject constructor(
         totalElements = totalElements,
     )
 
-    private companion object {
-        const val PAGE_SIZE = 30
+    companion object {
+        /**
+         * Откуда файл пришёл. В приложении место загрузки одно — композер переписки, — поэтому и
+         * метка одна; в листинге она вернётся как `user:chat`.
+         */
+        const val ORIGIN_CHAT = "chat"
+
+        private const val PAGE_SIZE = 30
     }
 }

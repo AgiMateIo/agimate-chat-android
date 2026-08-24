@@ -1,12 +1,9 @@
 package ru.agimate.mobile.data.webchat
 
-import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
-import retrofit2.http.Multipart
 import retrofit2.http.POST
-import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import ru.agimate.mobile.core.network.ApiEnvelope
@@ -18,6 +15,9 @@ import ru.agimate.mobile.core.network.PageEnvelope
  * **Слэш в конце пути значим.** `GET .../sessions/` и `POST .../sessions` — разные маршруты, и
  * лишний или недостающий слэш даёт 404. Правило: путь, отдающий список, заканчивается слэшем.
  * Ниже пути выписаны точно — не «причёсывать».
+ *
+ * Загрузки здесь нет: файл — сущность control-api, а не вложение переписки, и грузится он через
+ * [ru.agimate.mobile.data.files.FilesApi]. В сообщение уезжает только идентификатор.
  */
 interface WebchatApi {
 
@@ -72,10 +72,6 @@ interface WebchatApi {
         @Path("id") sessionId: String,
         @Body body: MarkReadRequest,
     ): ApiEnvelope<String?>
-
-    @Multipart
-    @POST("control/manage/webchat/files")
-    suspend fun uploadFile(@Part file: MultipartBody.Part): ApiEnvelope<WebchatFileDto>
 
     /** Токены на канал одной переписки: `webchat:{sessionId}`. */
     @POST("control/manage/webchat/sessions/{id}/token")

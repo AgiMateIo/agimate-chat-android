@@ -1,8 +1,5 @@
 package ru.agimate.mobile.data.webchat
 
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import ru.agimate.mobile.core.network.PageEnvelope
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.unwrap
@@ -62,13 +59,6 @@ class WebchatRepository @Inject constructor(
      */
     suspend fun markRead(sessionId: String, lastReadRowId: String?) {
         apiCall { api.markRead(sessionId, MarkReadRequest(lastReadRowId)) }
-    }
-
-    suspend fun upload(fileName: String, mime: String?, bytes: ByteArray): WebchatFileDto {
-        val body = bytes.toRequestBody(mime?.toMediaTypeOrNull())
-        // Имя части — ровно `file`.
-        val part = MultipartBody.Part.createFormData("file", fileName, body)
-        return apiCall { api.uploadFile(part) }.unwrap("загрузка файла")
     }
 
     /** Останавливает переписку целиком, а не один запуск. Повторное нажатие безопасно. */
