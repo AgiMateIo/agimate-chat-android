@@ -152,6 +152,7 @@
     <string name="chat_message_failed">not sent · retry</string>
     <string name="chat_message_sending">sending…</string>
     <string name="chat_attachment_generic">Attachment</string>
+    <string name="draft_attachments_gone">Some attachments are no longer available and were removed</string>
     <string name="chat_attachment_uploading">uploading…</string>
     <string name="chat_empty_title">Write the first message</string>
     <string name="chat_empty_description">In plain words — the way you would write to a person. You can attach a photo or a document.</string>

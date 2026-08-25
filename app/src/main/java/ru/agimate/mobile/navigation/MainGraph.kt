@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -174,6 +176,11 @@ fun MainGraph(
             val viewModel: ChatViewModel = hiltViewModel()
             val state by viewModel.state.collectAsStateWithLifecycle()
             val agentId = entry.arguments?.getString("agentId")?.takeIf { it.isNotBlank() }
+
+            // Черновик записывается по остановке экрана, а не в `onCleared`: до того дела доходит
+            // не всегда — процесс убивают и без разрушения модели, — а набранное к этому моменту
+            // уже жалко.
+            LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.persistDraft() }
             val agentEnabled = entry.arguments?.getString("agentEnabled") != "0"
 
             val picker = rememberLauncherForActivityResult(

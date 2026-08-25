@@ -14,6 +14,7 @@ import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
 import ru.agimate.mobile.core.push.PushSubscriptions
+import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.user.UserProfile
 import javax.inject.Inject
@@ -50,6 +51,7 @@ class SessionManager @Inject constructor(
     private val realtime: RealtimeClient,
     private val currentSession: CurrentSession,
     private val push: PushSubscriptions,
+    private val drafts: DraftStore,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<AppSession>(AppSession.Loading)
@@ -66,6 +68,10 @@ class SessionManager @Inject constructor(
                 if (tokens == null) {
                     // Токенов нет — живому соединению не на чем держаться, и его токены тоже мертвы.
                     realtime.stop()
+                    // Черновик — текст человека, и уходит он вместе с токенами. Место общее для
+                    // выхода по кнопке и выхода по мёртвому refresh: после второго в приложение
+                    // может войти другой человек, и чужие незаконченные сообщения он видеть не должен.
+                    drafts.clear()
                     _state.value = AppSession.SignedOut
                 } else {
                     loadProfile()

@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,6 +36,7 @@ import ru.agimate.mobile.core.share.SavedTo
 import ru.agimate.mobile.core.share.Sharing
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.files.FilesRepository
 import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.data.webchat.Attachment
@@ -97,6 +100,7 @@ class ChatViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
     private val uploader: AttachmentUploader,
+    private val drafts: DraftStore,
     private val storedFiles: FilesRepository,
     private val files: FileStore,
     private val sharing: Sharing,
@@ -144,6 +148,8 @@ class ChatViewModel @Inject constructor(
 
     init {
         openChats.open(sessionId)
+        restoreDraft()
+        observeDraftAttachments()
         observeRealtimeStatus()
         subscribeToSession()
         loadFirstPage()
@@ -152,10 +158,66 @@ class ChatViewModel @Inject constructor(
         markReadWholeSession()
     }
 
+    // ---------------------------------------------------------------- черновик
+
+    /**
+     * Набранное, но не отправленное. Хранится дольше экрана, поэтому переход в соседнюю переписку
+     * его больше не теряет.
+     */
+    private fun restoreDraft() {
+        val draft = drafts.draft(sessionId) ?: return
+        _state.update { it.copy(input = draft.text, attachments = draft.attachments) }
+        if (draft.attachments.isNotEmpty()) validateDraftAttachments(draft.attachments)
+    }
+
+    /**
+     * Вложения приходят из хранилища, а не хранятся здесь: загрузка идёт в области приложения и
+     * доходит даже тогда, когда экрана уже нет. Второй источник правды дал бы состояние, зависящее
+     * от того, успел ли человек уйти.
+     *
+     * Текст, наоборот, живёт в состоянии экрана и пишется в хранилище на ходу: снаружи его никто не
+     * меняет, а круг через поток на каждой букве поле ввода не обрадует.
+     */
+    private fun observeDraftAttachments() {
+        viewModelScope.launch {
+            drafts.drafts
+                .map { it[sessionId]?.attachments.orEmpty() }
+                .distinctUntilChanged()
+                .collect { attachments ->
+                    _state.update { it.copy(attachments = attachments) }
+                }
+        }
+    }
+
+    /**
+     * Файл из черновика мог уйти по сроку: у произведённого коннектором он семь дней, и удалить его
+     * можно руками. Сервер проверяет каждое вложение и отказывает **всему** сообщению — то есть
+     * недельный черновик с одной мёртвой картинкой не отправился бы вовсе, и виноват был бы вроде
+     * бы человек.
+     *
+     * Поэтому проверяем на входе: живые остаются, ушедшие убираются, и об этом говорится вслух.
+     */
+    private fun validateDraftAttachments(attachments: List<PendingAttachment>) {
+        viewModelScope.launch {
+            val alive = attachments.filter { attachment ->
+                val fileId = attachment.fileId ?: return@filter true
+                runCatching { storedFiles.freshUrl(fileId, name = attachment.name) }
+                    .getOrElse { return@launch } != null
+            }
+            if (alive.size == attachments.size) return@launch
+            drafts.replaceAttachments(sessionId, alive)
+            notice(uiText(R.string.draft_attachments_gone), failed = true)
+        }
+    }
+
+    /** Записать черновик немедленно — по остановке экрана. */
+    fun persistDraft() = drafts.flush()
+
     fun fileUrl(url: String): String = origins.fileUrl(url)
 
     fun onInputChange(value: String) {
         _state.update { it.copy(input = value, sendError = null) }
+        drafts.setText(sessionId, agentId, value)
     }
 
     fun dismissSendError() {
@@ -334,6 +396,9 @@ class ChatViewModel @Inject constructor(
         )
 
         messages = listOf(optimistic) + messages
+        // Сообщение ушло в ленту — черновика больше нет. Неудачная отправка его не воскрешает:
+        // сообщение остаётся в ленте с повтором, и второе место для того же текста только запутает.
+        drafts.clear(sessionId)
         _state.update {
             it.copy(
                 input = "",
@@ -362,6 +427,7 @@ class ChatViewModel @Inject constructor(
     fun retry(message: ChatMessage) {
         val localId = message.localId ?: return
         messages = messages.filterNot { it.localId == localId }
+        drafts.setText(sessionId, agentId, message.text.orEmpty())
         _state.update {
             it.copy(
                 input = message.text.orEmpty(),
@@ -391,23 +457,8 @@ class ChatViewModel @Inject constructor(
         val accepted = uris.take(room).map { uri ->
             uploader.describe(uri, UUID.randomUUID().toString())
         }
-        _state.update { it.copy(attachments = it.attachments + accepted) }
-
-        accepted.forEach { attachment ->
-            viewModelScope.launch {
-                uploader.upload(attachment)
-                    .onSuccess { fileId ->
-                        updateAttachment(attachment.localId) {
-                            it.copy(fileId = fileId, uploading = false)
-                        }
-                    }
-                    .onFailure { error ->
-                        updateAttachment(attachment.localId) {
-                            it.copy(uploading = false, error = error.toApiException().text)
-                        }
-                    }
-            }
-        }
+        // Загрузку ведёт хранилище черновиков: в его области она переживает уход с экрана.
+        drafts.attach(sessionId, agentId, accepted)
     }
 
     /**
@@ -423,9 +474,11 @@ class ChatViewModel @Inject constructor(
             _state.update { it.copy(sendError = uiText(R.string.chat_attachments_limit)) }
             return
         }
-        _state.update {
-            it.copy(
-                attachments = it.attachments + PendingAttachment(
+        drafts.attach(
+            sessionId = sessionId,
+            agentId = agentId,
+            items = listOf(
+                PendingAttachment(
                     localId = UUID.randomUUID().toString(),
                     name = file.name.orEmpty(),
                     mime = file.mime,
@@ -434,22 +487,12 @@ class ChatViewModel @Inject constructor(
                     fileId = file.id,
                     uploading = false,
                 )
-            )
-        }
+            ),
+        )
     }
 
     fun removeAttachment(localId: String) {
-        _state.update { it.copy(attachments = it.attachments.filterNot { a -> a.localId == localId }) }
-    }
-
-    private fun updateAttachment(localId: String, transform: (PendingAttachment) -> PendingAttachment) {
-        _state.update { current ->
-            current.copy(
-                attachments = current.attachments.map {
-                    if (it.localId == localId) transform(it) else it
-                }
-            )
-        }
+        drafts.removeAttachment(sessionId, localId)
     }
 
     // ------------------------------------------------- поделиться и сохранить
@@ -649,6 +692,8 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.closeSession(sessionId) }
                 .onSuccess {
+                    // В закрытую переписку писать нельзя — черновику там висеть незачем.
+                    drafts.clear(sessionId)
                     _state.update { it.copy(closed = true) }
                     onClosed()
                 }
