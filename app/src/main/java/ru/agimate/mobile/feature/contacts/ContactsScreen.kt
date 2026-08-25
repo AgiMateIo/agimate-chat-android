@@ -42,6 +42,9 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
+import androidx.compose.ui.text.AnnotatedString
+import ru.agimate.mobile.core.ui.components.draftLine
+import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.webchat.Contact
 
 /**
@@ -108,7 +111,11 @@ fun ContactsScreen(
 
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.visible, key = { it.agentId }) { contact ->
-                    ContactRow(contact = contact, onClick = { onContactClick(contact) })
+                    ContactRow(
+                        contact = contact,
+                        draft = state.drafts[contact.agentId],
+                        onClick = { onContactClick(contact) },
+                    )
                 }
                 item { Spacer(Modifier.height(AgiTheme.spacing.xl)) }
             }
@@ -222,7 +229,7 @@ private fun ConnectionBanner() {
 }
 
 @Composable
-private fun ContactRow(contact: Contact, onClick: () -> Unit) {
+private fun ContactRow(contact: Contact, draft: Draft?, onClick: () -> Unit) {
     val colors = AgiTheme.colors
     val muted = !contact.enabled
 
@@ -267,7 +274,7 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = secondaryLine(contact),
+                    text = secondaryLine(contact, draft),
                     style = AgiTheme.typography.secondary,
                     color = if (contact.isRunning) colors.accent else colors.textSecondary,
                     maxLines = 1,
@@ -288,15 +295,23 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit) {
  * известен только в композиции.
  */
 @Composable
-private fun secondaryLine(contact: Contact): String = when {
-    contact.isRunning -> stringResource(R.string.chat_status_typing)
+private fun secondaryLine(contact: Contact, draft: Draft?): AnnotatedString = when {
+    // Работающий агент важнее черновика: это происходит прямо сейчас, а черновик ждёт.
+    contact.isRunning -> AnnotatedString(stringResource(R.string.chat_status_typing))
+    draft != null -> draftLine(draft.preview.resolve())
     contact.preview != null -> {
         val text = contact.preview.displayText.resolve()
-        if (contact.preview.fromAgent) text else stringResource(R.string.contacts_preview_own, text)
+        AnnotatedString(
+            if (contact.preview.fromAgent) {
+                text
+            } else {
+                stringResource(R.string.contacts_preview_own, text)
+            }
+        )
     }
 
-    !contact.description.isNullOrBlank() -> contact.description
-    else -> stringResource(R.string.contacts_never_written)
+    !contact.description.isNullOrBlank() -> AnnotatedString(contact.description)
+    else -> AnnotatedString(stringResource(R.string.contacts_never_written))
 }
 
 @Composable

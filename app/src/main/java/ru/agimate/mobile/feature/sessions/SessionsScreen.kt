@@ -41,6 +41,9 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
+import androidx.compose.ui.text.AnnotatedString
+import ru.agimate.mobile.core.ui.components.draftLine
+import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.webchat.ChatSession
 
 @Composable
@@ -118,7 +121,11 @@ fun SessionsScreen(
 
                 else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     items(state.sessions, key = { it.sessionId }) { session ->
-                        SessionRow(session = session, onClick = { onOpen(session) })
+                        SessionRow(
+                            session = session,
+                            draft = state.drafts[session.sessionId],
+                            onClick = { onOpen(session) },
+                        )
                     }
                     item { Spacer(Modifier.height(AgiTheme.spacing.xl)) }
                 }
@@ -141,7 +148,7 @@ fun SessionsScreen(
 }
 
 @Composable
-private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
+private fun SessionRow(session: ChatSession, draft: Draft?, onClick: () -> Unit) {
     val colors = AgiTheme.colors
 
     Column(
@@ -173,10 +180,12 @@ private fun SessionRow(session: ChatSession, onClick: () -> Unit) {
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
+                // Работающий агент важнее черновика: это происходит прямо сейчас, а черновик ждёт.
                 text = when {
-                    session.isRunning -> stringResource(R.string.chat_status_typing)
-                    session.preview != null -> session.preview.displayText.resolve()
-                    else -> stringResource(R.string.sessions_empty_preview)
+                    session.isRunning -> AnnotatedString(stringResource(R.string.chat_status_typing))
+                    draft != null -> draftLine(draft.preview.resolve())
+                    session.preview != null -> AnnotatedString(session.preview.displayText.resolve())
+                    else -> AnnotatedString(stringResource(R.string.sessions_empty_preview))
                 },
                 style = AgiTheme.typography.secondary,
                 color = if (session.isRunning) colors.accent else colors.textSecondary,

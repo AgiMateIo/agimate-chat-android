@@ -145,6 +145,7 @@
     <string name="chat_message_failed">не отправлено · повторить</string>
     <string name="chat_message_sending">отправляется…</string>
     <string name="chat_attachment_generic">Вложение</string>
+    <string name="chat_draft_label">Черновик</string>
     <string name="draft_attachments_gone">Часть вложений больше недоступна — они убраны</string>
     <string name="chat_attachment_uploading">загружается…</string>
     <string name="chat_empty_title">Напишите первое сообщение</string>

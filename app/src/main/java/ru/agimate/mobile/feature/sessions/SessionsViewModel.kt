@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.network.toApiException
+import ru.agimate.mobile.data.drafts.Draft
+import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.webchat.ChatSession
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import javax.inject.Inject
@@ -26,6 +28,8 @@ data class SessionsUiState(
     val endReached: Boolean = false,
     val error: UiText? = null,
     val creating: Boolean = false,
+    /** Незаконченные сообщения, по идентификатору переписки. */
+    val drafts: Map<String, Draft> = emptyMap(),
 )
 
 /**
@@ -35,6 +39,7 @@ data class SessionsUiState(
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val repository: WebchatRepository,
+    drafts: DraftStore,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -49,6 +54,12 @@ class SessionsViewModel @Inject constructor(
 
     init {
         load()
+        // Черновики локальные, и приходят они отдельно от серверного списка: строка знает про свой
+        // по идентификатору переписки. Порядок строк при этом не меняется — он серверный, и между
+        // страницами его не восстановить.
+        viewModelScope.launch {
+            drafts.drafts.collect { map -> _state.update { it.copy(drafts = map) } }
+        }
     }
 
     fun load() {

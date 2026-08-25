@@ -17,6 +17,8 @@ import ru.agimate.mobile.core.realtime.OpenChatTracker
 import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.realtime.WebchatActivityPayload
+import ru.agimate.mobile.data.drafts.Draft
+import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.webchat.Contact
 import ru.agimate.mobile.data.webchat.MessagePreview
 import ru.agimate.mobile.data.webchat.MessageStream
@@ -32,6 +34,8 @@ data class ContactsUiState(
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
     /** Агент, для которого прямо сейчас заводится первая переписка. */
     val openingAgentId: String? = null,
+    /** Незаконченные сообщения, по агенту: у одного их может быть несколько, показываем свежий. */
+    val drafts: Map<String, Draft> = emptyMap(),
 ) {
     val visible: List<Contact>
         get() = if (query.isBlank()) {
@@ -52,6 +56,7 @@ class ContactsViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
     private val openChats: OpenChatTracker,
+    drafts: DraftStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsUiState())
@@ -64,6 +69,23 @@ class ContactsViewModel @Inject constructor(
         observeActivity()
         observeRealtimeStatus()
         load()
+        observeDrafts(drafts)
+    }
+
+    /**
+     * Черновики по агенту. У агента может быть несколько переписок и черновик в каждой — показываем
+     * самый свежий, и тап ведёт именно в неё.
+     */
+    private fun observeDrafts(drafts: DraftStore) {
+        viewModelScope.launch {
+            drafts.drafts.collect { map ->
+                val byAgent = map.values
+                    .filter { it.agentId != null }
+                    .groupBy { checkNotNull(it.agentId) }
+                    .mapValues { (_, list) -> list.maxBy { it.updatedAt } }
+                _state.update { it.copy(drafts = byAgent) }
+            }
+        }
     }
 
     fun load(refresh: Boolean = false) {
@@ -120,7 +142,9 @@ class ContactsViewModel @Inject constructor(
     fun openChat(contact: Contact, onReady: (String) -> Unit) {
         markContactRead(contact.agentId)
 
-        val existing = contact.lastSessionId
+        // Переписка с черновиком важнее последней: метка в строке обещает именно её, и открыться
+        // должна она, иначе человек увидит пустое поле и решит, что набранное потерялось.
+        val existing = _state.value.drafts[contact.agentId]?.sessionId ?: contact.lastSessionId
         if (existing != null) {
             onReady(existing)
             return
