@@ -69,13 +69,19 @@ data class WebchatContactDto(
 
 @Serializable
 data class WebchatSessionDto(
-    val sessionId: String,
+    val id: String,
     val channelId: String? = null,
     val agentId: String? = null,
-    /** Генерируется из первого сообщения. */
+    /**
+     * Чем идёт переписка: `webchat`, `telegram`, `acp`, … Приложение работает только с веб-чатом и
+     * фильтрует листинг по нему; у сессии другого коннектора `unreadCount`, `lastMessage` и
+     * `isRunning` приходят нулями — их непрочитанное ведёт сам мессенджер.
+     */
+    val connectorCode: String? = null,
+    /** Генерируется из первого сообщения, режется до 80 символов; переименование его перекрывает. */
     val title: String? = null,
     @Serializable(with = InstantSerializer::class)
-    val lastMessageAt: Instant? = null,
+    val lastActivityAt: Instant? = null,
     /** Закрытые переписки приходят вместе с открытыми — фильтра нет, различать по этому полю. */
     @Serializable(with = InstantSerializer::class)
     val closedAt: Instant? = null,

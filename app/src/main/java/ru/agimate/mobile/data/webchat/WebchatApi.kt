@@ -1,7 +1,6 @@
 package ru.agimate.mobile.data.webchat
 
 import retrofit2.http.Body
-import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -11,6 +10,15 @@ import ru.agimate.mobile.core.network.PageEnvelope
 
 /**
  * Переписки с агентами.
+ *
+ * Путей два семейства, и делятся они не по экранам, а по природе. Сама переписка — один ресурс
+ * `/manage/sessions` независимо от того, чем она идёт: листинг, история, отметка прочтения и
+ * закрытие общие для веб-чата, мессенджеров и IDE. В `/manage/webchat` остался только транспорт:
+ * начать чат, отправить сообщение, взять токен на живой канал, список агентов как контактов.
+ *
+ * **Листинг сессий без `connectorCode` отдаёт все переписки пользователя**, а не только чаты: у
+ * агента бывают сессии в мессенджерах и поток событий подключения вовсе без канала. Приложение
+ * показывает только веб-чат, поэтому фильтр обязателен — см. [WebchatRepository.CONNECTOR_WEBCHAT].
  *
  * **Слэш в конце пути значим.** `GET .../sessions/` и `POST .../sessions` — разные маршруты, и
  * лишний или недостающий слэш даёт 404. Правило: путь, отдающий список, заканчивается слэшем.
@@ -33,23 +41,29 @@ interface WebchatApi {
         @Query("size") size: Int,
     ): ApiEnvelope<PageEnvelope<WebchatContactDto>>
 
-    @GET("control/manage/webchat/sessions/")
+    /** Фильтры необязательны и комбинируются; порядок — свежая активность сверху. */
+    @GET("control/manage/sessions/")
     suspend fun sessions(
         @Query("agentId") agentId: String,
+        @Query("connectorCode") connectorCode: String,
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiEnvelope<PageEnvelope<WebchatSessionDto>>
 
-    /** Без слэша на конце — это создание, а не листинг. */
+    /** Одна сессия — строка того же вида, что в листинге. */
+    @GET("control/manage/sessions/{id}")
+    suspend fun session(@Path("id") sessionId: String): ApiEnvelope<WebchatSessionDto>
+
+    /** Без слэша на конце — это создание, а не листинг. Ответ — строка вида листинга. */
     @POST("control/manage/webchat/sessions")
     suspend fun startSession(@Body body: StartSessionRequest): ApiEnvelope<WebchatSessionDto>
 
     /** Закрытие. Гасит бейдж: сессия помечается прочитанной целиком. */
-    @DELETE("control/manage/webchat/sessions/{id}")
+    @POST("control/manage/sessions/{id}/close")
     suspend fun closeSession(@Path("id") sessionId: String): ApiEnvelope<WebchatSessionDto>
 
     /** Порядок — от новых к старым: первая страница это конец переписки, листание вверх — `page+1`. */
-    @GET("control/manage/webchat/sessions/{id}/messages/")
+    @GET("control/manage/sessions/{id}/messages/")
     suspend fun messages(
         @Path("id") sessionId: String,
         @Query("page") page: Int,
@@ -67,7 +81,7 @@ interface WebchatApi {
     ): ApiEnvelope<SendMessageResponseDto>
 
     /** Передаётся `id` строки, а не `messageId` — иначе 400. */
-    @POST("control/manage/webchat/sessions/{id}/read")
+    @POST("control/manage/sessions/{id}/read")
     suspend fun markRead(
         @Path("id") sessionId: String,
         @Body body: MarkReadRequest,

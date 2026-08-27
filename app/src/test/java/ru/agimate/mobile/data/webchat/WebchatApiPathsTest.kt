@@ -16,6 +16,9 @@ import ru.agimate.mobile.core.network.ApiJson
  * Слэш в конце пути значим: `GET .../sessions/` и `POST .../sessions` — разные маршруты, и лишний
  * или недостающий слэш даёт 404. Ошибка тихая — 404 легко списать на «нет данных», — поэтому пути
  * зафиксированы тестом.
+ *
+ * Заодно зафиксирована и граница между семействами: сама переписка живёт в `/manage/sessions`,
+ * в `/manage/webchat` остался транспорт. Перепутать их — те же тихие 404.
  */
 class WebchatApiPathsTest {
 
@@ -42,8 +45,6 @@ class WebchatApiPathsTest {
 
     private fun target(): String = server.takeRequest().target
 
-    private fun method(): String = server.takeRequest().method
-
     @Test
     fun `contacts listing keeps its trailing slash`() = runTest {
         server.enqueue(ok("""{"response":{"content":[],"number":0,"size":50,"totalElements":0,"totalPages":0}}"""))
@@ -51,16 +52,30 @@ class WebchatApiPathsTest {
         assertEquals("/control/manage/webchat/contacts/?page=0&size=50", target())
     }
 
+    /**
+     * Без `connectorCode` сюда попадают все переписки пользователя, а не только чаты, — фильтр
+     * такая же часть маршрута, как слэш.
+     */
     @Test
-    fun `sessions listing keeps its trailing slash`() = runTest {
+    fun `sessions listing filters by connector and keeps its trailing slash`() = runTest {
         server.enqueue(ok("""{"response":{"content":[],"number":0,"size":50,"totalElements":0,"totalPages":0}}"""))
-        api.sessions(agentId = "a-1", page = 0, size = 50)
-        assertEquals("/control/manage/webchat/sessions/?agentId=a-1&page=0&size=50", target())
+        api.sessions(agentId = "a-1", connectorCode = "webchat", page = 0, size = 50)
+        assertEquals(
+            "/control/manage/sessions/?agentId=a-1&connectorCode=webchat&page=0&size=50",
+            target(),
+        )
+    }
+
+    @Test
+    fun `one session has no trailing slash`() = runTest {
+        server.enqueue(ok("""{"response":{"id":"s-1"}}"""))
+        api.session("s-1")
+        assertEquals("/control/manage/sessions/s-1", target())
     }
 
     @Test
     fun `starting a session has no trailing slash`() = runTest {
-        server.enqueue(ok("""{"response":{"sessionId":"s-1"}}"""))
+        server.enqueue(ok("""{"response":{"id":"s-1"}}"""))
         api.startSession(StartSessionRequest("a-1"))
         val request = server.takeRequest()
         assertEquals("/control/manage/webchat/sessions", request.target)
@@ -71,7 +86,7 @@ class WebchatApiPathsTest {
     fun `messages history keeps its trailing slash`() = runTest {
         server.enqueue(ok("""{"response":{"content":[],"number":0,"size":50,"totalElements":0,"totalPages":0}}"""))
         api.messages(sessionId = "s-1", page = 1, size = 50)
-        assertEquals("/control/manage/webchat/sessions/s-1/messages/?page=1&size=50", target())
+        assertEquals("/control/manage/sessions/s-1/messages/?page=1&size=50", target())
     }
 
     @Test
@@ -86,7 +101,7 @@ class WebchatApiPathsTest {
         server.enqueue(ok("""{"response":null}"""))
         api.markRead("s-1", MarkReadRequest("10000000-0000-7000-8000-000000000005"))
         val request = server.takeRequest()
-        assertEquals("/control/manage/webchat/sessions/s-1/read", request.target)
+        assertEquals("/control/manage/sessions/s-1/read", request.target)
         // Передаётся id строки, а не messageId — иначе 400.
         assertEquals(
             """{"lastReadMessageId":"10000000-0000-7000-8000-000000000005"}""",
@@ -115,10 +130,13 @@ class WebchatApiPathsTest {
         assertEquals("/control/manage/centrifugo/token", target())
     }
 
+    /** Закрытие — действие над сессией, а не удаление: `POST .../close`, а не `DELETE`. */
     @Test
-    fun `closing a session is a DELETE on the session itself`() = runTest {
-        server.enqueue(ok("""{"response":{"sessionId":"s-1"}}"""))
+    fun `closing a session posts to the close action`() = runTest {
+        server.enqueue(ok("""{"response":{"id":"s-1"}}"""))
         api.closeSession("s-1")
-        assertEquals("DELETE", method())
+        val request = server.takeRequest()
+        assertEquals("/control/manage/sessions/s-1/close", request.target)
+        assertEquals("POST", request.method)
     }
 }

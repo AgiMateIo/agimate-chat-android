@@ -18,10 +18,18 @@ class WebchatRepository @Inject constructor(
             .unwrap("список контактов")
             .toPaged(Contact::from)
 
+    /**
+     * Переписки агента. Фильтр по коннектору обязателен: без него ресурс отдаёт вообще все сессии
+     * пользователя, включая мессенджеры и поток событий подключения без канала.
+     */
     suspend fun sessions(agentId: String, page: Int, size: Int = PAGE_SIZE): Paged<ChatSession> =
-        apiCall { api.sessions(agentId, page, size) }
+        apiCall { api.sessions(agentId, CONNECTOR_WEBCHAT, page, size) }
             .unwrap("переписки агента")
             .toPaged(ChatSession::from)
+
+    /** Состояние одной переписки: закрыта ли, работает ли агент, как называется. */
+    suspend fun session(sessionId: String): ChatSession =
+        ChatSession.from(apiCall { api.session(sessionId) }.unwrap("переписка"))
 
     /** Первая страница — конец переписки; листание вверх это `page + 1`. */
     suspend fun messages(sessionId: String, page: Int, size: Int = PAGE_SIZE): Paged<ChatMessage> =
@@ -80,5 +88,8 @@ class WebchatRepository @Inject constructor(
     companion object {
         /** Потолок на сервере — 100; просить больше бессмысленно, ответ молча урежут. */
         const val PAGE_SIZE = 50
+
+        /** Единственный коннектор, с которым работает приложение. */
+        const val CONNECTOR_WEBCHAT = "webchat"
     }
 }

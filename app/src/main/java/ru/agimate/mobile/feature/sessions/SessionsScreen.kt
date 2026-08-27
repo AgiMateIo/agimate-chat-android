@@ -172,7 +172,7 @@ private fun SessionRow(session: ChatSession, draft: Draft?, onClick: () -> Unit)
             )
             Spacer(Modifier.width(AgiTheme.spacing.sm))
             Text(
-                text = TimeFormat.listStamp(session.lastMessageAt ?: session.createdAt).resolve(),
+                text = TimeFormat.listStamp(session.lastActivityAt ?: session.createdAt).resolve(),
                 style = AgiTheme.typography.caption,
                 color = colors.textTertiary,
             )

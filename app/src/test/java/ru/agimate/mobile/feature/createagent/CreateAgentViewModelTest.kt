@@ -58,7 +58,7 @@ class CreateAgentViewModelTest {
                     }
                     path.endsWith("/agents/") -> ok(CREATED)
                     path.endsWith("/webchat/sessions") ->
-                        ok("""{"response":{"sessionId":"s-1","agentId":"agent-1"}}""")
+                        ok("""{"response":{"id":"s-1","agentId":"agent-1"}}""")
                     else -> MockResponse(code = 404)
                 }
             }

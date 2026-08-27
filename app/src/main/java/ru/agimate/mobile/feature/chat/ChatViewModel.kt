@@ -277,16 +277,13 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Состояние самой переписки: закрыта ли и работает ли агент прямо сейчас. Отдельного эндпойнта
-     * на одну сессию нет, поэтому берём из листинга переписок агента — он же и задуман для
-     * восстановления состояния при открытии экрана.
+     * Состояние самой переписки: закрыта ли и работает ли агент прямо сейчас. Спрашиваем сессию по
+     * идентификатору — экран открывается и по пушу, где про агента ничего не известно.
      */
     private fun loadSessionState() {
-        val agent = agentId ?: return
         viewModelScope.launch {
-            runCatching { repository.sessions(agent, 0) }
-                .onSuccess { page ->
-                    val session = page.items.firstOrNull { it.sessionId == sessionId } ?: return@onSuccess
+            runCatching { repository.session(sessionId) }
+                .onSuccess { session ->
                     _state.update {
                         it.copy(closed = session.isClosed, isRunning = session.isRunning)
                     }

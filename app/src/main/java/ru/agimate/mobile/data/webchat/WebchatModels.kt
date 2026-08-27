@@ -66,10 +66,12 @@ data class Contact(
 }
 
 data class ChatSession(
+    /** В ответе это `id`: сессия — самостоятельный ресурс, а не деталь веб-чата. */
     val sessionId: String,
     val agentId: String?,
     val title: String?,
-    val lastMessageAt: Instant?,
+    /** Свежесть переписки целиком, а не только последнего сообщения. */
+    val lastActivityAt: Instant?,
     val closedAt: Instant?,
     val createdAt: Instant?,
     val unreadCount: Long,
@@ -80,10 +82,10 @@ data class ChatSession(
 
     companion object {
         fun from(dto: WebchatSessionDto) = ChatSession(
-            sessionId = dto.sessionId,
+            sessionId = dto.id,
             agentId = dto.agentId,
             title = dto.title,
-            lastMessageAt = dto.lastMessageAt,
+            lastActivityAt = dto.lastActivityAt,
             closedAt = dto.closedAt,
             createdAt = dto.createdAt,
             unreadCount = dto.unreadCount,
