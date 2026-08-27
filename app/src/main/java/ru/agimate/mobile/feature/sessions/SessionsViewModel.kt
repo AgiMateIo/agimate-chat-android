@@ -30,6 +30,11 @@ data class SessionsUiState(
     val creating: Boolean = false,
     /** Незаконченные сообщения, по идентификатору переписки. */
     val drafts: Map<String, Draft> = emptyMap(),
+    /** Переписка, которую переименовывают прямо сейчас; `null` — диалога нет. */
+    val renaming: ChatSession? = null,
+    val renameBusy: Boolean = false,
+    /** Ошибка переименования живёт в диалоге, а не поверх списка: список-то цел. */
+    val renameError: UiText? = null,
 )
 
 /**
@@ -96,6 +101,45 @@ class SessionsViewModel @Inject constructor(
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 _state.update { it.copy(loadingMore = false, error = e.toApiException().text) }
+            }
+        }
+    }
+
+    fun startRename(session: ChatSession) {
+        _state.update { it.copy(renaming = session, renameBusy = false, renameError = null) }
+    }
+
+    fun cancelRename() {
+        _state.update { it.copy(renaming = null, renameBusy = false, renameError = null) }
+    }
+
+    /**
+     * Переименование. Ответ приходит обогащённым, поэтому строку меняем на месте, а не
+     * перезапрашиваем страницу: заново загруженный список потерял бы прокрутку и догруженные
+     * страницы. Порядок строк при этом не съезжает — переименование не двигает `lastActivityAt`.
+     */
+    fun rename(title: String) {
+        val target = _state.value.renaming ?: return
+        val wanted = title.trim()
+        if (wanted.isEmpty() || _state.value.renameBusy) return
+        viewModelScope.launch {
+            _state.update { it.copy(renameBusy = true, renameError = null) }
+            try {
+                val renamed = repository.renameSession(target.sessionId, wanted)
+                _state.update { state ->
+                    state.copy(
+                        sessions = state.sessions.map {
+                            if (it.sessionId == renamed.sessionId) renamed else it
+                        },
+                        renaming = null,
+                        renameBusy = false,
+                    )
+                }
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                _state.update {
+                    it.copy(renameBusy = false, renameError = e.toApiException().text)
+                }
             }
         }
     }

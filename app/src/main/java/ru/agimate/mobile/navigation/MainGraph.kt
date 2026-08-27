@@ -161,6 +161,9 @@ fun MainGraph(
                 },
                 onLoadMore = viewModel::loadMore,
                 onRetry = viewModel::load,
+                onRename = viewModel::startRename,
+                onRenameConfirm = viewModel::rename,
+                onRenameDismiss = viewModel::cancelRename,
             )
         }
 

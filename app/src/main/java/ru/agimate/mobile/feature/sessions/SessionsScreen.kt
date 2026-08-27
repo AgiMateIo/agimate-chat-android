@@ -2,6 +2,7 @@ package ru.agimate.mobile.feature.sessions
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,13 +21,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -45,6 +54,7 @@ import androidx.compose.ui.text.AnnotatedString
 import ru.agimate.mobile.core.ui.components.draftLine
 import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.webchat.ChatSession
+import ru.agimate.mobile.data.webchat.WebchatRepository
 
 @Composable
 fun SessionsScreen(
@@ -54,6 +64,9 @@ fun SessionsScreen(
     onNew: () -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
+    onRename: (ChatSession) -> Unit,
+    onRenameConfirm: (String) -> Unit,
+    onRenameDismiss: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -125,6 +138,7 @@ fun SessionsScreen(
                             session = session,
                             draft = state.drafts[session.sessionId],
                             onClick = { onOpen(session) },
+                            onRename = { onRename(session) },
                         )
                     }
                     item { Spacer(Modifier.height(AgiTheme.spacing.xl)) }
@@ -145,16 +159,104 @@ fun SessionsScreen(
             )
         }
     }
+
+    if (state.renaming != null) {
+        RenameDialog(
+            session = state.renaming,
+            busy = state.renameBusy,
+            error = state.renameError?.resolve(),
+            onConfirm = onRenameConfirm,
+            onDismiss = onRenameDismiss,
+        )
+    }
+}
+
+/**
+ * Переименование. Заголовок у переписки один — тот, что поставила система по первому сообщению, —
+ * и вернуть его после правки нечем, так что поле открывается с текущим текстом, а не пустым:
+ * человек правит, а не сочиняет заново.
+ */
+@Composable
+private fun RenameDialog(
+    session: ChatSession,
+    busy: Boolean,
+    error: String?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = AgiTheme.colors
+    var title by rememberSaveable(session.sessionId) { mutableStateOf(session.title.orEmpty()) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        containerColor = colors.surface,
+        title = {
+            Text(
+                text = stringResource(R.string.sessions_rename_title),
+                style = AgiTheme.typography.subtitle,
+                color = colors.textPrimary,
+            )
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    // Дальше предела ввод просто не идёт: на 81-м символе сервер отвечает 400, и
+                    // узнавать об этом после нажатия «Сохранить» — худший из моментов.
+                    onValueChange = {
+                        if (it.length <= WebchatRepository.TITLE_MAX_LENGTH) title = it
+                    },
+                    singleLine = true,
+                    enabled = !busy,
+                    textStyle = AgiTheme.typography.body,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (error != null) {
+                    Spacer(Modifier.height(AgiTheme.spacing.sm))
+                    Text(text = error, style = AgiTheme.typography.caption, color = colors.danger)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title) },
+                enabled = !busy && title.isNotBlank(),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_save),
+                    style = AgiTheme.typography.action,
+                    color = if (busy || title.isBlank()) colors.textTertiary else colors.accent,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(
+                    text = stringResource(R.string.action_cancel),
+                    style = AgiTheme.typography.action,
+                    color = colors.textSecondary,
+                )
+            }
+        },
+    )
 }
 
 @Composable
-private fun SessionRow(session: ChatSession, draft: Draft?, onClick: () -> Unit) {
+private fun SessionRow(
+    session: ChatSession,
+    draft: Draft?,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+) {
     val colors = AgiTheme.colors
+    // Долгое нажатие вместо кнопки в строке: жест привычен по мессенджерам, а строка остаётся
+    // чистой — в ней и так тесно от времени, бейджа и метки закрытой переписки.
+    var menuOpen by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .padding(horizontal = AgiTheme.spacing.screen, vertical = AgiTheme.spacing.md)
             // Закрытые переписки видны, но приглушены: история в них есть, писать нельзя.
             .alpha(if (session.isClosed) 0.55f else 1f),
@@ -215,6 +317,18 @@ private fun SessionRow(session: ChatSession, draft: Draft?, onClick: () -> Unit)
                     )
                 }
             }
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.sessions_rename),
+                        style = AgiTheme.typography.body,
+                    )
+                },
+                onClick = { menuOpen = false; onRename() },
+            )
         }
     }
 }

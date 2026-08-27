@@ -42,6 +42,16 @@ class WebchatRepository @Inject constructor(
             apiCall { api.startSession(StartSessionRequest(agentId)) }.unwrap("новая переписка")
         )
 
+    /**
+     * Переименование. Ответ приходит обогащённым — бейджем и `isRunning`, — поэтому его кладут в
+     * список как есть, не перезапрашивая страницу.
+     */
+    suspend fun renameSession(sessionId: String, title: String): ChatSession =
+        ChatSession.from(
+            apiCall { api.renameSession(sessionId, RenameSessionRequest(title)) }
+                .unwrap("переименование переписки")
+        )
+
     suspend fun closeSession(sessionId: String): ChatSession =
         ChatSession.from(
             apiCall { api.closeSession(sessionId) }.unwrap("закрытие переписки")
@@ -91,5 +101,8 @@ class WebchatRepository @Inject constructor(
 
         /** Единственный коннектор, с которым работает приложение. */
         const val CONNECTOR_WEBCHAT = "webchat"
+
+        /** Предел заголовка на сервере: длиннее — `400`. Столько же режет автоматический. */
+        const val TITLE_MAX_LENGTH = 80
     }
 }

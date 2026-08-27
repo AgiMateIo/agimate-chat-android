@@ -124,6 +124,10 @@ data class WebchatMessageDto(
 @Serializable
 data class StartSessionRequest(val agentId: String)
 
+/** Заголовок длиннее 80 символов сервер отклоняет (`400`), а не режет молча. */
+@Serializable
+data class RenameSessionRequest(val title: String)
+
 @Serializable
 data class SendMessageRequest(
     val text: String? = null,

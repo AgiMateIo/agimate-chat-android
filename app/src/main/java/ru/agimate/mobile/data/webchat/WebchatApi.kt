@@ -2,6 +2,7 @@ package ru.agimate.mobile.data.webchat
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -53,6 +54,16 @@ interface WebchatApi {
     /** Одна сессия — строка того же вида, что в листинге. */
     @GET("control/manage/sessions/{id}")
     suspend fun session(@Path("id") sessionId: String): ApiEnvelope<WebchatSessionDto>
+
+    /**
+     * Переименование. Перекрывает автоматический заголовок насовсем: вернуть сгенерированный из
+     * первого сообщения нечем.
+     */
+    @PATCH("control/manage/sessions/{id}")
+    suspend fun renameSession(
+        @Path("id") sessionId: String,
+        @Body body: RenameSessionRequest,
+    ): ApiEnvelope<WebchatSessionDto>
 
     /** Без слэша на конце — это создание, а не листинг. Ответ — строка вида листинга. */
     @POST("control/manage/webchat/sessions")

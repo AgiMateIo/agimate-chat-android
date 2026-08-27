@@ -66,6 +66,17 @@ class WebchatApiPathsTest {
         )
     }
 
+    /** Переименование — PATCH по самой сессии; тело ровно `{"title": …}`. */
+    @Test
+    fun `renaming patches the session itself`() = runTest {
+        server.enqueue(ok("""{"response":{"id":"s-1","title":"Отпуск в июле"}}"""))
+        api.renameSession("s-1", RenameSessionRequest("Отпуск в июле"))
+        val request = server.takeRequest()
+        assertEquals("/control/manage/sessions/s-1", request.target)
+        assertEquals("PATCH", request.method)
+        assertEquals("""{"title":"Отпуск в июле"}""", request.body?.utf8())
+    }
+
     @Test
     fun `one session has no trailing slash`() = runTest {
         server.enqueue(ok("""{"response":{"id":"s-1"}}"""))

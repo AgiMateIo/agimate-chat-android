@@ -10,6 +10,7 @@
     <string name="action_share">Поделиться</string>
     <string name="action_copy">Копировать</string>
     <string name="action_save">Сохранить</string>
+    <string name="action_cancel">Отмена</string>
     <string name="action_open">Открыть</string>
     <string name="action_close">Закрыть</string>
     <string name="action_more">Ещё</string>
@@ -132,6 +133,8 @@
     <string name="sessions_untitled">Без названия</string>
     <string name="sessions_empty_preview">Пока пусто</string>
     <string name="sessions_closed">закрыта</string>
+    <string name="sessions_rename">Переименовать</string>
+    <string name="sessions_rename_title">Название переписки</string>
 
     <!-- Переписка -->
     <string name="chat_realtime_lost">Связь потеряна — пробуем восстановить</string>

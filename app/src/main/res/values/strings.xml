@@ -14,6 +14,7 @@
     <string name="action_share">Share</string>
     <string name="action_copy">Copy</string>
     <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
     <string name="action_open">Open</string>
     <string name="action_close">Close</string>
     <string name="action_more">More</string>
@@ -139,6 +140,8 @@
     <string name="sessions_untitled">Untitled</string>
     <string name="sessions_empty_preview">Nothing yet</string>
     <string name="sessions_closed">closed</string>
+    <string name="sessions_rename">Rename</string>
+    <string name="sessions_rename_title">Conversation name</string>
 
     <!-- Переписка -->
     <string name="chat_realtime_lost">Connection lost — reconnecting</string>
