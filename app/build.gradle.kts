@@ -31,6 +31,20 @@ val releaseKeystore = localProperties.getProperty("release.storeFile")
     ?.takeIf { it.exists() }
 
 /**
+ * Проект пуш-уведомлений RuStore. Секрета в нём нет — идентификатор целиком уезжает внутрь APK, — но
+ * он так же привязывает сборку к конкретной консоли, как `google-services.json` привязывает её к
+ * конкретному проекту Firebase. Два канала доставки, одно правило: у форка должны быть свои.
+ *
+ * Пустой — рабочее состояние, а не поломка: пуши не поднимаются, живая лента остаётся на месте.
+ * Флейворы умеют разойтись (`rustore.projectId.prod`), и разойтись им придётся: в проекте пушей
+ * один отпечаток подписи, и пока там отладочный, боевая сборка токена по нему не получит.
+ */
+fun rustoreProjectId(flavor: String): String =
+    localProperties.getProperty("rustore.projectId.$flavor")
+        ?: localProperties.getProperty("rustore.projectId")
+        ?: ""
+
+/**
  * Версия — единственное место, где её задают руками. Номер сборки из неё выводится: держать два
  * числа рядом значит однажды поднять одно и забыть второе, а магазин ловит это уже после загрузки.
  *
@@ -80,9 +94,7 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"http://10.0.2.2:8000\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "true")
             buildConfigField("boolean", "USE_APP_LINK", "false")
-            // Проект пуш-уведомлений из консоли RuStore. Пустой — пуши просто не поднимаются:
-            // приложение работает как раньше, живая лента никуда не девается.
-            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"-eeO-sKPI0qq82bCMFqbndv2iR8kNPrd\"")
+            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"${rustoreProjectId("dev")}\"")
         }
         create("prod") {
             dimension = "backend"
@@ -92,10 +104,7 @@ android {
             // redirect_uri в ответе /user/oauth2/authorization/* указывает на api.agimate.io.
             buildConfigField("String", "API_ORIGIN", "\"https://api.agimate.io\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "false")
-            // Пока тот же проект, что у стенда: в проекте пушей один отпечаток подписи, и там
-            // сейчас отладочный — то есть боевая сборка токена по нему не получит. Как появится
-            // релизный ключ, здесь должен встать свой проект с его отпечатком.
-            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"-eeO-sKPI0qq82bCMFqbndv2iR8kNPrd\"")
+            buildConfigField("String", "RUSTORE_PROJECT_ID", "\"${rustoreProjectId("prod")}\"")
             // Включить, когда на домене появится /.well-known/assetlinks.json с отпечатком
             // рабочей подписи. До этого App Link молча уводит редирект в браузер.
             buildConfigField("boolean", "USE_APP_LINK", "false")
