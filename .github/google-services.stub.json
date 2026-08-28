@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "A stub, not a configuration. It exists so the build can be compiled and tested without a",
+    "Firebase project: the google-services plugin refuses to run without the file, and that",
+    "refusal is deliberate. Nothing here reaches a device — an app built on this stub has no FCM",
+    "delivery. To actually receive notifications, put your own app/google-services.json in place.",
+    "See the README."
+  ],
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "stub"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": { "package_name": "ru.agimate.mobile" }
+      },
+      "oauth_client": [],
+      "api_key": [ { "current_key": "not-a-key-this-file-is-a-stub" } ],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+    }
+  ],
+  "configuration_version": "1"
+}

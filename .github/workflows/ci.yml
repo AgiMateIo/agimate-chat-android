@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch makes the previous run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 17 is the floor the build declares; 21 is what it is developed on.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Only for the command-line tools and the accepted licences: the platform and the build
+      # tools are downloaded by the Android Gradle plugin itself, so the versions live in one
+      # place — the build script — and not here as well.
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # The google-services plugin refuses to run without the file, and that refusal is
+      # deliberate: an app silently built without half its delivery is worse than a build that
+      # stops. CI has no Firebase project and should not have one, and the stub is enough to
+      # compile — an APK built on it simply has no FCM channel.
+      - name: Put the google-services stub in place
+        run: cp .github/google-services.stub.json app/google-services.json
+
+      # Lint is not decoration here: MissingTranslation is what keeps the two languages in step.
+      - name: Test, lint, assemble
+        run: ./gradlew testDevDebugUnitTest lintDevDebug assembleProdDebug
+
+      - name: Keep the reports of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/intermediates/lint_intermediate_text_report/
+          retention-days: 7
