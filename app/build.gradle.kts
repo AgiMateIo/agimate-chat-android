@@ -89,7 +89,7 @@ android {
     productFlavors {
         create("dev") {
             dimension = "backend"
-            // Хост машины со стороны эмулятора. Caddy в ops/ имеет фолбэк-блок на любой Host,
+            // Хост машины со стороны эмулятора. Обратный прокси стенда отвечает на любой Host,
             // так что /user, /control и /connection/websocket доезжают.
             buildConfigField("String", "API_ORIGIN", "\"http://10.0.2.2:8000\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "true")
