@@ -1,252 +1,302 @@
-# AgiMate для Android
+# AgiMate for Android
 
-Мессенджер со своими ИИ-агентами: список агентов как список контактов и переписка с ними. Всё
-сложное — интеграции, навыки, политики доступа, выбор моделей, биллинг — живёт в админском
-интерфейсе и сюда не попадает.
+A messenger for your own AI agents: the agent list reads as a contact list, and you talk to
+them. Everything complicated — integrations, skills, access policies, model choice, billing —
+lives in the admin interface and does not come here.
 
-Контракт с бэкендом описан в [docs/android-app-spec.md](docs/android-app-spec.md), история
-изменений — в [CHANGELOG.md](CHANGELOG.md).
+The backend contract is described in [docs/android-app-spec.md](docs/android-app-spec.md), the
+history of changes in [CHANGELOG.md](CHANGELOG.md). Comments in the code and everything under
+`docs/` are in Russian; see [CONTRIBUTING.md](CONTRIBUTING.md) for why.
 
-## Сборка
+## Building
 
 ```
-./gradlew assembleDevDebug     # смотрит на локальный стенд
-./gradlew assembleProdDebug    # смотрит на https://www.agimate.io
-./gradlew test                 # юнит-тесты
+./gradlew assembleDevDebug     # points at a local backend
+./gradlew assembleProdDebug    # points at https://api.agimate.io
+./gradlew test                 # unit tests
 ```
 
-Нужен JDK 17+ (проверено на 21) и Android SDK с платформой 37. Всё остальное подтянет Gradle.
+You need JDK 17 or newer (21 is what it is developed on) and the Android SDK with platform 37.
+Gradle brings the rest.
 
-### Чего в репозитории нет: `app/google-services.json`
+### What the repository does not contain: `app/google-services.json`
 
-Уведомления идут двумя каналами, и второй — FCM. Его проект задаётся не полем сборки, а этим
-файлом, поэтому без него сборка падает:
+Notifications travel over two channels, and the second one is FCM. Its project is named not by a
+build field but by that file, so without it the build fails:
 
 ```
 > File google-services.json is missing.
   The Google Services Plugin cannot function without it.
 ```
 
-Так задумано: приложение, молча собранное без половины доставки, хуже, чем сборка, которая
-остановилась и сказала, чего ей не хватает.
+That is deliberate: an app silently built without half of its delivery is worse than a build that
+stopped and said what it was missing.
 
-Секрета в файле нет — он целиком уезжает внутрь APK, — но в git его тоже нет: он привязывает сборку
-к конкретному проекту Firebase, и у форка должен быть свой. Взять в консоли Firebase: проект →
-«Настройки проекта» → «Ваши приложения» → приложение Android с пакетом `ru.agimate.mobile` →
-«Скачать google-services.json», положить в `app/`. Файл один на оба флейвора — `applicationId` у них
-общий.
+There is no secret in the file — it goes into the APK whole — but it is not in git either: it ties
+the build to one particular Firebase project, and a fork should have its own. Take it from the
+Firebase console: project → "Project settings" → "Your apps" → the Android app with package
+`ru.agimate.mobile` → "Download google-services.json", and put it in `app/`. One file covers both
+flavours — they share an `applicationId`.
 
-### Версия
+To compile and test without a Firebase project at all, copy the stub CI uses —
+`cp .github/google-services.stub.json app/google-services.json`. An app built on it has no FCM
+channel; the live feed over the WebSocket is unaffected.
 
-Версия задаётся руками в одном месте — `appVersionName` в `app/build.gradle.kts`, и она semver.
-`versionCode` из неё выводится, по три разряда на поле: `0.3.1` → `3001`, `1.0.0` → `1000000`.
-Два числа рядом рано или поздно расходятся — поднимают одно и забывают второе, а магазин говорит об
-этом уже после загрузки.
+### The RuStore push project
 
-Магазину `versionCode` нужен только растущим, поэтому переход на формулу и смог поднять его с `3`
-сразу до тысяч. Схема закрывает ровно одну дорогу: сборки, разрезанные по ABI, требуют свободных
-хвостовых разрядов под смещение варианта. Мы не режем, а понадобится — поля сдвинутся влево.
-
-### Подпись релиза
-
-Ключ подписи задаёт личность приложения навсегда: магазин запоминает сертификат первой загрузки, и
-все обновления должны быть подписаны им же. Поэтому он лежит вне репозитория, а сборка берёт путь и
-пароли из `local.properties`:
+The other channel is RuStore, and its project id comes from `local.properties`:
 
 ```
-release.storeFile=/путь/к/agimate-mobile-release.jks
+rustore.projectId=...
+```
+
+There is no secret in it either — like the Firebase file, it ends up inside the APK — but it names
+*your* console project, so the same rule applies: a fork brings its own. Empty is a working state,
+not a breakage: push simply does not come up, and the live feed stays.
+
+A flavour can take its own with `rustore.projectId.prod`, and eventually it will have to: a push
+project holds one signing fingerprint, and while that fingerprint is the debug one, a release build
+gets no token from it.
+
+### Version
+
+The version is set by hand in one place — `appVersionName` in `app/build.gradle.kts` — and it is
+semver. `versionCode` is derived from it, three digits per field: `0.3.1` → `3001`, `1.0.0` →
+`1000000`. Two numbers side by side drift apart sooner or later — you raise one and forget the
+other, and the store tells you about it after the upload.
+
+A store only requires `versionCode` to grow, which is why moving to the formula could lift it from
+`3` straight into the thousands. The scheme closes exactly one road: builds split per ABI need free
+trailing digits for the variant offset. We do not split, and if we ever do, the fields shift left.
+
+### Release signing
+
+A signing key is the app's identity forever: the store remembers the certificate of the first
+upload, and every update has to be signed with the same one. So it lives outside the repository,
+and the build takes the path and the passwords from `local.properties`:
+
+```
+release.storeFile=/path/to/agimate-mobile-release.jks
 release.storePassword=...
 release.keyAlias=agimate-mobile
 release.keyPassword=...
 ```
 
-Без этих строк `assembleProdRelease` соберёт **неподписанный** APK и не упадёт: у форка своего ключа
-быть не может, и ломать ему сборку незачем — подписать можно потом, `apksigner`'ом.
+Without those lines `assembleProdRelease` produces an **unsigned** APK instead of failing: a fork
+cannot have our key, and there is no reason to break its build over that — signing can happen
+later, with `apksigner`.
 
-Отпечаток релизного ключа нужен ещё в двух местах, и без него всё выглядит рабочим, но молчит:
-в консоли RuStore у проекта пуш-уведомлений (иначе релизная сборка не получит токен) и в
-`/.well-known/assetlinks.json`, когда дойдёт дело до App Link.
+The release key's fingerprint is needed in two more places, and without it everything looks like it
+works while staying silent: in the RuStore console for the push project (otherwise a release build
+gets no token) and in `/.well-known/assetlinks.json`, once App Links come around.
 
-## Языки
+## Languages
 
-Приложение говорит по-русски и по-английски. Базовые ресурсы — `app/src/main/res/values/` —
-**английские**: они же запасные для любой локали, под которую своей папки нет. Русский лежит в
-`values-ru/`. Так же устроен и бэкенд: `messages.properties` английский, `messages_ru.properties`
-переопределяет.
+The app speaks Russian and English. The base resources — `app/src/main/res/values/` — are
+**English**: they are also the fallback for any locale without a folder of its own. Russian lives in
+`values-ru/`. The backend is built the same way: `messages.properties` is English,
+`messages_ru.properties` overrides it.
 
-Язык базовых ресурсов объявлен в `app/src/main/res/resources.properties` — из него AGP собирает
-`localeConfig`, а он даёт выбор языка для одного приложения в настройках Android 13+. Список
-`localeFilters` в `app/build.gradle.kts` отсекает переводы AndroidX на языки, которых нет у нас:
-иначе на немецком телефоне системные кнопки были бы немецкими, а всё наше — английским.
+The language of the base resources is declared in `app/src/main/res/resources.properties`; AGP
+builds `localeConfig` out of it, and that is what gives a single app its own language setting on
+Android 13+. The `localeFilters` list in `app/build.gradle.kts` cuts the AndroidX translations into
+languages we do not have: otherwise a German phone would show German system buttons and everything
+of ours in English.
 
-Язык можно сменить в настройках приложения, не трогая язык телефона. С Android 13 выбор хранит сама система
-(`LocaleManager`), поэтому он совпадает с пунктом «Язык приложения» в настройках телефона и
-переживает переустановку; до Android 13 ничего этого нет, и выбор хранится в SharedPreferences, а
-конфигурацию подменяет `attachBaseContext` у приложения и у активности — см.
-[`AppLanguages`](app/src/main/java/ru/agimate/mobile/core/ui/locale/AppLanguage.kt). Хранилище там
-device-protected: обычные `SharedPreferences` до первой разблокировки после перезагрузки не
-открываются, а выбор читается на каждом старте процесса, включая поднятый пушем на запертом
-телефоне.
+The language can be changed inside the app without touching the phone's. From Android 13 the choice
+is kept by the system itself (`LocaleManager`), so it matches the "App language" item in the phone
+settings and survives a reinstall; before Android 13 none of that exists, the choice is kept in
+SharedPreferences, and the configuration is swapped in `attachBaseContext` of both the application
+and the activity — see
+[`AppLanguages`](app/src/main/java/ru/agimate/mobile/core/ui/locale/AppLanguage.kt). That storage is
+device-protected: ordinary `SharedPreferences` do not open before the first unlock after a reboot,
+and the choice is read on every process start, including one raised by a push on a locked phone.
 
-Добавить язык — завести `values-<код>/strings.xml`, дописать код в `localeFilters` и добавить его в
-`AppLanguage`. Полноту переводов проверяет `./gradlew lintDevDebug` (`MissingTranslation`).
+To add a language: create `values-<code>/strings.xml`, add the code to `localeFilters` and to
+`AppLanguage`. Completeness of the translations is checked by `./gradlew lintDevDebug`
+(`MissingTranslation`).
 
-Строк в коде нет: текст для человека живёт в ресурсах, а модели и ViewModel'и носят
-[`UiText`](app/src/main/java/ru/agimate/mobile/core/ui/text/UiText.kt) — намерение показать строку,
-которое разворачивается на экране, где локаль уже известна. Русские строки, оставшиеся в коде, —
-это метки для логов и тексты исключений, которых человек не видит.
+There are no strings in the code: text meant for a person lives in resources, and models and view
+models carry a [`UiText`](app/src/main/java/ru/agimate/mobile/core/ui/text/UiText.kt) — an intent to
+show a string, resolved on the screen, where the locale is already known. The Russian strings left
+in the code are log labels and exception messages, which nobody sees.
 
-**Текст ошибок от сервера не переводится.** `ApiException.of` показывает его как есть: сервер знает
-про отказ то, чего клиент знать не может, — лимиты вложений с числами, причину отклонения файла.
-Цена решения в том, что в английском интерфейсе такой текст появится на языке бэкенда. Свой перевод
-достаётся только тем ответам, где сервер промолчал.
+**Error text from the server is not translated.** `ApiException.of` shows it as it came: the server
+knows things about a refusal that the client cannot — attachment limits with numbers, the reason a
+file was rejected. The price is that in an English interface such text appears in the backend's
+language. Our own wording is only for the answers where the server said nothing.
 
-Чтобы у бэкенда была возможность отвечать на нужном языке, к каждому запросу к API добавляется
-`Accept-Language`: выбранный язык первым, предпочтения телефона следом по убыванию веса — см.
+So that the backend has a chance to answer in the right language, every API request carries
+`Accept-Language`: the chosen language first, the phone's preferences after it by descending weight
+— see
 [`AcceptLanguageInterceptor`](app/src/main/java/ru/agimate/mobile/core/network/AcceptLanguageInterceptor.kt).
-Сейчас бэкенд его не читает — нотисы агента он берёт из `messages*.properties` по настройке
-развёртывания `agent.response.language`, — но без заголовка выбор языка остаётся половиной решения.
-Файловый клиент заголовок не шлёт: за пресайненной ссылкой лежит содержимое файла, а не текст для
-человека.
+The backend does not read it yet — it takes agent notices from `messages*.properties` by the
+`agent.response.language` deployment setting — but without the header the language choice stays half
+a decision. The file client does not send it: behind a presigned link there is file content, not
+text for a person.
 
-## Айдентика
+## Identity
 
-Цвета, радиусы и длительности не живут в приложении. Источник — репозиторий айдентики, откуда
-`design/dist/AgimateTokens.kt` копируется сюда в [`com/agimate/design`](app/src/main/java/com/agimate/design/AgimateTokens.kt)
-как есть. Файл сгенерирован, руками его не правят: следующая генерация затрёт. Копия, а не
-зависимость — осознанный размен: копирование видно в диффе и не может сломать мобильную сборку в
-неудачный момент, но означает, что смена токена это правка в трёх репозиториях. Забытую третью
-ловит `tools/check-tokens.sh` (путь к айдентике — `AGIMATE_IDENTICA`, по умолчанию `../identica`).
+Colours, radii and durations do not live in the app. The source is the identity repository, from
+which `design/dist/AgimateTokens.kt` is copied here into
+[`com/agimate/design`](app/src/main/java/com/agimate/design/AgimateTokens.kt) as is. The file is
+generated and never edited by hand: the next generation would overwrite it. A copy rather than a
+dependency is a deliberate trade: copying is visible in the diff and cannot break the mobile build
+at an unfortunate moment, but it means changing a token is an edit in three repositories. The third
+one, the one that gets forgotten, is caught by `tools/check-tokens.sh` (path to the identity
+repository in `AGIMATE_IDENTICA`, `../identica` by default).
 
-Земля приложения собрана в [`Modifier.backdrop()`](app/src/main/java/ru/agimate/mobile/core/ui/theme/Backdrop.kt):
-градиент подложки и два пятна света из токенов `accent-glow` и `aurora-tint`. Одного градиента
-мало — между его концами одиннадцать уровней яркости на всю высоту экрана, и такой перепад глаз без
-края для сравнения не ловит; на вебе он в одиночку тоже не работает, лендинг кладёт поверх него
-светящиеся слои. Центры пятен вынесены за холст, поэтому под текстом нет ни яркой точки, ни края.
+The app's ground is assembled in
+[`Modifier.backdrop()`](app/src/main/java/ru/agimate/mobile/core/ui/theme/Backdrop.kt): the gradient
+underlay and two spots of light from the `accent-glow` and `aurora-tint` tokens. One gradient is not
+enough — between its ends there are eleven brightness steps over the full height of the screen, and
+the eye does not catch a fall like that without an edge to compare against; on the web it does not
+work alone either, the landing page lays glowing layers over it. The centres of the spots are pushed
+off the canvas, so there is neither a bright point nor an edge under the text.
 
-У витрины — интро, вход, ожидание одобрения — своя земля, `Modifier.auroraBackdrop()`: три эллипса
-с периодами 13, 17 и 21 секунды, вращение вместо смещения, периоды без заметного общего кратного.
-Под лентой сообщений этого нет намеренно: ползущее пятно меняло бы контраст текста на ходу. При
-выключенных в системе анимациях бесконечная анимация не заводится вовсе.
+The showcase — intro, sign-in, waiting for approval — has a ground of its own,
+`Modifier.auroraBackdrop()`: three ellipses with periods of 13, 17 and 21 seconds, rotating rather
+than shifting, the periods without a noticeable common multiple. Under the message feed there is
+none of that, on purpose: a crawling spot would keep changing the contrast of the text. With
+animations turned off in the system, the endless animation never starts.
 
-Продуктовый код имеет право только на роли из [`AgiColors`](app/src/main/java/ru/agimate/mobile/core/ui/theme/Color.kt),
-а не на конкретные краски. Четырёх ролей в токенах нет: пузыри, приглушённые заливки и текст
-третьего плана — потому что мессенджера бренд-бук не покрывает, и они смешиваются из существующих
-ролей; `accentText` — потому что у бирюзы на тёмной теме контраст к фону 4,32, ниже порога для
-мелкого кегля.
+Product code is entitled only to the roles in
+[`AgiColors`](app/src/main/java/ru/agimate/mobile/core/ui/theme/Color.kt), not to particular paints.
+Four of the roles are not in the tokens: bubbles, muted fills and third-plane text — because a brand
+book does not cover a messenger, and they are mixed out of the existing roles; `accentText` —
+because the turquoise on the dark theme has a contrast of 4.32 against the background, below the
+threshold for small type.
 
-Знак рисуется кодом — [`BrandMark`](app/src/main/java/ru/agimate/mobile/core/ui/components/BrandMark.kt),
-контуры те же, что в эталонном файле айдентики. Компонент принимает одну краску и выводит из неё
-фасетку альфой: на акцентной плашке вызывающий передаёт белый, а светлее белого ничего нет. Фасетка
-— свой градиент у каждой из четырёх фигур, свет всегда из верхнего левого угла; разворачивать его
-нельзя, одинаковый угол света и есть то единственное, что связывает фигуры в один предмет. Ниже
-40 dp градиент не читается, и знак ставится одной плоской краской — так собраны иконка в статусной
-строке и монохромный слой лаунчера. Правка знака делается в айдентике, а не здесь.
+The mark is drawn in code —
+[`BrandMark`](app/src/main/java/ru/agimate/mobile/core/ui/components/BrandMark.kt) — with the same
+outlines as the reference file in the identity repository. The component takes one paint and derives
+the facet from it with alpha: on an accent plate the caller passes white, and there is nothing
+lighter than white. The facet is a gradient of its own for each of the four shapes, with the light
+always from the top left; turning it is not allowed, the single angle of light is the one thing that
+binds the shapes into one object. Below 40 dp the gradient does not read, and the mark is drawn in
+one flat paint — that is how the status-bar icon and the monochrome launcher layer are made. Editing
+the mark happens in the identity repository, not here.
 
-Иконка приложения — плита-градиент с тёплым бликом в дальнем углу и белый знак фасеткой поверх
-([`ic_launcher_background`](app/src/main/res/drawable/ic_launcher_background.xml),
-[`ic_launcher_foreground`](app/src/main/res/drawable/ic_launcher_foreground.xml)). Это единственное
-место, где тёплая краска дотягивается до айдентики, и она остаётся под знаком. Краски здесь
-дублированы шестнадцатеричными: ресурс рисует лаунчер в своём процессе, до токенов ему не
-дотянуться. Взяты значения тёмной темы — она в бренд-буке основная, а переключать иконку вслед за
-темой телефона нечестно: человек ищет её по виду.
+The app icon is a gradient slab with a warm highlight in the far corner and the white mark, faceted,
+on top ([`ic_launcher_background`](app/src/main/res/drawable/ic_launcher_background.xml),
+[`ic_launcher_foreground`](app/src/main/res/drawable/ic_launcher_foreground.xml)). It is the only
+place where a warm paint reaches into the identity, and it stays under the mark. The paints here are
+duplicated as hex: the resource draws the launcher in its own process and cannot reach the tokens.
+The dark theme values were taken — it is the primary one in the brand book, and switching the icon
+along with the phone's theme is dishonest: people look for it by how it looks.
 
-Шрифтовая шкала — своя: в токенах её нет, продукт живёт на шкале Tailwind, и свести их пока никто не
-решал. Гарнитура общая — IBM Plex Sans и Mono, файлы переменные, лицензия в
-[`licenses/`](licenses/IBM-Plex-OFL-1.1.txt).
+The type scale is our own: the tokens do not have one, the product lives on the Tailwind scale, and
+nobody has yet decided how to reconcile them. The typeface is shared — IBM Plex Sans and Mono,
+variable files, licence in [`licenses/`](licenses/IBM-Plex-OFL-1.1.txt).
 
-Тему можно сменить в настройках приложения, не трогая тему телефона. Применяется подменой `uiMode` в
-`attachBaseContext` — от неё зависит не только палитра, но и выбор ресурсов `values-night`, откуда
-берётся фон окна. Подложка стартового окна остаётся системной: её рисует система до запуска
-процесса, и при выборе, противоположном системному, холодный старт мигнёт.
+The theme can be changed in the app settings without touching the phone's. It is applied by
+substituting `uiMode` in `attachBaseContext` — not only the palette depends on it but also the
+choice of `values-night` resources, which is where the window background comes from. The splash
+background stays the system one: it is drawn before the process starts, and with a choice opposite
+to the system's a cold start would flash.
 
-## Флейворы
+## Flavours
 
 | | `dev` | `prod` |
 |---|---|---|
-| Адрес | `http://10.0.2.2:8000` | `https://www.agimate.io` |
-| Смена адреса из UI | да, поле на экране входа | нет |
-| Cleartext HTTP | разрешён | запрещён |
+| Address | `http://10.0.2.2:8000` | `https://api.agimate.io` |
+| Address editable from the UI | yes, a field on the sign-in screen | no |
+| Cleartext HTTP | allowed | forbidden |
 
-`applicationId` у обоих одинаковый — намеренно: две установленные копии заявили бы одну и ту же
-схему `agimate://auth`, и возврат из браузера упирался бы в диалог выбора приложения.
+Both share an `applicationId`, on purpose: two installed copies would claim the same
+`agimate://auth` scheme, and coming back from the browser would run into an app chooser.
 
-С эмулятора локальный стенд доступен по `10.0.2.2`; с реального телефона нужно вписать LAN-адрес
-машины в поле «Сервер» на экране входа.
+`api.*` and not `www.*`: `www.agimate.io` serves the site, which sends the request on to a localised
+path (a 307 to `/ru/...`) where there is no API — the app used to get a 404 on the profile and show
+"not found". The backend's OAuth is set up for that host too: the `redirect_uri` in the answer from
+`/user/oauth2/authorization/*` points at `api.agimate.io`.
 
-**Вход через провайдера на локальном стенде не заработает.** OAuth-провайдер редиректит на
-`{baseUrl}/login/oauth2/code/{provider}`, а такой адрес у Google и Яндекса не зарегистрирован. Этот
-путь проверяется на prod-сборке.
+From the emulator a local stack is reachable at `10.0.2.2`; from a real phone you need to put the
+machine's LAN address into the "Server" field on the sign-in screen.
 
-Вход **по паролю** на стенде работает: браузера в нём нет, и регистрировать у провайдера нечего.
-Регистрация и «забыли пароль» упираются в почту стенда — без неё оба запроса отвечают 503, и
-приложение прячет обе двери до перезапуска.
+**Signing in through a provider will not work against a local stack.** The OAuth provider redirects
+to `{baseUrl}/login/oauth2/code/{provider}`, and no such address is registered with Google or
+Yandex. That path is checked on a prod build.
 
-## Что где лежит
+Signing in **with a password** does work against a local stack: there is no browser in it, and
+nothing to register with a provider. Registration and "forgot password" run into the stack's mail —
+without it both requests answer 503, and the app hides both doors until a restart.
+
+## Where things live
 
 ```
-core/network/    Retrofit, конверт {response}/{error}, толерантный парсер дат,
-                 подстановка origin, Authorization, обновление токенов по 401
-core/auth/       три пути внутрь — провайдер с PKCE, пароль, письмо; привязка
-                 провайдера к открытому аккаунту; хранилище токенов (Keystore),
-                 single-flight обновление, состояние сессии и гейт «ждём одобрения»
-core/realtime/   Centrifugo: личный канал и канал переписки
-core/ui/         тема, роли цвета и типографики, общие компоненты
-core/onboarding/ отметка о том, что рассказ о приложении уже прочитан
-core/share/      файлы наружу и внутрь: буфер, «поделиться», сохранение в
-                 общую память, снимок камерой как вложение
-com/agimate/     токены айдентики: копия сгенерированного файла, руками не правят
-data/            DTO, модели и репозитории: контакты, переписки, сообщения,
-                 файлы, пресеты, агенты, профиль, устройства
-feature/         экраны: onboarding, login, authmethods, settings, pending,
+core/network/    Retrofit, the {response}/{error} envelope, a tolerant date parser,
+                 origin substitution, Authorization, token refresh on 401
+core/auth/       three ways in — a provider with PKCE, a password, a letter; linking
+                 a provider to an open account; the token store (Keystore),
+                 single-flight refresh, session state and the "awaiting approval" gate
+core/realtime/   Centrifugo: the personal channel and the conversation channel
+core/ui/         theme, colour and typography roles, shared components
+core/onboarding/ the mark that the tour of the app has already been read
+core/share/      files out and in: clipboard, "share", saving to shared storage,
+                 a camera shot as an attachment
+com/agimate/     identity tokens: a copy of a generated file, never edited by hand
+data/            DTOs, models and repositories: contacts, conversations, messages,
+                 files, presets, agents, profile, devices
+feature/         screens: onboarding, login, authmethods, settings, pending,
                  contacts, sessions, chat, files, createagent, profile
-navigation/      корневая развилка и граф внутри продукта
+navigation/      the root fork and the graph inside the product
 ```
 
-## Что стоит знать, прежде чем править
+## What to know before you change things
 
-Несколько мест выглядят как излишняя осторожность, но каждое отвечает конкретной особенности
-бэкенда. Все они прикрыты тестами.
+Several places look like over-caution, but each of them answers a specific behaviour of the backend.
+All of them are covered by tests.
 
-- **Слэш в конце пути значим.** `GET …/sessions/` и `POST …/sessions` — разные маршруты; лишний
-  слэш даёт 404, который легко принять за «нет данных». Пути зафиксированы в
+- **A trailing slash is significant.** `GET …/sessions/` and `POST …/sessions` are different routes;
+  an extra slash gives a 404 that is easy to read as "no data". The paths are pinned by
   `WebchatApiPathsTest`.
-- **Время приходит в четырёх видах** — с зоной, без зоны, через пробел, без долей секунды. Разбирает
-  `ServerTime`; беззонное считается UTC.
-- **Обновление токенов однопоточное.** Пять параллельных 401 обязаны дать один запрос на `/refresh`:
-  ротация — условная запись, и проигравшие получают 409. Сетевая ошибка — повтор **тем же** токеном
-  в пределах минуты, 403 — вход заново. См. `TokenRefresher` и его тест.
-- **Вход по паролю обязан представиться `NATIVE` явным полем в теле.** Наш `Json` собран с
-  `encodeDefaults = false` и значение по умолчанию не сериализует, а молчание сервер читает как
-  «веб»: refresh уедет в cookie, которой у приложения нет, и в теле придёт `null`. Отсюда
-  `@EncodeDefault` на поле и тест, который смотрит именно в тело запроса.
-- **Длина пароля считается в байтах UTF-8.** Алгоритм хеша читает 72 байта и об остальном молчит:
-  сорок кириллических букв уже за границей, а по символам выглядят коротким паролем. См.
-  `PasswordRules` и его тест.
-- **Возврат из браузера у входа и у привязки один.** Различает их параметр: `code` — вход,
-  `link_proof` — привязка. Доказательство привязки гасится сразу по возвращении: пять минут его
-  жизни отведены на дорогу от колбэка до запроса, а не на раздумья.
-- **403 от control-api — не разлогин.** У аккаунта с ролью `GUEST` так отвечает любой запрос к
-  `/control`, и это значит «ждём одобрения». Разлогинивает только 403 на `/user/oauth2/refresh`.
-- **Дедупликация по `messageId`.** Доставка at-least-once, плюс своё сообщение возвращается эхом —
-  оптимистично показанное схлопывается с ним (`mergeLiveMessage`).
-- **Отметка прочтения шлёт `id` строки, а не `messageId`.** Иначе 400.
-- **Кнопка «стоп» отменяет сессию, а не запуск.** Отмена одного запуска позволит стартовать
-  следующему из очереди этой же переписки.
-- **Список контактов не пересортировывается на клиенте.** Ключ сортировки серверный, между
-  страницами его не восстановить.
+- **Time arrives in four shapes** — with a zone, without one, separated by a space, without
+  fractional seconds. `ServerTime` parses it; a zoneless value is taken as UTC.
+- **Token refresh is single-threaded.** Five parallel 401s must produce one request to `/refresh`:
+  rotation is a conditional write, and the losers get a 409. A network error means a retry with the
+  **same** token within a minute, a 403 means signing in again. See `TokenRefresher` and its test.
+- **Signing in with a password must announce itself as `NATIVE` in an explicit field in the body.**
+  Our `Json` is built with `encodeDefaults = false` and does not serialise a default value, and the
+  server reads that silence as "web": the refresh would go into a cookie the app does not have, and
+  the body would arrive with a `null`. Hence `@EncodeDefault` on the field and a test that looks at
+  the request body itself.
+- **Password length is counted in UTF-8 bytes.** The hashing algorithm reads 72 bytes and says
+  nothing about the rest: forty Cyrillic letters are already past the edge while looking like a
+  short password by character count. See `PasswordRules` and its test.
+- **Sign-in and provider linking come back from the browser through the same door.** A parameter
+  tells them apart: `code` is a sign-in, `link_proof` is a linking. The linking proof is spent
+  immediately on return: its five minutes of life are meant for the trip from the callback to the
+  request, not for deliberation.
+- **A 403 from control-api is not a sign-out.** For an account with the `GUEST` role, that is how
+  any request to `/control` answers, and it means "awaiting approval". Only a 403 on
+  `/user/oauth2/refresh` signs you out.
+- **Deduplication is by `messageId`.** Delivery is at-least-once, plus your own message comes back
+  as an echo — the optimistically shown one collapses into it (`mergeLiveMessage`).
+- **A read receipt sends the row `id`, not the `messageId`.** Otherwise a 400.
+- **The stop button cancels the session, not the run.** Cancelling a single run would let the next
+  one in that conversation's queue start.
+- **The contact list is not re-sorted on the client.** The sort key is the server's and cannot be
+  reconstructed between pages.
 
-## Адрес возврата из браузера
+## Coming back from the browser
 
-Сейчас — схема `agimate://auth`. App Link (`https://www.agimate.io/app/auth`) поддержан кодом и
-включается флагом; что для этого нужно от инфраструктуры — в [docs/app-links.md](docs/app-links.md).
+For now, the `agimate://auth` scheme. An App Link (`https://www.agimate.io/app/auth`) is supported
+by the code and turned on by a flag; what that needs from the infrastructure is in
+[docs/app-links.md](docs/app-links.md).
 
-## Чего в приложении нет и не должно быть
+## What the app does not have, and should not
 
-Интеграции и подключения, навыки, политики доступа, выбор модели и ключи, команды агентов, доски
-задач, таблицы, биллинг, настройки воркеров. Если кажется, что экран без них неполон — значит, экран
-не про то.
+Integrations and connections, skills, access policies, model choice and keys, agent commands, task
+boards, tables, billing, worker settings. If a screen feels incomplete without them, the screen is
+about something else.
 
-## Лицензия
+## Contributing
 
-[Apache 2.0](LICENSE), правообладатель — в [NOTICE](NOTICE).
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Security problems go
+through the [security policy](https://github.com/AgiMateIo/.github/blob/main/SECURITY.md), not
+through an issue.
+
+## License
+
+[Apache 2.0](LICENSE), copyright holder in [NOTICE](NOTICE).
