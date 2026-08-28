@@ -2,7 +2,7 @@
  * GENERATED FILE — do not edit.
  * Source: design/tokens (DTCG JSON) — regenerate with `pnpm tokens`.
  */
-package com.agimate.design
+package ru.agimate.mobile.design
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp

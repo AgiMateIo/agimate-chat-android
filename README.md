@@ -139,12 +139,23 @@ text for a person.
 
 Colours, radii and durations do not live in the app. The source is the identity repository, from
 which `design/dist/AgimateTokens.kt` is copied here into
-[`com/agimate/design`](app/src/main/java/com/agimate/design/AgimateTokens.kt) as is. The file is
-generated and never edited by hand: the next generation would overwrite it. A copy rather than a
-dependency is a deliberate trade: copying is visible in the diff and cannot break the mobile build
-at an unfortunate moment, but it means changing a token is an edit in three repositories. The third
-one, the one that gets forgotten, is caught by `tools/check-tokens.sh` (path to the identity
-repository in `AGIMATE_IDENTICA`, `../identica` by default).
+[`design/`](app/src/main/java/ru/agimate/mobile/design/AgimateTokens.kt). The file is generated and
+never edited by hand: the next generation would overwrite it. A copy rather than a dependency is a
+deliberate trade: copying is visible in the diff and cannot break the mobile build at an
+unfortunate moment, but it means changing a token is an edit in three repositories. The third one,
+the one that gets forgotten, is caught by `tools/check-tokens.sh` (path to the identity repository
+in `AGIMATE_IDENTICA`, `../identica` by default).
+
+Exactly one line is changed on the way in: `package`. The identity repository is a shared source
+for several platforms and lives in a namespace of its own, and the app has no reason to carry a
+second package root for one file. The substitution is mechanical — the check does it too, and
+compares everything else — so "never edited by hand" still holds. The check cannot run in CI: the
+identity repository is not there, and it would exit green having verified nothing. Run it locally
+before touching the theme.
+
+Product code reaches the tokens through the roles in `AgiColors`, `AgiShapes` and `AgiType`, never
+directly. Where a role has to hand out a raw number rather than a `Shape` — the message bubble
+needs a radius, one of its corners is cut — the role hands out the number.
 
 The app's ground is assembled in
 [`Modifier.backdrop()`](app/src/main/java/ru/agimate/mobile/core/ui/theme/Backdrop.kt): the gradient
@@ -235,7 +246,7 @@ core/ui/         theme, colour and typography roles, shared components
 core/onboarding/ the mark that the tour of the app has already been read
 core/share/      files out and in: clipboard, "share", saving to shared storage,
                  a camera shot as an attachment
-com/agimate/     identity tokens: a copy of a generated file, never edited by hand
+design/         identity tokens: a copy of a generated file, never edited by hand
 data/            DTOs, models and repositories: contacts, conversations, messages,
                  files, presets, agents, profile, devices
 feature/         screens: onboarding, login, authmethods, settings, pending,

@@ -91,8 +91,8 @@ import ru.agimate.mobile.core.ui.format.TimeFormat
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.share.FileNotice
 import ru.agimate.mobile.core.ui.text.resolve
-import com.agimate.design.AgimateTokens
 import ru.agimate.mobile.core.ui.theme.AgiMotion
+import ru.agimate.mobile.core.ui.theme.AgiShapes
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.data.webchat.Attachment
@@ -616,8 +616,8 @@ private fun MessageBubble(
     }
 }
 
-/** Радиус — панельный из токенов; срезанный угол показывает, с чьей стороны пузырь. */
-private val bubbleRadius = AgimateTokens.Radius.panel
+/** Радиус — панельная роль темы; срезанный угол показывает, с чьей стороны пузырь. */
+private val bubbleRadius = AgiShapes.bubbleRadius
 private val bubbleTail = 4.dp
 
 private fun bubbleShape(own: Boolean) = if (own) {

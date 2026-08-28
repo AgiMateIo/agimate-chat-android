@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
-import com.agimate.design.AgimateTokens
+import ru.agimate.mobile.design.AgimateTokens
 
 /**
  * Семантические токены цвета. Компоненты обращаются к роли («фон карточки», «текст второго

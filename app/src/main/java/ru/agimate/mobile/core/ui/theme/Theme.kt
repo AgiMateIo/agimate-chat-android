@@ -17,7 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.agimate.design.AgimateTokens
+import ru.agimate.mobile.design.AgimateTokens
 
 val LocalAgiColors = staticCompositionLocalOf { LightColors }
 val LocalAgiTypography = staticCompositionLocalOf { AgiTypographyDefaults }
@@ -47,8 +47,14 @@ object AgiSpacing {
 object AgiShapes {
     val control: Shape = RoundedCornerShape(AgimateTokens.Radius.control)
     val card: Shape = RoundedCornerShape(AgimateTokens.Radius.card)
-    /** Пузырь — крупный блок, тот же радиус, что у панели. Своей роли в токенах у него нет. */
-    val bubble: Shape = RoundedCornerShape(AgimateTokens.Radius.panel)
+    /**
+     * Пузырь — крупный блок, тот же радиус, что у панели. Своей роли в токенах у него нет.
+     *
+     * Радиус отдаётся и числом: у пузыря один угол срезан, и собрать такую форму из [bubble]
+     * нельзя — а лезть за этим в токены значит обходить роли, ради которых они здесь и собраны.
+     */
+    val bubbleRadius: Dp = AgimateTokens.Radius.panel
+    val bubble: Shape = RoundedCornerShape(bubbleRadius)
     val panel: Shape = RoundedCornerShape(AgimateTokens.Radius.panel)
     val pill: Shape = RoundedCornerShape(percent = 50)
 }
