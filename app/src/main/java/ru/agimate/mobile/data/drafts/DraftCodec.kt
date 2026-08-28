@@ -2,7 +2,7 @@ package ru.agimate.mobile.data.drafts
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.PendingAttachment
 import java.util.UUID
 
 /**

@@ -1,4 +1,4 @@
-package ru.agimate.mobile.data.webchat
+package ru.agimate.mobile.data.files
 
 import android.content.Context
 import android.net.Uri
@@ -11,7 +11,6 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
-import ru.agimate.mobile.data.files.FilesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 

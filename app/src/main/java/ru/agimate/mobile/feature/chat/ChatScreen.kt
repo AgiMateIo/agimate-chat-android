@@ -98,7 +98,7 @@ import ru.agimate.mobile.core.ui.theme.backdrop
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.PendingAttachment
 
 /**
  * Что можно сделать с сообщением и его файлами.

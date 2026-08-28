@@ -14,8 +14,8 @@ import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.auth.KeystoreCipher
 import ru.agimate.mobile.core.di.ApplicationScope
 import ru.agimate.mobile.core.network.toApiException
-import ru.agimate.mobile.data.webchat.AttachmentUploader
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.AttachmentUploader
+import ru.agimate.mobile.data.files.PendingAttachment
 import javax.inject.Inject
 import javax.inject.Singleton
 

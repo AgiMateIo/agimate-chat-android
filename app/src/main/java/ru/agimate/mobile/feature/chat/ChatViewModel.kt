@@ -40,11 +40,11 @@ import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.files.FilesRepository
 import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.data.webchat.Attachment
-import ru.agimate.mobile.data.webchat.AttachmentUploader
+import ru.agimate.mobile.data.files.AttachmentUploader
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageDirection
 import ru.agimate.mobile.data.webchat.MessageStream
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.PendingAttachment
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import java.time.Instant
 import java.util.UUID

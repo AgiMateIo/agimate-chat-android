@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.PendingAttachment
 
 /**
  * Формат черновиков на диске. Проверяется здесь, а не через [DraftStore]: тот шифрует ключом из

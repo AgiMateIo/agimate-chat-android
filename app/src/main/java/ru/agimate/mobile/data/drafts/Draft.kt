@@ -3,7 +3,7 @@ package ru.agimate.mobile.data.drafts
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
-import ru.agimate.mobile.data.webchat.PendingAttachment
+import ru.agimate.mobile.data.files.PendingAttachment
 
 /**
  * Несобранное сообщение переписки: текст и вложения, которые человек выбрал, но не отправил.
