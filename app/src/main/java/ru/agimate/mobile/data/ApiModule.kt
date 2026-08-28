@@ -1,11 +1,11 @@
-package ru.agimate.mobile.core.network
+package ru.agimate.mobile.data
 
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
-import ru.agimate.mobile.core.auth.AuthMethodsApi
+import ru.agimate.mobile.core.network.AuthedClient
 import ru.agimate.mobile.data.agents.AgentsApi
 import ru.agimate.mobile.data.files.FilesApi
 import ru.agimate.mobile.data.push.PushApi
@@ -13,19 +13,17 @@ import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.webchat.WebchatApi
 import javax.inject.Singleton
 
-/** Retrofit-интерфейсы, ходящие с авторизацией. */
+/**
+ * Retrofit-интерфейсы этого слоя, ходящие с авторизацией.
+ *
+ * Модуль лежит в `data`, а не рядом с клиентом в `core/network`: собирает он именно эти
+ * интерфейсы, и от того, где он лежит, зависит направление зависимости между слоями. Отсюда
+ * `core/network` — уже только про транспорт: конверт, заголовки, обновление токена, — и о том,
+ * какие ресурсы существуют, ничего не знает.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object ApiModule {
-
-    /**
-     * Способы входа — единственная часть авторизации, ходящая с токеном: остальное живёт в
-     * [ru.agimate.mobile.core.auth.AuthApi] на клиенте без авторизации.
-     */
-    @Provides
-    @Singleton
-    fun authMethodsApi(@AuthedClient retrofit: Retrofit): AuthMethodsApi =
-        retrofit.create(AuthMethodsApi::class.java)
 
     @Provides
     @Singleton
