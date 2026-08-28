@@ -1,4 +1,4 @@
-package ru.agimate.mobile.feature.login
+package ru.agimate.mobile.core.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions

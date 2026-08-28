@@ -1,5 +1,6 @@
 package ru.agimate.mobile.feature.login
 
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,12 +37,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-
 import ru.agimate.mobile.LoginPhase
 import ru.agimate.mobile.LoginUiState
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.auth.AuthProvider
+import ru.agimate.mobile.core.ui.components.AuthField
 import ru.agimate.mobile.core.ui.components.BrandMark
+import ru.agimate.mobile.core.ui.components.PasswordField
 import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.text.resolve

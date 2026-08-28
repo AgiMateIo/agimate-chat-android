@@ -41,7 +41,7 @@ import ru.agimate.mobile.core.ui.components.PrimaryButton
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
-import ru.agimate.mobile.feature.login.PasswordField
+import ru.agimate.mobile.core.ui.components.PasswordField
 
 /**
  * Смена пароля: текущий и новый.
