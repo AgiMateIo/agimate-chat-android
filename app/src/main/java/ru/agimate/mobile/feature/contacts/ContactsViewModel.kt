@@ -154,7 +154,12 @@ class ContactsViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(openingAgentId = contact.agentId) }
             try {
-                val session = repository.startSession(contact.agentId)
+                // Пустая переписка в контакт не попадает: lastSessionId сервер берёт из последнего
+                // сообщения. Прошлый такой же тап уже мог завести переписку — сначала ищем её в
+                // листинге (свежие сверху), иначе каждый тап по нетронутому агенту плодит пустые.
+                val existing = repository.sessions(contact.agentId, page = 0).items
+                    .firstOrNull { !it.isClosed }
+                val session = existing ?: repository.startSession(contact.agentId)
                 _state.update { it.copy(openingAgentId = null) }
                 onReady(session.sessionId)
             } catch (e: Throwable) {
