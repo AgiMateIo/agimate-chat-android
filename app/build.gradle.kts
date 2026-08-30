@@ -223,6 +223,8 @@ dependencies {
     implementation(libs.rustore.universalpush)
     implementation(libs.rustore.universalrustore)
     implementation(libs.rustore.universalfcm)
+    // Пин транзитивного WorkManager из пуш-SDK — почему, рассказано у версии в каталоге.
+    implementation(libs.androidx.work.runtime)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

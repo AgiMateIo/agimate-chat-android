@@ -26,6 +26,12 @@ centrifuge = "0.7.0"
 coil = "3.5.0"
 markdown = "0.43.0"
 rustorePush = "7.4.1"
+# Не прямая зависимость, а пин транзитивной: пуш-SDK тянет WorkManager 2.7.1, а тот — Room 2.2.5,
+# чьи consumer-правила держат класс базы, но не его конструктор. R8 в full mode конструктор
+# вырезает, и релизная сборка падала на старте процесса, не дойдя ни до одной нашей строки:
+# «Failed to create an instance of androidx.work.impl.WorkDatabase». Свежий WorkManager несёт
+# Room с исправленными правилами.
+workManager = "2.11.2"
 # Плагин читает google-services.json и кладёт его значения в ресурсы — без него Firebase SDK
 # не знает, к какому проекту подключаться.
 googleServices = "4.5.0"
@@ -78,6 +84,7 @@ markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-
 rustore-universalpush = { group = "ru.rustore.sdk", name = "universalpush", version.ref = "rustorePush" }
 rustore-universalrustore = { group = "ru.rustore.sdk", name = "universalrustore", version.ref = "rustorePush" }
 rustore-universalfcm = { group = "ru.rustore.sdk", name = "universalfcm", version.ref = "rustorePush" }
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
