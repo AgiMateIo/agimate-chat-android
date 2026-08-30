@@ -153,7 +153,7 @@ class DraftStore @Inject constructor(
         localId: String,
         transform: (PendingAttachment) -> PendingAttachment,
     ) {
-        update(sessionId, agentId = null) { draft ->
+        update(sessionId, agentId = null, touch = false) { draft ->
             draft.copy(
                 attachments = draft.attachments.map {
                     if (it.localId == localId) transform(it) else it
@@ -168,14 +168,23 @@ class DraftStore @Inject constructor(
      * `agentId` берётся из вызова, только когда он там есть: правки вроде «загрузка дошла» его не
      * знают, и затирать им уже записанный нельзя.
      *
+     *
+     * `touch = false` — для правок не руками: по `updatedAt` контакт выбирает, какой из черновиков
+     * показать и куда вести тапом, и дошедшая через минуты фоновая загрузка иначе переключала бы
+     * этот выбор с черновика, который человек набирает сейчас, на тот, что он давно оставил.
      */
-    private fun update(sessionId: String, agentId: String?, transform: (Draft) -> Draft) {
+    private fun update(
+        sessionId: String,
+        agentId: String?,
+        touch: Boolean = true,
+        transform: (Draft) -> Draft,
+    ) {
         ensureLoaded()
         _drafts.update { current ->
             val before = current[sessionId] ?: Draft(sessionId = sessionId, agentId = agentId)
             val after = transform(before).copy(
                 agentId = agentId ?: before.agentId,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = if (touch) System.currentTimeMillis() else before.updatedAt,
             )
             if (after.isEmpty) current - sessionId else current + (sessionId to after)
         }
