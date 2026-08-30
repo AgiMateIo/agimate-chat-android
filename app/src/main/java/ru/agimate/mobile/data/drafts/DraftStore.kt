@@ -49,6 +49,13 @@ class DraftStore @Inject constructor(
     private var loaded = false
     private var persistJob: Job? = null
 
+    init {
+        // Прогрев хранилища не с главного потока. Само по себе первое чтение случилось бы на нём —
+        // черновики спрашивают ViewModel'и при старте экрана, — а это файл настроек плюс круг
+        // в Keystore за расшифровкой: десятки миллисекунд, изредка больше.
+        scope.launch { ensureLoaded() }
+    }
+
     /** Все черновики, по идентификатору переписки. На него подписаны оба списка. */
     val drafts: StateFlow<Map<String, Draft>>
         get() {
@@ -94,17 +101,31 @@ class DraftStore @Inject constructor(
         schedulePersist()
     }
 
-    /** Выход из аккаунта. Черновик — текст человека, и уходит он вместе с токенами. */
+    /**
+     * Выход из аккаунта. Черновик — текст человека, и уходит он вместе с токенами.
+     *
+     * Мимо дебаунса и с `commit`: отложенная запись с асинхронным `apply` оставляла бы окно, в
+     * котором процесс убит, а на диске лежат черновики. Ценой промедления здесь платил бы не тот,
+     * кто выходит, а тот, кто войдёт следующим и увидит чужой незаконченный текст.
+     *
+     * Зачистка безусловная: даже при пустой карте в памяти на диске мог остаться снимок от
+     * записи, обогнавшей выход.
+     */
+    @Synchronized
     fun clear() {
         ensureLoaded()
-        if (_drafts.value.isEmpty()) return
+        persistJob?.cancel()
         _drafts.value = emptyMap()
-        schedulePersist()
+        prefs.edit(commit = true) { remove(KEY_PAYLOAD) }
     }
 
     /**
      * Записать немедленно. Зовётся при остановке экрана: до `onCleared` дело доходит не всегда, а
      * набранное к этому моменту уже жалко.
+     *
+     * Сама запись всё же в фоне: остановка экрана — это и каждое сворачивание, гонять Keystore на
+     * главном потоке при каждом из них слишком дорого за окно в мгновение между запуском корутины
+     * и смертью процесса. С чужой доживающей записью не гоняемся — [persist] сериализован.
      */
     fun flush() {
         persistJob?.cancel()
@@ -146,6 +167,7 @@ class DraftStore @Inject constructor(
      *
      * `agentId` берётся из вызова, только когда он там есть: правки вроде «загрузка дошла» его не
      * знают, и затирать им уже записанный нельзя.
+     *
      */
     private fun update(sessionId: String, agentId: String?, transform: (Draft) -> Draft) {
         ensureLoaded()
@@ -172,9 +194,27 @@ class DraftStore @Inject constructor(
         }
     }
 
+    /**
+     * Запись сериализована: точек приостановки внутри нет, и отмена уже начатую не остановит —
+     * без замка [flush] мог бы гоняться с доживающей отложенной записью, и последним на диск лёг
+     * бы старший снимок. Снимок берётся под замком по той же причине. `commit`, а не `apply`:
+     * запись по остановке экрана — последняя перед возможной смертью процесса.
+     *
+     * Отказ шифрования — не повод падать: Keystore на части прошивок болеет (битая запись ключа,
+     * занятый демон), а сюда приводит каждая набранная буква. Сначала ключ перевыпускается —
+     * прежний снимок всё равно перезаписывается целиком, — а если не помогло, запись пропускается:
+     * потерянный черновик дешевле процесса, падающего при наборе.
+     */
+    @Synchronized
     private fun persist() {
         val payload = DraftCodec.encode(_drafts.value.values)
-        prefs.edit { putString(KEY_PAYLOAD, cipher.encrypt(payload)) }
+        val encrypted = runCatching { cipher.encrypt(payload) }
+            .recoverCatching {
+                cipher.dropKey()
+                cipher.encrypt(payload)
+            }
+            .getOrNull() ?: return
+        prefs.edit(commit = true) { putString(KEY_PAYLOAD, encrypted) }
     }
 
     @Synchronized
