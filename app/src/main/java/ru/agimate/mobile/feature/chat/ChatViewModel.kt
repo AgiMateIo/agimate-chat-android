@@ -196,16 +196,22 @@ class ChatViewModel @Inject constructor(
      * бы человек.
      *
      * Поэтому проверяем на входе: живые остаются, ушедшие убираются, и об этом говорится вслух.
+     *
+     * Убирается только то, чего точно нет, — [FilesRepository.Lookup.Missing]. Поиск, упёршийся в
+     * потолок листинга, и сетевая ошибка — не приговор файлу: сервер такое вложение, может быть,
+     * ещё примет, а удаление здесь необратимо. И убирается по идентификатору из текущего черновика,
+     * а не заменой на свой снимок: пока шли проверки, человек мог приложить или убрать своё.
      */
     private fun validateDraftAttachments(attachments: List<PendingAttachment>) {
         viewModelScope.launch {
-            val alive = attachments.filter { attachment ->
-                val fileId = attachment.fileId ?: return@filter true
-                runCatching { storedFiles.freshUrl(fileId, name = attachment.name) }
-                    .getOrElse { return@launch } != null
+            val dead = attachments.mapNotNull { attachment ->
+                val fileId = attachment.fileId ?: return@mapNotNull null
+                val lookup = runCatching { storedFiles.locate(fileId, name = attachment.name) }
+                    .getOrElse { return@launch }
+                fileId.takeIf { lookup == FilesRepository.Lookup.Missing }
             }
-            if (alive.size == attachments.size) return@launch
-            drafts.replaceAttachments(sessionId, alive)
+            if (dead.isEmpty()) return@launch
+            drafts.removeAttachments(sessionId, dead.toSet())
             notice(uiText(R.string.draft_attachments_gone), failed = true)
         }
     }

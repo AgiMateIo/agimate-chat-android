@@ -145,6 +145,35 @@ class FilesApiTest {
         assertEquals(1, server.requestCount)
     }
 
+    /** Дочитанный до конца листинг — единственное, что даёт право сказать «файла точно нет». */
+    @Test
+    fun `an exhausted listing without the file means missing`() = runTest {
+        server.enqueue(emptyPage())
+        assertEquals(FilesRepository.Lookup.Missing, repository.locate("agf_1"))
+    }
+
+    /**
+     * Потолок страниц — не приговор: файл, может быть, лежит дальше. По [FilesRepository.Lookup.Unknown]
+     * вложение из черновика удалять нельзя — этим он и отличается от Missing.
+     */
+    @Test
+    fun `a search that hits the page cap says unknown, not missing`() = runTest {
+        repeat(5) { page ->
+            server.enqueue(
+                MockResponse(
+                    code = 200,
+                    body = """{"response":{"content":[{"id":"agf_other","url":"/files/x"}],
+                        "number":$page,"size":100,"totalElements":600,"totalPages":6}}"""
+                        .trimIndent().replace("\n", ""),
+                )
+            )
+        }
+
+        assertEquals(FilesRepository.Lookup.Unknown, repository.locate("agf_1"))
+        // Ровно потолок запросов: сдаться надо после него, а не до и не бесконечно позже.
+        assertEquals(5, server.requestCount)
+    }
+
     @Test
     fun `a row without a name and without a zone in dates still parses`() = runTest {
         server.enqueue(

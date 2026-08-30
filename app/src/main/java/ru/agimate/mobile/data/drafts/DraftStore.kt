@@ -88,9 +88,18 @@ class DraftStore @Inject constructor(
         }
     }
 
-    /** Вложения после проверки: ушедшие по сроку файлы убирает открывшийся экран. */
-    fun replaceAttachments(sessionId: String, attachments: List<PendingAttachment>) {
-        update(sessionId, agentId = null) { it.copy(attachments = attachments) }
+    /**
+     * Вложения, которых на сервере уже нет: их убирает проверка при открытии экрана.
+     *
+     * Именно вычитание из текущего состояния, а не замена списком от проверявшего: пока шли её
+     * сетевые запросы, человек мог что-то приложить или убрать, и снимок на момент открытия экрана
+     * затёр бы эти правки.
+     */
+    fun removeAttachments(sessionId: String, fileIds: Set<String>) {
+        if (fileIds.isEmpty()) return
+        update(sessionId, agentId = null, touch = false) { draft ->
+            draft.copy(attachments = draft.attachments.filterNot { it.fileId in fileIds })
+        }
     }
 
     /** Черновика больше нет: сообщение ушло, переписка закрыта, поле очищено. */

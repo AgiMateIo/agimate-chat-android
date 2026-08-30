@@ -90,26 +90,44 @@ class FilesRepository @Inject constructor(
     )
 
     /**
-     * Свежая подпись файла.
+     * Исход поиска файла в листинге. «Не нашёл» здесь двух сортов, и различие несёт смысл:
+     * удалять вложение из черновика можно только по [Missing] — по [Unknown] файл, может быть,
+     * просто лежит дальше потолка страниц.
+     */
+    sealed interface Lookup {
+        data class Found(val url: String?) : Lookup
+
+        /** Листинг дочитан до конца — файла точно нет: ушёл по сроку или удалён. */
+        data object Missing : Lookup
+
+        /** Поиск упёрся в потолок страниц; есть файл или нет — неизвестно. */
+        data object Unknown : Lookup
+    }
+
+    /**
+     * Найти файл ради свежей подписи.
      *
      * Ссылка живёт пятнадцать минут, и `403` на ней означает не потерянный доступ, а протухшую
      * подпись: правильная реакция — перезапросить выдачу, где ссылка подписывается заново каждый
-     * раз. `null` возвращается, только если файла нет и в листинге, — вот тогда он действительно
-     * ушёл по сроку.
+     * раз.
      *
      * Запроса за одним файлом в API нет, поэтому листинг просматривается страницами. Известные
      * фильтры сужают выдачу до нескольких строк, но на случай, когда их нет, поиск ограничен
-     * [FRESH_URL_PAGES] страницами: файл дальше них считается ненайденным. Это потолок, а не
-     * гарантия — и он честнее, чем листать всё хранилище ради одной картинки.
+     * [FRESH_URL_PAGES] страницами — листать всё хранилище ради одной картинки нечестно по
+     * отношению к серверу. Упёршийся в потолок поиск говорит [Lookup.Unknown], а не «нет».
      */
-    suspend fun freshUrl(fileId: String, sessionId: String? = null, name: String? = null): String? {
+    suspend fun locate(fileId: String, sessionId: String? = null, name: String? = null): Lookup {
         repeat(FRESH_URL_PAGES) { page ->
             val result = files(sessionId, name, page, size = MAX_PAGE_SIZE)
-            result.items.firstOrNull { it.id == fileId }?.let { return it.url }
-            if (result.isLast) return null
+            result.items.firstOrNull { it.id == fileId }?.let { return Lookup.Found(it.url) }
+            if (result.isLast) return Lookup.Missing
         }
-        return null
+        return Lookup.Unknown
     }
+
+    /** Свежая подпись, когда различие «нет» и «не дотянулся» не важно: обоим ответ — ссылки нет. */
+    suspend fun freshUrl(fileId: String, sessionId: String? = null, name: String? = null): String? =
+        (locate(fileId, sessionId, name) as? Lookup.Found)?.url
 
     suspend fun delete(fileId: String) {
         apiCall { api.deleteFile(fileId) }
