@@ -39,8 +39,12 @@ jobs:
         run: cp .github/google-services.stub.json app/google-services.json
 
       # Lint is not decoration here: MissingTranslation is what keeps the two languages in step.
+      # assembleProdRelease is the only step that runs R8: a debug build cannot see a broken or
+      # missing keep rule, and 0.3.5 shipped a startup crash that existed in the minified build
+      # alone. This catches shrinker-time breakage; a runtime smoke test of the minified APK is
+      # still a separate, heavier decision.
       - name: Test, lint, assemble
-        run: ./gradlew testDevDebugUnitTest lintDevDebug assembleProdDebug
+        run: ./gradlew testDevDebugUnitTest lintDevDebug assembleProdDebug assembleProdRelease
 
       - name: Keep the reports of a failed run
         if: failure()
