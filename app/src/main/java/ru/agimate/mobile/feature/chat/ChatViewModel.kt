@@ -290,6 +290,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.session(sessionId) }
                 .onSuccess { session ->
+                    // Правило то же, что в [closeSession]: в закрытую переписку писать нельзя,
+                    // черновику там висеть незачем. Закрыть могли с веба или другого устройства —
+                    // узнаём мы об этом только здесь, а живучий черновик уводил бы тап по контакту
+                    // в мёртвую переписку до конца времён.
+                    if (session.isClosed) drafts.clear(sessionId)
                     _state.update {
                         it.copy(closed = session.isClosed, isRunning = session.isRunning)
                     }
