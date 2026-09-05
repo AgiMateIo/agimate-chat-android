@@ -57,8 +57,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Возврат из Custom Tabs по схеме. Фолбэк к App Link: схему может зарегистрировать
-                 на себя чужое приложение, поэтому PKCE обязателен. -->
+            <!-- Возврат из Custom Tabs по схеме — фолбэк к App Link, и временный: схему может
+                 зарегистрировать на себя любое приложение, а PKCE эту дыру не закрывает. Он
+                 спасает поток, начатый настоящим приложением: без верифайера перехваченный код
+                 бесполезен. В потоке, начатом атакующим, челлендж пришёл в его ссылке, верифайер
+                 у него, и уехавший по схеме код обменивается штатно. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

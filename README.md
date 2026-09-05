@@ -292,9 +292,16 @@ All of them are covered by tests.
 
 ## Coming back from the browser
 
-For now, the `agimate://auth` scheme. An App Link (`https://www.agimate.io/app/auth`) is supported
-by the code and turned on by a flag; what that needs from the infrastructure is in
-[docs/app-links.md](docs/app-links.md).
+For now, the `agimate://auth` scheme, and it is temporary rather than merely unpolished: any app on
+the device can claim a scheme, and PKCE does not close that hole. PKCE saves a flow the *real* app
+started — an intercepted code is useless without the verifier. It gives nothing in a flow the
+*attacker* started: the challenge came in their link, the verifier is theirs, and the code that
+leaves over the scheme into their app exchanges normally.
+
+An App Link (`https://www.agimate.io/app/auth`) is verified by the domain and cannot be claimed by
+another app. The code supports it and a flag turns it on; what that needs from the infrastructure is
+in [docs/app-links.md](docs/app-links.md). The server will stop accepting the scheme once installed
+copies have had time to update.
 
 ## What the app does not have, and should not
 
