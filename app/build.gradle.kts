@@ -105,8 +105,10 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"https://api.agimate.io\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "false")
             buildConfigField("String", "RUSTORE_PROJECT_ID", "\"${rustoreProjectId("prod")}\"")
-            // Включить, когда на домене появится /.well-known/assetlinks.json с отпечатком
-            // рабочей подписи. До этого App Link молча уводит редирект в браузер.
+            // Включить, когда на домене появятся /.well-known/assetlinks.json с отпечатком
+            // рабочей подписи и страница по самому адресу возврата. До этого App Link молча
+            // уводит редирект в браузер. Адрес возврата — не производная от API_ORIGIN:
+            // он ведёт на сайт и задан константой в AuthConfig.appLinkRedirect.
             buildConfigField("boolean", "USE_APP_LINK", "false")
         }
     }
