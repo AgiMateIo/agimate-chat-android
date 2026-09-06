@@ -13,6 +13,7 @@ import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
+import ru.agimate.mobile.core.push.PushNotifier
 import ru.agimate.mobile.core.push.PushSubscriptions
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.user.UserApi
@@ -51,6 +52,7 @@ class SessionManager @Inject constructor(
     private val realtime: RealtimeClient,
     private val currentSession: CurrentSession,
     private val push: PushSubscriptions,
+    private val notifications: PushNotifier,
     private val drafts: DraftStore,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
@@ -72,6 +74,9 @@ class SessionManager @Inject constructor(
                     // выхода по кнопке и выхода по мёртвому refresh: после второго в приложение
                     // может войти другой человек, и чужие незаконченные сообщения он видеть не должен.
                     drafts.clear()
+                    // По той же причине гаснет и шторка: висящее уведомление показывает ответ агента
+                    // целиком, и после выхода оно читается кем угодно, не открывая приложения.
+                    notifications.cancelAll()
                     _state.value = AppSession.SignedOut
                 } else {
                     loadProfile()
