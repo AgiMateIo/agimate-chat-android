@@ -362,7 +362,15 @@ class ChatViewModel @Inject constructor(
         // гасла бы в одном кадре, а сам ответ встал бы в следующем — между ними лента осталась бы
         // без обоих и подпрыгнула.
         _state.update { current ->
-            val next = current.copy(items = buildChatItems(messages))
+            val withItems = current.copy(items = buildChatItems(messages))
+            // Эхо схлопнулось с пузырём, на который жаловались, — значит сообщение всё-таки дошло,
+            // и жалоба устарела. Ошибка отправки живёт ради конкретного сообщения: не осталось
+            // неудачных — полосе нечего показывать. Соседняя неудача, если она есть, её удержит.
+            val next = if (current.sendError != null && messages.none { it.failed }) {
+                withItems.copy(sendError = null)
+            } else {
+                withItems
+            }
             when (incoming.stream) {
                 MessageStream.PROGRESS -> next.copy(isRunning = true)
                 MessageStream.ANSWER, MessageStream.ERROR -> next.copy(isRunning = false)
@@ -424,6 +432,15 @@ class ChatViewModel @Inject constructor(
                 _state.update { it.copy(sending = false, isRunning = true) }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
+                // Ответ не доехал — но сообщение могло доехать. Эхо из сокета приходит своим путём
+                // и часто раньше ответа на отправку; схлопнувшись с оптимистичным пузырём, оно
+                // принесло ему `messageId`. Значит сообщение в переписке есть, и хоронить его
+                // нельзя: человек увидел бы «не отправилось» под тем, что агент уже читает, а
+                // повтор отправил бы второе.
+                if (deliveredLocally(localId)) {
+                    _state.update { it.copy(sending = false, isRunning = true) }
+                    return@launch
+                }
                 val error = e.toApiException()
                 updateLocal(localId) { it.copy(pending = false, failed = true) }
                 _state.update { it.copy(sending = false, sendError = error.text) }
@@ -431,9 +448,22 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Дошло ли сообщение, несмотря на неудачу запроса: `messageId` даёт только сервер. */
+    private fun deliveredLocally(localId: String): Boolean =
+        messages.any { it.localId == localId && it.messageId != null }
+
     /** Повтор неудачной отправки: убираем неудачное сообщение и кладём текст обратно в поле. */
     fun retry(message: ChatMessage) {
         val localId = message.localId ?: return
+
+        // Пока пузырь ждал повтора, эхо могло всё-таки прийти. Удалить его теперь значит стереть с
+        // экрана сообщение, которое на сервере есть, — и отправить его во второй раз.
+        if (deliveredLocally(localId)) {
+            updateLocal(localId) { it.copy(pending = false, failed = false) }
+            _state.update { it.copy(sendError = null) }
+            return
+        }
+
         messages = messages.filterNot { it.localId == localId }
         drafts.setText(sessionId, agentId, message.text.orEmpty())
         _state.update {
