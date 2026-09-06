@@ -150,7 +150,6 @@ class ChatViewModel @Inject constructor(
     private var slowConnectJob: Job? = null
 
     init {
-        openChats.open(sessionId)
         restoreDraft()
         observeDraftAttachments()
         observeRealtimeStatus()
@@ -159,6 +158,22 @@ class ChatViewModel @Inject constructor(
         loadSessionState()
         // При открытии чата — отметка прочтения без тела: сессия прочитана до конца.
         markReadWholeSession()
+    }
+
+    /**
+     * Переписка появилась на экране и ушла с него.
+     *
+     * Зовёт экран, а не `init`/`onCleared`, и в этом вся суть: открытой считалась переписка, чья
+     * модель жива, — а модель живёт и тогда, когда поверх неё открыли вложения переписки или
+     * человек ушёл вперёд по навигации. Уведомление в такие минуты молчало: канал уведомлений
+     * считал, что человек и так всё видит. Видел он при этом совсем другой экран.
+     */
+    fun onScreenShown() {
+        openChats.open(sessionId)
+    }
+
+    fun onScreenHidden() {
+        openChats.close(sessionId)
     }
 
     // ---------------------------------------------------------------- черновик

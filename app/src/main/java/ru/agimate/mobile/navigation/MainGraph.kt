@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -245,6 +246,15 @@ fun MainGraph(
                     },
                 )
                 return@composable
+            }
+
+            // Переписка открыта ровно тогда, когда она на экране, — и это не то же самое, что
+            // «модель жива». Эффект стоит после ветки с файлами намеренно: вложения открываются
+            // поверх переписки внутри того же маршрута, и уход в них — такой же уход с экрана,
+            // как переход вперёд по навигации. Уведомлениям нужно знать именно это.
+            LifecycleResumeEffect(viewModel.sessionId) {
+                viewModel.onScreenShown()
+                onPauseOrDispose { viewModel.onScreenHidden() }
             }
 
             ChatScreen(
