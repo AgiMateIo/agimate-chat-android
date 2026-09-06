@@ -266,7 +266,7 @@ class ChatViewModel @Inject constructor(
             _state.update { it.copy(loadingOlder = true) }
             try {
                 val page = repository.messages(sessionId, nextPage)
-                messages = messages + page.items
+                messages = appendOlderPage(messages, page.items)
                 nextPage++
                 _state.update {
                     it.copy(

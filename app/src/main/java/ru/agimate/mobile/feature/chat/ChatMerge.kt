@@ -65,3 +65,31 @@ fun mergeHistoryPage(live: List<ChatMessage>, page: List<ChatMessage>): List<Cha
     val known = page.mapNotNullTo(mutableSetOf()) { it.messageId }
     return live.filter { it.messageId == null || it.messageId !in known } + page
 }
+
+/**
+ * Дописывает страницу постарше в хвост ленты.
+ *
+ * Выборка идёт по смещению, а лента растёт с того же конца, от которого считается смещение: пришло
+ * одно новое сообщение — и всё окно уехало на позицию. То, что было последним на прошлой странице,
+ * приезжает первым на следующей. Раньше страницы склеивались сложением, и такой повтор давал в
+ * списке два элемента с одним ключом, а это не порченый кадр, а падение процесса: Compose проверяет
+ * ключи и бросает исключение в главном потоке. Ловилось это одним движением пальца вверх в переписке
+ * длиннее пятидесяти сообщений — то есть в любой живой.
+ *
+ * Сравниваем по всем трём приметам сразу. `key` ловит сдвиг окна (у истории он из `rowId`),
+ * `messageId` — пересечение с тем, что уже пришло живьём, где ключ построен иначе. Потери сообщения
+ * здесь не бывает: сдвиг добавляет повтор в начало страницы, а не выбрасывает строку из середины.
+ */
+fun appendOlderPage(current: List<ChatMessage>, page: List<ChatMessage>): List<ChatMessage> {
+    if (current.isEmpty()) return page
+
+    val keys = current.mapTo(mutableSetOf()) { it.key }
+    val ids = current.mapNotNullTo(mutableSetOf()) { it.messageId }
+    val rows = current.mapNotNullTo(mutableSetOf()) { it.rowId }
+
+    return current + page.filterNot { candidate ->
+        candidate.key in keys ||
+            candidate.messageId?.let { it in ids } == true ||
+            candidate.rowId?.let { it in rows } == true
+    }
+}

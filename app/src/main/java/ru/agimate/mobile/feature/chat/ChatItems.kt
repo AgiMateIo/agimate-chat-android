@@ -29,11 +29,19 @@ sealed interface ChatItem {
  * Вход — сообщения от новых к старым (как приходят с сервера и как рисует LazyColumn с
  * `reverseLayout`). Разделитель дня встаёт после последнего сообщения этого дня в массиве, потому
  * что при перевёрнутой отрисовке «после» означает «выше».
+ *
+ * Повторившийся ключ здесь отбрасывается, и это не забота о красоте списка: LazyColumn на двух
+ * одинаковых ключах бросает исключение в главном потоке, то есть роняет приложение. Дубликаты
+ * убираются в источнике — при склейке страниц и живых событий, — но лента собирается из трёх
+ * потоков сразу, и цена пропущенного случая слишком велика, чтобы полагаться на одну проверку.
+ * Отбрасываем именно повтор: он всегда второе появление того же сообщения, и показывать его дважды
+ * всё равно было бы неправильно.
  */
 fun buildChatItems(
-    messages: List<ChatMessage>,
+    source: List<ChatMessage>,
     zone: ZoneId = ZoneId.systemDefault(),
 ): List<ChatItem> {
+    val messages = source.distinctByKey()
     val items = mutableListOf<ChatItem>()
     var index = 0
 
@@ -76,4 +84,22 @@ fun buildChatItems(
     }
 
     return items
+}
+
+/**
+ * Первое вхождение каждого ключа. Дешёвый путь — когда дублей нет — не создаёт нового списка.
+ */
+private fun List<ChatMessage>.distinctByKey(): List<ChatMessage> {
+    val seen = HashSet<String>(size)
+    var duplicates = false
+    for (message in this) {
+        if (!seen.add(message.key)) {
+            duplicates = true
+            break
+        }
+    }
+    if (!duplicates) return this
+
+    val unique = HashSet<String>(size)
+    return filter { unique.add(it.key) }
 }

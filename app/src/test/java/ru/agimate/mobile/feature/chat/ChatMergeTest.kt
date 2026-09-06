@@ -151,6 +151,61 @@ class ChatMergeTest {
         assertEquals(page, mergeHistoryPage(emptyList(), page))
     }
 
+    /**
+     * Выборка идёт по смещению, а лента растёт с того же конца: пришло новое сообщение — и всё
+     * окно уехало на позицию. Последнее сообщение прошлой страницы приезжает первым на следующей.
+     */
+    @Test
+    fun `a shifted pagination window does not duplicate the message on the page boundary`() {
+        val loaded = listOf(
+            agent("m-50", "пятидесятое").copy(rowId = "row-50"),
+            agent("m-51", "пятьдесят первое").copy(rowId = "row-51"),
+        )
+        val older = listOf(
+            // Тот же, что уже показан: страницу сдвинуло новое сообщение.
+            agent("m-51", "пятьдесят первое").copy(rowId = "row-51"),
+            agent("m-52", "пятьдесят второе").copy(rowId = "row-52"),
+        )
+
+        val merged = appendOlderPage(loaded, older)
+
+        assertEquals(
+            "повторившийся ключ роняет список, а не портит кадр",
+            listOf("row-50", "row-51", "row-52"),
+            merged.map { it.rowId },
+        )
+    }
+
+    @Test
+    fun `an older page meeting a live message keeps a single copy of it`() {
+        // У живого сообщения ключ из messageId, у того же из истории — из rowId: совпадения
+        // ключей нет, и ловится это только по messageId.
+        val loaded = listOf(agent("m-9", "готово"))
+        val older = listOf(
+            agent("m-9", "готово").copy(rowId = "row-9"),
+            agent("m-8", "раньше").copy(rowId = "row-8"),
+        )
+
+        val merged = appendOlderPage(loaded, older)
+
+        assertEquals(listOf("m-9", "m-8"), merged.map { it.messageId })
+    }
+
+    @Test
+    fun `an older page with nothing in common is appended whole`() {
+        val loaded = listOf(agent("m-2", "второе").copy(rowId = "row-2"))
+        val older = listOf(agent("m-1", "первое").copy(rowId = "row-1"))
+
+        assertEquals(listOf("row-2", "row-1"), appendOlderPage(loaded, older).map { it.rowId })
+    }
+
+    @Test
+    fun `an empty feed takes the older page as is`() {
+        val page = listOf(agent("m-1", "первое"))
+
+        assertEquals(page, appendOlderPage(emptyList(), page))
+    }
+
     @Test
     fun `progress messages accumulate rather than replace each other`() {
         var feed = emptyList<ChatMessage>()

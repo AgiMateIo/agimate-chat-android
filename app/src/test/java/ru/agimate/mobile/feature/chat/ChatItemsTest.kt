@@ -101,4 +101,48 @@ class ChatItemsTest {
     fun `empty feed produces no items`() {
         assertTrue(buildChatItems(emptyList(), zone).isEmpty())
     }
+
+    /**
+     * Последняя линия обороны: дубликаты убираются при склейке страниц, но лента собирается из
+     * трёх источников сразу, и повторившийся ключ здесь означает не порченый кадр, а падение.
+     */
+    @Test
+    fun `a repeated message key never reaches the list twice`() {
+        val duplicate = message("m-7", MessageStream.ANSWER, "2026-08-15T10:00:00Z")
+        val feed = listOf(
+            duplicate,
+            duplicate,
+            message("m-6", MessageStream.ANSWER, "2026-08-15T09:59:00Z"),
+        )
+
+        val items = buildChatItems(feed, zone)
+        val keys = items.map { it.key }
+
+        assertEquals(keys.size, keys.distinct().size)
+        assertEquals(
+            listOf("m-7", "m-6"),
+            items.filterIsInstance<ChatItem.Bubble>().map { it.message.messageId },
+        )
+    }
+
+    /** Внутри свёрнутой группы дубликаты тоже не должны появляться. */
+    @Test
+    fun `a repeated progress line does not slip in through its group`() {
+        val step = message("p1", MessageStream.PROGRESS, "2026-08-15T10:00:03Z")
+        val feed = listOf(
+            message("answer", MessageStream.ANSWER, "2026-08-15T10:00:10Z"),
+            step,
+            step,
+            message("ask", MessageStream.NONE, "2026-08-15T10:00:00Z"),
+        )
+
+        val items = buildChatItems(feed, zone)
+
+        assertEquals(
+            listOf("p1"),
+            items.filterIsInstance<ChatItem.ProgressGroup>().single().lines.map { it.messageId },
+        )
+        val keys = items.map { it.key }
+        assertEquals(keys.size, keys.distinct().size)
+    }
 }
