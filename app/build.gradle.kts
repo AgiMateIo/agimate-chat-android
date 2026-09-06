@@ -107,11 +107,13 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"https://api.agimate.io\"")
             buildConfigField("boolean", "ALLOW_ORIGIN_OVERRIDE", "false")
             buildConfigField("String", "RUSTORE_PROJECT_ID", "\"${rustoreProjectId("prod")}\"")
-            // Включить, когда на домене появятся /.well-known/assetlinks.json с отпечатком
-            // рабочей подписи и страница по самому адресу возврата. До этого App Link молча
-            // уводит редирект в браузер. Адрес возврата — не производная от API_ORIGIN:
-            // он ведёт на сайт и задан константой в AuthConfig.appLinkRedirect.
-            buildConfigField("boolean", "USE_APP_LINK", "false")
+            // Держится на файле /.well-known/assetlinks.json с отпечатком подписи и на странице
+            // по самому адресу возврата. Пропадёт любое из двух — App Link молча уведёт редирект
+            // в браузер, вход не сломается, но и не завершится. Отпечаток меняется при переходе
+            // на подпись Google Play: файл придётся обновить.
+            // Адрес возврата — не производная от API_ORIGIN: он ведёт на сайт и задан константой
+            // в AuthConfig.appLinkRedirect.
+            buildConfigField("boolean", "USE_APP_LINK", "true")
         }
     }
 
