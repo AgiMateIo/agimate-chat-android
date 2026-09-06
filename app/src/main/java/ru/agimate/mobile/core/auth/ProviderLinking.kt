@@ -1,6 +1,9 @@
 package ru.agimate.mobile.core.auth
 
+import android.content.Context
 import android.net.Uri
+import androidx.core.content.edit
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +69,7 @@ sealed interface LinkState {
  */
 @Singleton
 class ProviderLinking @Inject constructor(
+    @ApplicationContext context: Context,
     private val repository: AuthRepository,
     private val api: AuthMethodsApi,
     @param:ApplicationScope private val scope: CoroutineScope,
@@ -74,8 +78,20 @@ class ProviderLinking @Inject constructor(
     val state: StateFlow<LinkState> = _state.asStateFlow()
 
     /**
+     * Метка «круг привязки начали мы». Переживает смерть процесса намеренно: браузер поднимается
+     * рядом, и убить нас в этот момент система может запросто — а вернувшееся доказательство
+     * тогда окажется честным, но непринятым.
+     *
+     * Секрета здесь нет: имя провайдера и время. Обычное хранилище, без Keystore.
+     */
+    private val marks = context.getSharedPreferences(MARKS, Context.MODE_PRIVATE)
+
+    /**
      * Провайдер, за которым ушли в браузер. Он же признак «идёт привязка, а не вход»: возврат с
      * `?error=` в обоих путях выглядит одинаково, и различить их больше нечем.
+     *
+     * Живёт в памяти и гаснет на первом же возврате в приложение ([abandon]) — это состояние
+     * экрана, а не разрешение принять доказательство. Разрешение — в [marks].
      */
     private val pending = AtomicReference<AuthProvider?>(null)
 
@@ -91,11 +107,21 @@ class ProviderLinking @Inject constructor(
     /** Адрес круга привязки. Открывать — в системном браузере, как и вход. */
     fun begin(provider: AuthProvider): Uri {
         pending.set(provider)
+        marks.edit {
+            putString(KEY_PROVIDER, provider.code)
+            putLong(KEY_STARTED_AT, System.currentTimeMillis())
+        }
         _state.value = LinkState.Idle
         return repository.linkingUri(provider)
     }
 
-    /** Круг не дошёл до конца: провайдер отказал, или человек закрыл вкладку. */
+    /**
+     * Круг не дошёл до конца: провайдер отказал, или человек закрыл вкладку.
+     *
+     * Метку не трогаем. Зовётся это на каждом возврате в приложение, а вернуться человек может и
+     * посреди круга — переключился на другое приложение и обратно. Стерев метку здесь, мы отвергли
+     * бы доказательство, которого сами же и просили минуту назад.
+     */
     fun abandon() {
         pending.set(null)
     }
@@ -109,11 +135,29 @@ class ProviderLinking @Inject constructor(
      * Второй шаг: доказательство меняется на связь с **этим** аккаунтом — тем, чей токен уйдёт в
      * заголовке. Провайдер из редиректа нужен только для текста на экране; что именно привязано,
      * говорит ответ.
+     *
+     * Доказательство, которого не просили, выбрасывается: круг должно было начать это приложение.
+     * Сервер связывает провайдера с аккаунтом по заголовку `Authorization` и держится на том, что
+     * заголовок пошлёт только своя страница, — но здесь его посылаем мы, сами, за любой пришедший
+     * `link_proof`. Без этой проверки хватает подсунуть телефону ссылку с чужим доказательством
+     * (ссылкой в переписке, редиректом со страницы, интентом от другого приложения — Activity
+     * экспортирована), чтобы аккаунт провайдера злоумышленника стал дверью в аккаунт жертвы. И
+     * молча: [state] читает только экран способов входа, а его в этот момент может не быть.
+     *
+     * Молчим и мы: показать по такой ссылке нечего, любое сообщение стало бы текстом, который
+     * выбрал чужой человек, и временем, которое выбрал он же.
+     *
+     * Метка живёт ровно столько, сколько само доказательство. Просроченная не хуже отсутствующей:
+     * сервер такое доказательство всё равно не примет, а окно, в которое подсунутое чужое сойдёт
+     * за наше, сужается до пяти минут после того, как человек сам нажал «привязать».
      */
     fun redeem(proof: String, provider: AuthProvider?) {
+        val started = marks.getLong(KEY_STARTED_AT, 0L)
+        if (started == 0L || System.currentTimeMillis() - started > PROOF_LIFETIME_MS) return
         if (spent.getAndSet(proof) == proof) return
 
-        val known = provider ?: pending.get()
+        val known = provider ?: AuthProvider.of(marks.getString(KEY_PROVIDER, null)) ?: pending.get()
+        marks.edit { clear() }
         pending.set(null)
         _state.value = LinkState.Working(known)
 
@@ -140,5 +184,14 @@ class ProviderLinking @Inject constructor(
     /** Экран показал исход — дальше состояние жить не должно. */
     fun consume() {
         _state.value = LinkState.Idle
+    }
+
+    private companion object {
+        const val MARKS = "provider_linking"
+        const val KEY_PROVIDER = "provider"
+        const val KEY_STARTED_AT = "started_at"
+
+        /** Столько живёт доказательство на сервере. Дольше метки держать незачем. */
+        const val PROOF_LIFETIME_MS = 5 * 60 * 1000L
     }
 }
