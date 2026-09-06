@@ -78,7 +78,7 @@ and the build takes the path and the passwords from `local.properties`:
 ```
 release.storeFile=/path/to/agimate-mobile-release.jks
 release.storePassword=...
-release.keyAlias=agimate-mobile
+release.keyAlias=agimate-chat-android
 release.keyPassword=...
 ```
 
