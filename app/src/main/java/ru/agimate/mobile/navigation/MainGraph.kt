@@ -258,6 +258,7 @@ fun MainGraph(
                 onTakePhoto = camera,
                 onRemoveAttachment = viewModel::removeAttachment,
                 onLoadOlder = viewModel::loadOlder,
+                onRetryLoad = viewModel::reload,
                 onReachedBottom = viewModel::onReachedBottom,
                 onRetryMessage = viewModel::retry,
                 actions = actions,

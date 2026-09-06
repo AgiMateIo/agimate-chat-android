@@ -83,8 +83,10 @@ import coil3.request.ImageRequest
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
+import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.ImageViewer
 import ru.agimate.mobile.core.ui.components.MarkdownText
+import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.components.ViewerImage
 import ru.agimate.mobile.core.ui.format.TimeFormat
@@ -145,6 +147,8 @@ fun ChatScreen(
     onTakePhoto: (() -> Unit)?,
     onRemoveAttachment: (String) -> Unit,
     onLoadOlder: () -> Unit,
+    /** Повторить загрузку переписки после отказа — с экрана ошибки, вместо пустой ленты. */
+    onRetryLoad: () -> Unit,
     onReachedBottom: () -> Unit,
     onRetryMessage: (ChatMessage) -> Unit,
     actions: MessageActions,
@@ -254,6 +258,14 @@ fun ChatScreen(
                 when {
                     state.loading -> ChatSkeleton()
 
+                    // Порядок веток важнее, чем кажется: без этой человек с оборвавшейся связью
+                    // видел приглашение написать первое сообщение в переписку, где их сотни, —
+                    // то есть решал, что всё стёрлось.
+                    state.error != null && state.items.isEmpty() -> ErrorState(
+                        message = state.error.resolve(),
+                        onRetry = onRetryLoad,
+                    )
+
                     state.items.isEmpty() -> EmptyChatHint(agentName = state.agentName)
 
                     else -> LazyColumn(
@@ -299,7 +311,7 @@ fun ChatScreen(
                         )
 
                         if (state.loadingOlder) {
-                            item {
+                            item(key = "older-loading") {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -312,6 +324,16 @@ fun ChatScreen(
                                         color = colors.textTertiary,
                                     )
                                 }
+                            }
+                        } else if (state.olderError != null) {
+                            // Там же, где крутился спиннер: верх ленты — то самое место, куда
+                            // человек смотрит, не дождавшись продолжения истории. Само оно не
+                            // повторится, поэтому здесь единственная кнопка, которая это делает.
+                            item(key = "older-error") {
+                                OlderPageError(
+                                    message = state.olderError.resolve(),
+                                    onRetry = onLoadOlder,
+                                )
                             }
                         }
                     }
@@ -932,6 +954,34 @@ private fun TypingDots(modifier: Modifier = Modifier) {
                     .background(AgiTheme.colors.textTertiary.copy(alpha = opacity), AgiTheme.shapes.pill)
             )
         }
+    }
+}
+
+/**
+ * Верх ленты, когда история дальше не дотянулась.
+ *
+ * Строкой, а не экраном: то, что уже загружено, человек читает и дальше — не хватает только
+ * продолжения, и говорить об этом надо ровно там, где оно должно было появиться.
+ */
+@Composable
+private fun OlderPageError(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(AgiTheme.spacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = message,
+            style = AgiTheme.typography.caption,
+            color = AgiTheme.colors.textSecondary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(AgiTheme.spacing.sm))
+        SecondaryButton(
+            text = stringResource(R.string.action_retry),
+            onClick = onRetry,
+        )
     }
 }
 

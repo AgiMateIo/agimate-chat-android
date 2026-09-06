@@ -71,7 +71,10 @@ data class ChatUiState(
     val loading: Boolean = true,
     val loadingOlder: Boolean = false,
     val endReached: Boolean = false,
+    /** Не удалось загрузить переписку. Пустая лента и обрыв связи — разные вещи, и выглядеть должны по-разному. */
     val error: UiText? = null,
+    /** Не удалось дотянуть страницу постарше: лента на месте, не хватает только верха. */
+    val olderError: UiText? = null,
     /** Агент сейчас работает. Гаснет приходом ответа или ошибки, а не опросом. */
     val isRunning: Boolean = false,
     val input: String = "",
@@ -232,6 +235,17 @@ class ChatViewModel @Inject constructor(
 
     // ---------------------------------------------------------------- история
 
+    /**
+     * Повторить загрузку переписки после отказа.
+     *
+     * Отдельный вход, а не побочный эффект пролистывания: экран ошибки — единственное, что человек
+     * в этот момент видит, и кнопка на нём должна вести именно сюда.
+     */
+    fun reload() {
+        if (_state.value.loading) return
+        loadFirstPage()
+    }
+
     private fun loadFirstPage() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
@@ -263,7 +277,7 @@ class ChatViewModel @Inject constructor(
 
         loadOlderJob?.cancel()
         loadOlderJob = viewModelScope.launch {
-            _state.update { it.copy(loadingOlder = true) }
+            _state.update { it.copy(loadingOlder = true, olderError = null) }
             try {
                 val page = repository.messages(sessionId, nextPage)
                 messages = appendOlderPage(messages, page.items)
@@ -277,7 +291,12 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loadingOlder = false, error = e.toApiException().text) }
+                // Своё поле, а не общее: лента уже показана, и подменять её экраном ошибки из-за
+                // недостающего верха нельзя. Экран покажет строку с повтором там, где крутился
+                // спиннер, — сам он повториться не может, ключи эффекта подгрузки не изменились.
+                _state.update {
+                    it.copy(loadingOlder = false, olderError = e.toApiException().text)
+                }
             }
         }
     }
