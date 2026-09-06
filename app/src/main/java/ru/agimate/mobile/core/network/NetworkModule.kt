@@ -65,17 +65,23 @@ object NetworkModule {
         retry: RetryInterceptor,
         origin: OriginInterceptor,
         language: AcceptLanguageInterceptor,
+        foreign: ForeignResponseInterceptor,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
         // Ретраи снаружи всего: каждая попытка заново проходит подстановку origin и авторизацию.
         .addInterceptor(retry)
         .addInterceptor(origin)
         .addInterceptor(language)
+        // Внутри ретраев: подменённый порталом ответ становится ошибкой связи, и повтор идёт по
+        // общему правилу — то есть только для GET и HEAD.
+        .addInterceptor(foreign)
         .addInterceptor(logging)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
+        // Повторы — дело [RetryInterceptor] и только его. Почему собственные повторы OkHttp здесь
+        // выключены, рассказано там же: они не различают методов и пересылают в том числе `POST`.
+        .retryOnConnectionFailure(false)
         .build()
 
     @Provides
@@ -87,6 +93,7 @@ object NetworkModule {
         auth: AuthInterceptor,
         language: AcceptLanguageInterceptor,
         authenticator: TokenAuthenticator,
+        foreign: ForeignResponseInterceptor,
         logging: HttpLoggingInterceptor,
     ): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(retry)
@@ -94,13 +101,15 @@ object NetworkModule {
         .addInterceptor(auth)
         .addInterceptor(language)
         .authenticator(authenticator)
+        .addInterceptor(foreign)
         .addInterceptor(logging)
         .connectTimeout(15, TimeUnit.SECONDS)
         // Отправка сообщения синхронная: маршрутизация происходит внутри запроса, поэтому ответа
         // можно ждать заметно дольше обычного. Загрузка файла — до 50 МБ.
         .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
+        // См. [RetryInterceptor]: повторяем только идемпотентное и только своим слоем.
+        .retryOnConnectionFailure(false)
         .build()
 
     @Provides
