@@ -44,19 +44,22 @@ channel; the live feed over the WebSocket is unaffected.
 
 ### The RuStore push project
 
-The other channel is RuStore, and its project id comes from `local.properties`:
+The other channel is RuStore, and each flavour names its own project id in `local.properties`:
 
 ```
-rustore.projectId=...
+rustore.projectId.dev=...
+rustore.projectId.prod=...
 ```
 
-There is no secret in it either — like the Firebase file, it ends up inside the APK — but it names
+There is no secret in either — like the Firebase file, the id ends up inside the APK — but it names
 *your* console project, so the same rule applies: a fork brings its own. Empty is a working state,
 not a breakage: push simply does not come up, and the live feed stays.
 
-A flavour can take its own with `rustore.projectId.prod`, and eventually it will have to: a push
-project holds one signing fingerprint, and while that fingerprint is the debug one, a release build
-gets no token from it.
+One value for both flavours is not offered on purpose. A console project is bound to a package plus
+one signing fingerprint, so a shared project leaves whichever build is signed with the other key
+without a token — and it says so only in the device log, as `package_id … with pub_key … doesn't
+exist`. By the same token a debug-signed build of the `prod` flavour has no project of its own:
+that is a known gap, not a misconfiguration.
 
 ### Version
 
