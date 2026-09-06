@@ -72,7 +72,12 @@ class LoginViewModel @Inject constructor(
 
     /**
      * Дальше состояние ведёт `SessionManager`: он подхватит появившиеся токены, и экран сменится
-     * сам. Поэтому успех здесь ничего не показывает — показывать уже некому.
+     * сам. Показывать успех действительно некому — но обнулить форму всё равно обязательно.
+     *
+     * ViewModel переживает свой экран: `hiltViewModel()` в `SignedOut` вызывается вне NavHost, и
+     * владелец у неё — Activity. Оставленный на успехе `busy = true` вернулся бы при следующем
+     * выходе из аккаунта: кнопка входа с вечным спиннером и `canSubmit`, навсегда равный `false`.
+     * Заодно из памяти уходит почта предыдущего человека — телефон бывает общий.
      */
     fun submitSignIn() {
         val form = _signIn.value
@@ -81,6 +86,7 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _signIn.update { it.copy(busy = true, error = null) }
             auth.signIn(form.email, form.password)
+                .onSuccess { _signIn.value = SignInUiState() }
                 .onFailure { error ->
                     _signIn.update { it.copy(busy = false, error = error.toApiException().text) }
                 }
