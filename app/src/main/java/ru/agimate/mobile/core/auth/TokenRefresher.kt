@@ -1,9 +1,9 @@
 package ru.agimate.mobile.core.auth
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -80,10 +80,19 @@ class TokenRefresher @Inject constructor(
             attempt++
             val response = try {
                 api.get().refresh(RefreshRequest(tokens.refreshToken))
-            } catch (e: IOException) {
-                // Ответ мог потеряться по дороге. Сервер это знает: обновление, ответ на которое не
-                // доехал, можно повторить ТЕМ ЖЕ токеном в течение минуты после ротации — вернётся
+            } catch (e: Throwable) {
+                // Ответа, по сути, нет — неважно, оборвалась связь или вместо пары токенов приехало
+                // нечто неразбираемое. Сервер это знает: обновление, ответ на которое не доехал,
+                // можно повторить ТЕМ ЖЕ токеном в течение минуты после ротации — вернётся
                 // актуальная пара. Начинать вход заново здесь нельзя.
+                //
+                // Перехват намеренно шире ввода-вывода. Разбор ответа бросает своё исключение, и
+                // раньше оно проходило мимо: у планового обновления — в корневую корутину без
+                // обработчика, у обновления по 401 — через `runBlocking` прямо в рабочий поток
+                // OkHttp. И то и другое убивало процесс, стоило подключиться к сети с порталом.
+                // Подмену теперь отсекает [ForeignResponseInterceptor], но обновление токенов —
+                // не то место, где стоит полагаться на единственную линию обороны.
+                if (e is CancellationException) throw e
                 if (!withinRetryWindow(startedAt)) return Outcome.Offline
                 delay(backoffMillis(attempt))
                 continue

@@ -205,4 +205,32 @@ class TokenRefresherTest {
         assertEquals(TokenRefresher.Outcome.NotSignedIn, refresher(store).refresh(null))
         assertEquals(0, server.requestCount)
     }
+
+    /**
+     * Портал гостиничного Wi-Fi отвечает страницей входа с кодом 200. Разбор такого тела бросает
+     * своё исключение, и раньше оно уходило из обновления наружу: у планового — в корневую
+     * корутину, у обновления по 401 — прямо в поток OkHttp. И то и другое убивало процесс.
+     *
+     * Здесь проверяется именно это: ответ негодный, обновление кончается «связи нет», токены целы,
+     * наружу ничего не летит. Транспорт такую подмену отсекает раньше
+     * (см. `ForeignResponseInterceptorTest`), но обновление токенов обязано держать и само.
+     */
+    @Test
+    fun `an unparseable answer does not escape the refresher`() = runTest {
+        val store = FakeTokenStore(initial)
+        var calls = 0
+        val clock = TokenRefresher.Clock { if (calls++ == 0) 0L else 120_000L }
+        server.enqueue(
+            MockResponse(
+                code = 200,
+                headers = okhttp3.Headers.headersOf("Content-Type", "text/html"),
+                body = "<!DOCTYPE html><html><body>Sign in to continue</body></html>",
+            )
+        )
+
+        val outcome = refresher(store, clock).refresh("access-1")
+
+        assertEquals(TokenRefresher.Outcome.Offline, outcome)
+        assertFalse("до сервера запрос не дошёл — разлогинивать не за что", store.cleared)
+    }
 }

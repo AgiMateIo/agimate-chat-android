@@ -28,7 +28,17 @@ class TokenAuthenticator @Inject constructor(
 
         val stale = response.request.header("Authorization")?.removePrefix("Bearer ")?.trim()
 
-        return when (val outcome = runBlocking { refresher.refresh(stale) }) {
+        // Всё, что вылетит отсюда, вылетит в рабочий поток OkHttp — а там необработанное исключение
+        // означает не проваленный запрос, а убитый процесс. Обновление и само не должно так падать
+        // (см. [TokenRefresher]), но эта граница обязана держать в любом случае: неудавшееся
+        // обновление — это «повторять нечем», и только.
+        val outcome = try {
+            runBlocking { refresher.refresh(stale) }
+        } catch (e: Throwable) {
+            return null
+        }
+
+        return when (outcome) {
             is TokenRefresher.Outcome.Refreshed ->
                 response.request.newBuilder()
                     .header("Authorization", "Bearer ${outcome.accessToken}")
