@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Строки от google-services: их генерирует плагин, а читает Firebase по имени ресурса в рантайме
+  (StringResourceValueReader), а не через R. Ссылок из кода нет, поэтому shrinkResources в релизе
+  выбрасывал их как мусор, и FirebaseApp молча не поднимался: «no default options were found»,
+  дальше — «error on getting firebase token», и второй канал уведомлений в релизе не работал вовсе.
+  В debug шринкера нет, поэтому там всё было исправно, и разойтись это могло только на релизе.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/google_app_id,
+                @string/google_api_key,
+                @string/gcm_defaultSenderId,
+                @string/google_crash_reporting_api_key,
+                @string/google_storage_bucket,
+                @string/project_id" />
