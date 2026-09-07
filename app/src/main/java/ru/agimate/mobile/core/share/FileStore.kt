@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
+import coil3.SingletonImageLoader
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -209,6 +210,39 @@ class FileStore @Inject constructor(
     private fun prune(shared: File) {
         val deadline = System.currentTimeMillis() - CACHE_TTL_MILLIS
         shared.listFiles()?.forEach { if (it.lastModified() < deadline) it.deleteRecursively() }
+    }
+
+    /**
+     * Выход из аккаунта: всё, что закэшировано ради этого человека, уходит целиком.
+     *
+     * Сроки жизни у этих каталогов отвечают на другие вопросы — сколько файл нужен чужому
+     * приложению, сколько снимок висит в поле ввода, — и к смене человека отношения не имеют.
+     * После выхода в приложение может войти другой, а вложения переписки это её содержимое:
+     * держать их значит противоречить тому же правилу, ради которого шифруются черновики и гасится
+     * шторка.
+     *
+     * Каталогов три, и первый из них — наименее важный:
+     *  - `shared` — копии, отданные наружу; он один и был здесь сначала, а на устройстве его чаще
+     *    всего просто нет: он заводится только когда файл отдают чужому приложению;
+     *  - `camera` — снимки, сделанные для отправки. Свои фотографии человека, а не скачанное;
+     *  - дисковый кэш Coil — то, ради чего пункт вообще нужен: картинки переписки и то, что
+     *    нарисовал агент. Мегабайты против сотен килобайт у остальных.
+     *
+     * Coil чистится своим API, а не удалением каталога: `ImageLoader` живёт всё время работы
+     * приложения и держит открытый `DiskLruCache` — вынутый из-под него каталог означал бы записи
+     * в никуда до самого перезапуска.
+     *
+     * Сохранённое в галерею и «Загрузки» не трогаем: человек сохранял это себе, и удаление своих
+     * файлов при выходе было бы не защитой, а потерей.
+     */
+    fun clear() {
+        File(context.cacheDir, SHARED_DIR).deleteRecursively()
+        File(context.cacheDir, CAMERA_DIR).deleteRecursively()
+
+        val loader = SingletonImageLoader.get(context)
+        loader.diskCache?.clear()
+        // Память тоже: картинка, уже разобранная в bitmap, переживёт выход не хуже файла.
+        loader.memoryCache?.clear()
     }
 
     /** Имя на диске. Запасное имя берётся из ресурсов — оно тоже перевод, а не константа. */

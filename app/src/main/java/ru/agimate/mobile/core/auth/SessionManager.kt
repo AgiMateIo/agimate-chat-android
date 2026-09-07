@@ -15,6 +15,7 @@ import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.network.unwrap
 import ru.agimate.mobile.core.push.PushNotifier
 import ru.agimate.mobile.core.push.PushSubscriptions
+import ru.agimate.mobile.core.share.FileStore
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.user.UserApi
 import ru.agimate.mobile.data.user.UserProfile
@@ -54,6 +55,7 @@ class SessionManager @Inject constructor(
     private val push: PushSubscriptions,
     private val notifications: PushNotifier,
     private val drafts: DraftStore,
+    private val files: FileStore,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<AppSession>(AppSession.Loading)
@@ -77,6 +79,9 @@ class SessionManager @Inject constructor(
                     // По той же причине гаснет и шторка: висящее уведомление показывает ответ агента
                     // целиком, и после выхода оно читается кем угодно, не открывая приложения.
                     notifications.cancelAll()
+                    // И по той же — кэш скачанных вложений. Свой срок у него про другое: сколько
+                    // файл нужен чужому приложению, до суток. Смена человека этот срок не ждёт.
+                    files.clear()
                     _state.value = AppSession.SignedOut
                 } else {
                     loadProfile()

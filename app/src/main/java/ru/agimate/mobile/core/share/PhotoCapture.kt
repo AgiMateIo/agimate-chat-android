@@ -128,8 +128,11 @@ private fun prunePhotos(dir: File) {
     dir.listFiles()?.forEach { if (it.lastModified() < deadline) it.delete() }
 }
 
-/** Подкаталог кэша под снимки. Он же объявлен в `res/xml/file_paths.xml`. */
-private const val CAMERA_DIR = "camera"
+/**
+ * Подкаталог кэша под снимки. Он же объявлен в `res/xml/file_paths.xml` и стирается при выходе —
+ * см. [FileStore.clear].
+ */
+internal const val CAMERA_DIR = "camera"
 
 /** Суффикс authority у FileProvider. Должен совпадать с манифестом. */
 private const val FILE_PROVIDER_SUFFIX = ".files"
