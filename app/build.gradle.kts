@@ -71,7 +71,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ru.agimate.mobile"
+        // С namespace не совпадает намеренно. Пакет в магазине выдаётся один раз и навсегда:
+        // первая карточка в RuStore заняла ru.agimate.mobile и не отдаёт его обратно даже
+        // черновиком, не прошедшим модерацию. Переименован только идентификатор — namespace
+        // снаружи не значит ничего, и его смена стоила бы правки всех исходников без единого
+        // следствия. Цена расхождения — классы в стектрейсах остаются ru.agimate.mobile.*
+        applicationId = "ru.agimate.chat"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode

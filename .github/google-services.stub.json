@@ -14,7 +14,7 @@
     {
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-        "android_client_info": { "package_name": "ru.agimate.mobile" }
+        "android_client_info": { "package_name": "ru.agimate.chat" }
       },
       "oauth_client": [],
       "api_key": [ { "current_key": "not-a-key-this-file-is-a-stub" } ],

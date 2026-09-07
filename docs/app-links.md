@@ -30,7 +30,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "ru.agimate.mobile",
+      "package_name": "ru.agimate.chat",
       "sha256_cert_fingerprints": [
         "96:B0:C5:72:5C:92:CD:C1:D9:F8:78:32:C4:57:B6:49:96:0D:A4:C0:F5:1C:09:55:D0:0F:C5:DC:97:98:DA:D1"
       ]
@@ -81,8 +81,8 @@ buildConfigField("boolean", "USE_APP_LINK", "true")
 ## 5. Проверить
 
 ```
-adb shell pm verify-app-links --re-verify ru.agimate.mobile
-adb shell pm get-app-links ru.agimate.mobile
+adb shell pm verify-app-links --re-verify ru.agimate.chat
+adb shell pm get-app-links ru.agimate.chat
 ```
 
 У домена `www.agimate.io` должен быть статус `verified`. Затем — живой вход целиком: возврат обязан

@@ -35,7 +35,7 @@ stopped and said what it was missing.
 There is no secret in the file — it goes into the APK whole — but it is not in git either: it ties
 the build to one particular Firebase project, and a fork should have its own. Take it from the
 Firebase console: project → "Project settings" → "Your apps" → the Android app with package
-`ru.agimate.mobile` → "Download google-services.json", and put it in `app/`. One file covers both
+`ru.agimate.chat` → "Download google-services.json", and put it in `app/`. One file covers both
 flavours — they share an `applicationId`.
 
 To compile and test without a Firebase project at all, copy the stub CI uses —
