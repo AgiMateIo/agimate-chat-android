@@ -218,7 +218,19 @@ class PushSubscriptions @Inject constructor(
             // этого условия отзыв и выдача гоняли бы друг друга по кругу.
             if (registrations.read() != null) {
                 registrations.forget()
-                transport.dropTokens(transport.tokens())
+                val revoked = transport.tokens()
+                // Карантин тот же, что в [signOut], и ставится по той же причине и в том же порядке:
+                // отзыв не мгновенный, `getTokens()` в этом окне продолжает отдавать отозванное, и
+                // следующий вход зарегистрировал бы мёртвые значения как живые — уведомлений тогда
+                // нет до перезапуска. Разницы между «нажал выход» и «сессию отозвали с другого
+                // устройства» здесь никакой: окно одно и то же, а вход в него вероятнее — человек
+                // видит экран входа и обычно входит сразу.
+                if (revoked.isNotEmpty()) {
+                    registrations.writeRevocation(
+                        PushRevocation(tokens = revoked, at = System.currentTimeMillis())
+                    )
+                }
+                transport.dropTokens(revoked)
                 // Отозванные токены больше не описывают транспорт: следующий вход спросит заново.
                 transportTokens.value = emptyMap()
             }

@@ -224,6 +224,46 @@ class PushSubscriptionsTest {
         assertEquals(listOf(mapOf(PROVIDER to "T1")), transport.dropped)
     }
 
+    /**
+     * Тот же карантин, но выход непроизвольный: сессию отозвали с другого устройства, и токены
+     * просто кончились — `signOut()` при этом никто не звал. Раньше карантин ставила только кнопка
+     * «Выход», и этот путь регистрировал отозванные значения как живые: уведомлений не было до
+     * перезапуска приложения, а памятка выглядела свежей, так что суточная переотправка не спасала.
+     */
+    @Test
+    fun `отозванная сессия ставит тот же карантин, что и выход по кнопке`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        val subscriptions = subscriptions(FakeTransport(token = "T1", afterDrop = "T1"), api, store)
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+
+        // Токены кончились сами — ни выхода по кнопке, ни снятия подписки.
+        store.clear()
+        runCurrent()
+        store.save(AuthTokens("access", "refresh", "s2"))
+        runCurrent()
+
+        assertEquals(listOf("T1"), api.subscribed.map { it.token })
+    }
+
+    /** Обратная сторона: карантин держит отозванное, а не всё подряд — свежее уходит сразу. */
+    @Test
+    fun `после отозванной сессии свежий токен регистрируется`() = runTest {
+        val store = FakeTokenStore(null)
+        val api = RecordingPushApi()
+        val subscriptions = subscriptions(FakeTransport(token = "T1", afterDrop = "T2"), api, store)
+        store.save(AuthTokens("access", "refresh", "s1"))
+        runCurrent()
+
+        store.clear()
+        runCurrent()
+        store.save(AuthTokens("access", "refresh", "s2"))
+        runCurrent()
+
+        assertEquals(listOf("T1", "T2"), api.subscribed.map { it.token })
+    }
+
     /** Собранный так же, как в приложении: колбэк транспорта уходит владельцу подписки. */
     private fun kotlinx.coroutines.test.TestScope.subscriptions(
         transport: FakeTransport,
