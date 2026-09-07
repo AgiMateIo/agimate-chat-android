@@ -57,7 +57,7 @@ fun rustoreProjectId(flavor: String): String =
  * Переход на формулу поднял номер сразу с 3 до тысяч. Это безопасно: магазины требуют, чтобы
  * номер рос, а не чтобы рос на единицу.
  */
-val appVersionName = "0.3.8"
+val appVersionName = "0.3.9"
 
 val appVersionCode = appVersionName.split(".").map { it.toIntOrNull() ?: -1 }.let { parts ->
     require(parts.size == 3 && parts.all { it in 0..999 }) {
