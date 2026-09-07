@@ -88,7 +88,8 @@ class FilesViewModel @Inject constructor(
     val effects: Flow<FilesEffect> = _effects.receiveAsFlow()
 
     private var nextPage = 0
-    private var searchJob: Job? = null
+    private var listJob: Job? = null
+    private var moreJob: Job? = null
     private var fileJob: Job? = null
     private var noticeJob: Job? = null
 
@@ -111,8 +112,8 @@ class FilesViewModel @Inject constructor(
     }
 
     fun load() {
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
+        restart()
+        listJob = viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             fetch(page = 0)
         }
@@ -121,10 +122,28 @@ class FilesViewModel @Inject constructor(
     fun loadMore() {
         val current = _state.value
         if (current.loading || current.loadingMore || current.endReached) return
-        viewModelScope.launch {
+        // Возврат к первой странице начинается с паузы набора, и всё это время `loading` ещё false.
+        // Без этой проверки прокрутка в паузе успевала бы запросить страницу списка, которого через
+        // мгновение не станет.
+        if (listJob?.isActive == true) return
+        moreJob = viewModelScope.launch {
             _state.update { it.copy(loadingMore = true) }
             fetch(page = nextPage)
         }
+    }
+
+    /**
+     * Остановить всё, что пишет в список.
+     *
+     * Отдельный слот у догрузки нужен ровно затем, чтобы её доставала отмена. Раньше она уходила в
+     * `viewModelScope` напрямую, мимо задачи поиска, и начатый поиск её не касался: страница
+     * прежнего списка дописывалась поверх найденного. Совпавший файл, попавший в её диапазон, давал
+     * два одинаковых `id` — а ключ у `LazyColumn` на этом экране именно `id`, и повтор роняет экран,
+     * а не портит порядок.
+     */
+    private fun restart() {
+        listJob?.cancel()
+        moreJob?.cancel()
     }
 
     /**
@@ -134,8 +153,8 @@ class FilesViewModel @Inject constructor(
      */
     fun onQueryChange(value: String) {
         _state.update { it.copy(query = value) }
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
+        restart()
+        listJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MILLIS)
             _state.update { it.copy(loading = true, error = null) }
             fetch(page = 0)
@@ -207,7 +226,7 @@ class FilesViewModel @Inject constructor(
             nextPage = page + 1
             _state.update {
                 it.copy(
-                    files = if (page == 0) result.items else it.files + result.items,
+                    files = if (page == 0) result.items else appendFilesPage(it.files, result.items),
                     loading = false,
                     loadingMore = false,
                     endReached = result.isLast,
@@ -317,4 +336,20 @@ class FilesViewModel @Inject constructor(
         const val SEARCH_DEBOUNCE_MILLIS = 300L
         const val NOTICE_MILLIS = 2_500L
     }
+}
+
+/**
+ * Дописать страницу, не повторив уже показанного.
+ *
+ * Отменённой догрузки для этого мало. Выборка идёт по смещению, а список живой: файл, добавленный
+ * или удалённый на сервере между двумя запросами, сдвигает окно, и пограничная строка приезжает
+ * второй раз. Для экрана это не косметика — ключ строки `id`, и повтор роняет `LazyColumn`. То же
+ * правило и по той же причине действует в переписке ([ru.agimate.mobile.feature.chat.appendOlderPage]).
+ */
+fun appendFilesPage(current: List<StoredFile>, page: List<StoredFile>): List<StoredFile> {
+    val seen = current.mapTo(mutableSetOf()) { it.id }
+    // `add` возвращает false на повторе — значит одной проверкой закрыты оба случая: строка уже на
+    // экране и строка, названная дважды внутри самой страницы. Второе тоже бывает: страница
+    // собирается на сервере из живой выборки.
+    return current + page.filter { seen.add(it.id) }
 }
