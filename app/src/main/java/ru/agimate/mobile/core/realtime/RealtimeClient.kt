@@ -45,6 +45,7 @@ import ru.agimate.mobile.core.network.NetworkMonitor
 import ru.agimate.mobile.data.webchat.WebchatContactDto
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import ru.agimate.mobile.data.webchat.WebchatSessionDto
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -106,10 +107,15 @@ class RealtimeClient @Inject constructor(
     /** Подписка на личный канал. С ней сверяются так же, как с [client], и по той же причине. */
     @Volatile
     private var userSubscription: Subscription? = null
+
+    @Volatile
     private var userChannel: String? = null
 
-    /** Сколько раз подряд подписка не поднялась — от этого растёт пауза перед повтором. */
-    private var failedAttempts = 0
+    /**
+     * Сколько раз подряд подписка не поднялась — от этого растёт пауза перед повтором. Атомарный:
+     * растёт на потоке библиотеки, а обнуляется и там, и в корутинах.
+     */
+    private val failedAttempts = AtomicInteger(0)
 
     @Volatile
     private var connectJob: Job? = null
@@ -137,7 +143,7 @@ class RealtimeClient @Inject constructor(
             lock.withLock {
                 userSubscription = null
                 userChannel = null
-                failedAttempts = 0
+                failedAttempts.set(0)
 
                 val dying = client
                 // Обнулить до close: слушатель сверяется с этим полем, и события умирающего
@@ -197,7 +203,10 @@ class RealtimeClient @Inject constructor(
         created.connect()
 
         userChannel = bootstrap.channel
-        subscribe(created, bootstrap.channel, bootstrap.subscriptionToken, resyncOnSubscribed = false)
+        // Перечитать и после первой подписки: экран, открытый пушем на холодном старте, грузит
+        // историю, пока поднимается соединение, а у новой подписки нет позиции, с которой Centrifugo
+        // дослал бы пришедшее в этот промежуток. Экранов ещё нет — сигнал никто не услышит.
+        subscribe(created, bootstrap.channel, bootstrap.subscriptionToken, resyncOnSubscribed = true)
         created
     }
 
@@ -210,8 +219,8 @@ class RealtimeClient @Inject constructor(
      *
      * @param token готовый токен подписки; `null` — пусть его добудет `tokenGetter` (так поднимают
      *              подписку заново: прежний токен к тому моменту обычно и есть причина падения)
-     * @param resyncOnSubscribed подписка заводится взамен умершей: позиции у новой нет, и всё, что
-     *                           пришло в промежутке, потеряно — экранам надо перечитать себя
+     * @param resyncOnSubscribed у подписки нет позиции — первая или взамен умершей, — и всё, что
+     *                           пришло до неё, потеряно: экранам надо перечитать себя
      */
     private fun subscribe(client: Client, channel: String, token: String?, resyncOnSubscribed: Boolean) {
         val options = SubscriptionOptions().apply {
@@ -243,7 +252,7 @@ class RealtimeClient @Inject constructor(
                 if (sub !== userSubscription) return
                 val lost = event.wasRecovering() == true && event.recovered != true
                 trace { "$channel: подписан, recovered=${event.recovered}" }
-                failedAttempts = 0
+                failedAttempts.set(0)
                 subscriptionStatus.value = RealtimeStatus.Connected
                 if (lost || resyncPending) {
                     resyncPending = false
@@ -308,7 +317,7 @@ class RealtimeClient @Inject constructor(
      * @param dead подписка, которую заменяем; `null` — её не удалось даже завести
      */
     private fun scheduleResubscribe(dead: Subscription?) {
-        val attempt = failedAttempts++
+        val attempt = failedAttempts.getAndIncrement()
 
         scope.launch {
             awaitRetry(attempt)

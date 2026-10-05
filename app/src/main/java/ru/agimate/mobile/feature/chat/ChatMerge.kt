@@ -69,12 +69,26 @@ fun mergeHistoryPage(live: List<ChatMessage>, page: List<ChatMessage>): List<Cha
 /**
  * Свежая первая страница взамен ленты — после разрыва, пропущенное за который не восстановилось.
  *
- * Слить её с тем, что было, нельзя: за разрыв могло прийти больше страницы, и между ней и прежней
- * историей осталась бы дыра, которую не видно. Поэтому лента начинается заново, а с прежней
- * переносится только своё неотправленное — его на сервере нет, и иначе оно пропало бы бесследно.
+ * Слить её со всей прежней лентой нельзя: за разрыв могло прийти больше страницы, и между ней и
+ * прежней историей осталась бы дыра, которую не видно. Поэтому лента начинается заново, а с прежней
+ * переносится то, чего в странице быть не может:
+ *  - своё неотправленное — его на сервере нет;
+ *  - живое, пришедшее, пока страница ехала, — подписка к этому моменту уже работает, и второй раз
+ *    такое сообщение никто не пришлёт. Живое старше начала страницы — это прежняя история, а не
+ *    новинка, его не переносим.
  */
-fun resyncNewestPage(current: List<ChatMessage>, page: List<ChatMessage>): List<ChatMessage> =
-    mergeHistoryPage(current.filter { it.pending || it.failed }, page)
+fun resyncNewestPage(current: List<ChatMessage>, page: List<ChatMessage>): List<ChatMessage> {
+    val known = page.mapNotNullTo(mutableSetOf()) { it.messageId }
+    val head = page.firstOrNull()?.createdAt
+    val kept = current.filter { message ->
+        message.pending || message.failed || (
+            message.rowId == null &&
+                message.messageId != null && message.messageId !in known &&
+                (head == null || message.createdAt == null || message.createdAt >= head)
+            )
+    }
+    return mergeHistoryPage(kept, page)
+}
 
 /**
  * Дописывает страницу постарше в хвост ленты.

@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,35 +73,31 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
+    private var loadJob: Job? = null
+    private var loadMoreJob: Job? = null
+
+    /** Первая страница хоть раз загрузилась: до этого живые строки не вставляем — см. [shouldInsert]. */
+    private var loaded = false
+
+    /**
+     * Живые строки, пришедшие за время загрузки первой страницы. Ответ — снимок, снятый раньше них,
+     * и без повторного наложения вернул бы старый заголовок или погасшее «печатает…».
+     */
+    private var liveDuringLoad = mutableListOf<RealtimeEvent.Session>()
+
     /**
      * Строки переписок приходят целиком: заголовок, который платформа дала сама, закрытие с другого
      * устройства, счётчик, «печатает…». Канал общий на всё приложение, поэтому чужие строки
      * отбрасываем: другого агента, другого коннектора и субагентов.
-     *
-     * Новая переписка встаёт по свежести, то есть наверх. Обновлённой, которой на экране нет, не
-     * вставляем: список постраничный, и она просто лежит на непрочитанной странице.
      */
     private fun observeLiveRows() {
         viewModelScope.launch {
             realtime.events.collect { event ->
                 when (event) {
                     is RealtimeEvent.Session -> {
-                        val session = ChatSession.from(event.row)
-                        if (!belongsHere(session)) return@collect
-                        _state.update { current ->
-                            current.copy(
-                                sessions = current.sessions.upsertByActivity(
-                                    session,
-                                    insertIfAbsent = event.created,
-                                    key = ChatSession::sessionId,
-                                    activity = ChatSession::lastActivityAt,
-                                ),
-                                // Диалог переименования держит снимок строки — пусть он не отстаёт.
-                                renaming = current.renaming?.let {
-                                    if (it.sessionId == session.sessionId) session else it
-                                },
-                            )
-                        }
+                        if (!belongsHere(ChatSession.from(event.row))) return@collect
+                        if (loadJob?.isActive == true) liveDuringLoad += event
+                        _state.update { it.withLiveRow(event) }
                     }
                     RealtimeEvent.Resync -> load()
                     is RealtimeEvent.Contact, is RealtimeEvent.Message -> Unit
@@ -109,19 +106,66 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
+    private fun SessionsUiState.withLiveRow(event: RealtimeEvent.Session): SessionsUiState {
+        val session = ChatSession.from(event.row)
+        return copy(
+            sessions = sessions.upsertByActivity(
+                session,
+                insertIfAbsent = shouldInsert(session, event.created, this),
+                key = ChatSession::sessionId,
+                activity = ChatSession::lastActivityAt,
+            ),
+            // Диалог переименования держит снимок строки — пусть он не отстаёт.
+            renaming = renaming?.let { if (it.sessionId == session.sessionId) session else it },
+        )
+    }
+
+    /**
+     * Строки нет на экране — вставлять ли её.
+     *
+     * Список постраничный и отсортирован по свежести. Строка, свежее последней загруженной, по
+     * серверному порядку уже на загруженных страницах — например, переписка с дальней страницы,
+     * куда только что пришло сообщение, — и без вставки пропала бы совсем: её прежнее место
+     * дочитанная страница не покажет. Строка старше последней лежит на непрочитанной странице и
+     * приедет догрузкой.
+     *
+     * До первой удачной загрузки не вставляем ничего: одна строка спрятала бы экран ошибки и выдала
+     * себя за весь список.
+     */
+    private fun shouldInsert(session: ChatSession, created: Boolean, state: SessionsUiState): Boolean {
+        if (!loaded) return false
+        if (created || state.endReached) return true
+        val at = session.lastActivityAt ?: return false
+        val oldest = state.sessions.lastOrNull()?.lastActivityAt ?: return true
+        return at >= oldest
+    }
+
     private fun belongsHere(session: ChatSession): Boolean =
         session.agentId == agentId &&
             session.connectorCode == WebchatRepository.CONNECTOR_WEBCHAT &&
             session.parentSessionId == null
 
+    /**
+     * Первая страница — при открытии, по повтору и после разрыва, пропущенное за который не
+     * восстановилось. Скелетон только на пустом списке: показанный список перечитывается молча.
+     */
     fun load() {
-        viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null) }
+        // Догрузка, начатая до перечитывания, легла бы под свежую первую страницу с дырой между ними.
+        loadMoreJob?.cancel()
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            liveDuringLoad = mutableListOf()
+            _state.update {
+                it.copy(loading = it.sessions.isEmpty(), loadingMore = false, error = null)
+            }
             try {
                 val page = repository.sessions(agentId, 0)
                 nextPage = 1
-                _state.update {
-                    it.copy(sessions = page.items, loading = false, endReached = page.isLast)
+                loaded = true
+                _state.update { current ->
+                    liveDuringLoad.fold(
+                        current.copy(sessions = page.items, loading = false, endReached = page.isLast)
+                    ) { state, event -> state.withLiveRow(event) }
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
@@ -130,17 +174,24 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Следующая страница. Страницы считаются смещением от свежего края, а живые строки этот край
+     * двигают: поднятая наверх переписка сдвигает окно, и её сосед приезжает второй раз. Повтор
+     * отбрасываем — две строки с одним ключом роняют список.
+     */
     fun loadMore() {
         val current = _state.value
         if (current.loading || current.loadingMore || current.endReached) return
-        viewModelScope.launch {
+        if (loadJob?.isActive == true) return
+        loadMoreJob = viewModelScope.launch {
             _state.update { it.copy(loadingMore = true) }
             try {
                 val page = repository.sessions(agentId, nextPage)
                 nextPage++
-                _state.update {
-                    it.copy(
-                        sessions = it.sessions + page.items,
+                _state.update { state ->
+                    val shown = state.sessions.mapTo(mutableSetOf()) { it.sessionId }
+                    state.copy(
+                        sessions = state.sessions + page.items.filter { it.sessionId !in shown },
                         loadingMore = false,
                         endReached = page.isLast,
                     )

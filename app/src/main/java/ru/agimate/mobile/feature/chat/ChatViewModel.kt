@@ -157,6 +157,9 @@ class ChatViewModel @Inject constructor(
      * строка: так остановка с другого устройства не потеряется, даже случившись в это же окно.
      */
     private var runGraceJob: Job? = null
+
+    /** Сколько живых строк этой переписки пришло — чтобы снимок по REST не перекрыл свежую. */
+    private var liveSessionRows = 0
     private var deferredIdleRow = false
 
     init {
@@ -341,9 +344,14 @@ class ChatViewModel @Inject constructor(
      * идентификатору — экран открывается и по пушу, где про агента ничего не известно.
      */
     private fun loadSessionState() {
+        val seenBefore = liveSessionRows
         viewModelScope.launch {
             runCatching { repository.session(sessionId) }
-                .onSuccess(::applySessionRow)
+                .onSuccess { session ->
+                    // Пока шёл запрос, живая строка уже пришла — она свежее снимка, и снимок
+                    // вернул бы погасшее «печатает…» или открыл закрытую переписку.
+                    if (liveSessionRows == seenBefore) applySessionRow(session)
+                }
         }
     }
 
@@ -359,9 +367,14 @@ class ChatViewModel @Inject constructor(
                 when (event) {
                     is RealtimeEvent.Message ->
                         if (event.payload.sessionId == sessionId) applyLiveMessage(event.payload)
-                    is RealtimeEvent.Session ->
-                        if (event.row.id == sessionId) applySessionRow(ChatSession.from(event.row))
+                    is RealtimeEvent.Session -> if (event.row.id == sessionId) {
+                        liveSessionRows++
+                        applySessionRow(ChatSession.from(event.row))
+                    }
                     RealtimeEvent.Resync -> {
+                        // Догрузка старой страницы легла бы под свежую первую с дырой между ними.
+                        loadOlderJob?.cancel()
+                        _state.update { it.copy(loadingOlder = false) }
                         loadFirstPage(resync = true)
                         loadSessionState()
                     }

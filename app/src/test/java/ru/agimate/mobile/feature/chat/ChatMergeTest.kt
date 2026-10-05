@@ -221,8 +221,8 @@ class ChatMergeTest {
     }
 
     @Test
-    fun `resync starts the feed over and keeps only unsent bubbles`() {
-        val oldHistory = agent("old", "давнее")
+    fun `resync starts the feed over and drops the old history`() {
+        val oldHistory = agent("old", "давнее").copy(rowId = "r0")
         val failed = optimistic("l1", "не ушло").copy(failed = true)
         val pending = optimistic("l2", "в пути")
         val page = listOf(agent("new", "свежее"))
@@ -231,5 +231,16 @@ class ChatMergeTest {
 
         assertEquals(listOf("l2", "l1", null), result.map { it.localId })
         assertEquals("new", result.last().messageId)
+    }
+
+    @Test
+    fun `resync keeps a live answer that arrived while the page was loading`() {
+        val pageHead = agent("p", "в странице").copy(rowId = "r1")
+        val lateAnswer = agent("late", "ответ").copy(createdAt = Instant.parse("2026-08-15T10:05:00Z"))
+        val staleLive = agent("stale", "давнее живое").copy(createdAt = Instant.parse("2026-08-15T09:00:00Z"))
+
+        val result = resyncNewestPage(listOf(lateAnswer, staleLive), listOf(pageHead))
+
+        assertEquals(listOf("late", "p"), result.map { it.messageId })
     }
 }

@@ -61,6 +61,15 @@ class ContactsViewModel @Inject constructor(
 
     private var loadJob: Job? = null
 
+    /** Список хоть раз дочитан целиком: до этого живой контакт не вставляем — см. [observeLiveRows]. */
+    private var loaded = false
+
+    /**
+     * Живые строки, пришедшие за время загрузки. Ответ REST — снимок, снятый раньше них, и без
+     * повторного наложения вернул бы погасший бейдж до следующего события.
+     */
+    private var liveDuringLoad = mutableMapOf<String, Contact>()
+
     init {
         observeLiveRows()
         observeRealtimeStatus()
@@ -94,6 +103,7 @@ class ContactsViewModel @Inject constructor(
                     error = null,
                 )
             }
+            liveDuringLoad = mutableMapOf()
             try {
                 // Экран контактов — один запрос на страницу, но искать надо по всему списку, а
                 // серверного поиска у этого эндпойнта нет. Агентов у человека единицы, поэтому
@@ -106,9 +116,13 @@ class ContactsViewModel @Inject constructor(
                     if (chunk.isLast) break
                     page++
                 }
+                val merged = liveDuringLoad.values.fold(collected.toList()) { list, contact ->
+                    list.upsertContact(contact, insertIfAbsent = true)
+                }
+                loaded = true
                 _state.update {
                     it.copy(
-                        contacts = collected,
+                        contacts = merged,
                         loading = false,
                         refreshing = false,
                         error = null,
@@ -170,22 +184,22 @@ class ContactsViewModel @Inject constructor(
      * перепискам агента: ни прибавлять к нему, ни гасить его здесь нельзя. Бейдж гаснет сам, когда
      * открытый чат отметит прочтение и сервер пришлёт строку заново.
      *
-     * Список дочитан до конца, поэтому контакт, которого в нём нет, — новый агент, а не строка с
-     * чужой страницы: его вставляем.
+     * Дочитанный список полон, поэтому контакт, которого в нём нет, — новый агент, и его вставляем.
+     * Недочитанный — нет: одна вставленная строка спрятала бы экран ошибки и выдала себя за весь
+     * список.
      */
     private fun observeLiveRows() {
         viewModelScope.launch {
             realtime.events.collect { event ->
                 when (event) {
-                    is RealtimeEvent.Contact -> _state.update { current ->
-                        current.copy(
-                            contacts = current.contacts.upsertByActivity(
-                                Contact.from(event.row),
-                                insertIfAbsent = true,
-                                key = Contact::agentId,
-                                activity = Contact::lastActivityAt,
+                    is RealtimeEvent.Contact -> {
+                        val contact = Contact.from(event.row)
+                        if (loadJob?.isActive == true) liveDuringLoad[contact.agentId] = contact
+                        _state.update { current ->
+                            current.copy(
+                                contacts = current.contacts.upsertContact(contact, insertIfAbsent = loaded)
                             )
-                        )
+                        }
                     }
                     RealtimeEvent.Resync -> load(refresh = false)
                     is RealtimeEvent.Session, is RealtimeEvent.Message -> Unit
@@ -193,6 +207,14 @@ class ContactsViewModel @Inject constructor(
             }
         }
     }
+
+    private fun List<Contact>.upsertContact(contact: Contact, insertIfAbsent: Boolean) =
+        upsertByActivity(
+            contact,
+            insertIfAbsent = insertIfAbsent,
+            key = Contact::agentId,
+            activity = Contact::lastActivityAt,
+        )
 
     private fun observeRealtimeStatus() {
         viewModelScope.launch {
