@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import ru.agimate.mobile.core.network.InstantSerializer
 import ru.agimate.mobile.data.webchat.WebchatAttachmentDto
+import ru.agimate.mobile.data.webchat.WebchatContactDto
+import ru.agimate.mobile.data.webchat.WebchatSessionDto
 import java.time.Instant
 
 @Serializable
@@ -12,25 +14,7 @@ data class RealtimeEnvelope(
     val payload: JsonElement? = null,
 )
 
-/**
- * Тонкое событие личного канала `user:{userId}` — поднимает бейдж, пока чат не открыт.
- *
- * Приходит только для `answer` и `error`; для `progress` и для эха своих сообщений — нет. Событие
- * best-effort: при сбое публикации теряется, и счётчик чинится следующим листингом. Единственным
- * источником правды для бейджа его делать нельзя.
- */
-@Serializable
-data class WebchatActivityPayload(
-    val agentId: String? = null,
-    val sessionId: String? = null,
-    val messageId: String? = null,
-    val stream: String? = null,
-    val preview: String? = null,
-    @Serializable(with = InstantSerializer::class)
-    val createdAt: Instant? = null,
-)
-
-/** Само сообщение из канала переписки `webchat:{sessionId}`. */
+/** Сообщение переписки веб-чата: ответ агента, строка хода работы или эхо своего. */
 @Serializable
 data class WebchatMessagePayload(
     val sessionId: String? = null,
@@ -46,20 +30,33 @@ data class WebchatMessagePayload(
 )
 
 object RealtimeEventType {
-    const val MESSAGE = "webchat_message"
-    const val ACTIVITY = "webchat_activity"
+    const val SESSION_CREATED = "session.created"
+    const val SESSION_UPDATED = "session.updated"
+    const val WEBCHAT_AGENT_UPDATED = "webchat.agent.updated"
+    const val WEBCHAT_MESSAGE = "webchat.message"
 }
 
 /**
- * Что происходит в канале переписки.
+ * Что пришло в личный канал `user:{userId}` — единственный канал приложения.
  *
- * Состояние подписки едет тем же потоком, что и сообщения, не отдельным: подписка живёт ровно
- * столько, сколько её читают, и отдельный поток состояния пришлось бы считать вторым читателем.
+ * Строки сессий и контактов приходят целиком, а не разницей: их заменяют, а не сливают. Доставка
+ * at-least-once и best-effort, поэтому обработчик обязан быть идемпотентным, а событие — не
+ * единственный источник правды: при открытии экран всё равно берёт данные из REST.
  */
-sealed interface SessionEvent {
-    data class Message(val payload: WebchatMessagePayload) : SessionEvent
+sealed interface RealtimeEvent {
+    /** Строка `GET /manage/sessions/` — у веб-чата, мессенджеров и субагентов. */
+    data class Session(val created: Boolean, val row: WebchatSessionDto) : RealtimeEvent
 
-    data class Status(val status: RealtimeStatus) : SessionEvent
+    /** Строка `GET /manage/webchat/contacts/`: счётчик в ней — уже сумма по всем перепискам. */
+    data class Contact(val row: WebchatContactDto) : RealtimeEvent
+
+    data class Message(val payload: WebchatMessagePayload) : RealtimeEvent
+
+    /**
+     * Пропущенное восстановить не удалось — долгий офлайн или подписка, заведённая заново. Открытые
+     * экраны перечитывают себя через REST: события за разрыв уже не придут.
+     */
+    data object Resync : RealtimeEvent
 }
 
 /** Состояние живого соединения — для полоски «связь потеряна / восстановлена». */
@@ -71,7 +68,7 @@ enum class RealtimeStatus {
          * Худшее из двух состояний.
          *
          * Живое сообщение доезжает, только когда целы обе половины — и соединение, и подписка на
-         * канал переписки. Целый WebSocket с умершей подпиской показывал бы «на связи», пока чат
+         * личный канал. Целый WebSocket с умершей подпиской показывал бы «на связи», пока чат
          * молчит, — а это ровно тот случай, который надо видеть.
          *
          * `Idle` получается, только когда **обе** половины ещё не отчитались. Одна известная и одна

@@ -27,7 +27,7 @@ data class PushMessage(
         PushChatTarget(sessionId = sessionId, agentId = agentId, agentName = agentName)
 
     companion object {
-        /** Тип события. Совпадает с тем, что бэкенд публикует в Centrifugo. */
+        /** Тип пуша. Свой контракт: с типами событий Centrifugo он больше не совпадает. */
         const val TYPE_WEBCHAT_MESSAGE = "webchat_message"
 
         fun parse(data: Map<String, String>): PushMessage? {

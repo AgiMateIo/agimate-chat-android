@@ -26,8 +26,8 @@ import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.realtime.OpenChatTracker
 import ru.agimate.mobile.core.realtime.RealtimeClient
+import ru.agimate.mobile.core.realtime.RealtimeEvent
 import ru.agimate.mobile.core.realtime.RealtimeStatus
-import ru.agimate.mobile.core.realtime.SessionEvent
 import ru.agimate.mobile.core.realtime.WebchatMessagePayload
 import ru.agimate.mobile.core.share.FileNotice
 import ru.agimate.mobile.core.share.FileStore
@@ -42,6 +42,7 @@ import ru.agimate.mobile.data.files.StoredFile
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.files.AttachmentUploader
 import ru.agimate.mobile.data.webchat.ChatMessage
+import ru.agimate.mobile.data.webchat.ChatSession
 import ru.agimate.mobile.data.webchat.MessageDirection
 import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.files.PendingAttachment
@@ -144,16 +145,25 @@ class ChatViewModel @Inject constructor(
     /** Чем в последний раз двигали указатель прочтения — чтобы не звать сервер на каждый скролл. */
     private var lastReadMarker: String? = null
 
-    /** Половинки живой связи: соединение целиком и подписка на канал этой переписки. */
-    private var connectionStatus = RealtimeStatus.Idle
-    private var channelStatus = RealtimeStatus.Idle
     private var slowConnectJob: Job? = null
+
+    /**
+     * Своё сообщение ушло, а запуск агента ещё не поставлен. Сервер успевает прислать в это окно
+     * до трёх строк переписки — заголовок, эхо, прочтение — и все с `isRunning = false`: запуск
+     * ставится после них. Применённые как есть, они гасили бы «печатает…», едва оно загорелось.
+     *
+     * Пока окно открыто, погасший признак из строки откладывается, а не применяется. Закрывает
+     * окно строка с работающим агентом, ответ или срок — по сроку применяется последняя отложенная
+     * строка: так остановка с другого устройства не потеряется, даже случившись в это же окно.
+     */
+    private var runGraceJob: Job? = null
+    private var deferredIdleRow = false
 
     init {
         restoreDraft()
         observeDraftAttachments()
         observeRealtimeStatus()
-        subscribeToSession()
+        observeLiveEvents()
         loadFirstPage()
         loadSessionState()
         // При открытии чата — отметка прочтения без тела: сессия прочитана до конца.
@@ -261,14 +271,23 @@ class ChatViewModel @Inject constructor(
         loadFirstPage()
     }
 
-    private fun loadFirstPage() {
+    /**
+     * @param resync перечитать ленту поверх показанной — после разрыва, пропущенное за который не
+     *               восстановилось. Без скелетона и без экрана ошибки: лента на экране цела, и
+     *               менять её на заглушку из-за неудачного повтора нельзя.
+     */
+    private fun loadFirstPage(resync: Boolean = false) {
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null) }
+            if (!resync) _state.update { it.copy(loading = true, error = null) }
             try {
                 val page = repository.messages(sessionId, 0)
-                // Не присваивание: подписка живёт с самого init, и пока грузилась история, в ленту
-                // уже могли лечь живые сообщения. Второй раз их никто не пришлёт.
-                messages = mergeHistoryPage(messages, page.items)
+                messages = if (resync) {
+                    resyncNewestPage(messages, page.items)
+                } else {
+                    // Не присваивание: подписка живёт с самого init, и пока грузилась история, в
+                    // ленту уже могли лечь живые сообщения. Второй раз их никто не пришлёт.
+                    mergeHistoryPage(messages, page.items)
+                }
                 nextPage = 1
                 lastReadMarker = page.items.firstOrNull()?.rowId
                 _state.update {
@@ -280,6 +299,7 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
+                if (resync) return@launch
                 _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
@@ -323,50 +343,87 @@ class ChatViewModel @Inject constructor(
     private fun loadSessionState() {
         viewModelScope.launch {
             runCatching { repository.session(sessionId) }
-                .onSuccess { session ->
-                    // Правило то же, что в [closeSession]: в закрытую переписку писать нельзя,
-                    // черновику там висеть незачем. Закрыть могли с веба или другого устройства —
-                    // узнаём мы об этом только здесь, а живучий черновик уводил бы тап по контакту
-                    // в мёртвую переписку до конца времён.
-                    if (session.isClosed) drafts.clear(sessionId)
-                    _state.update {
-                        it.copy(closed = session.isClosed, isRunning = session.isRunning)
-                    }
-                }
+                .onSuccess(::applySessionRow)
         }
     }
 
     // ---------------------------------------------------------------- real-time
 
-    private fun subscribeToSession() {
+    /**
+     * Канал общий на всё приложение: своё отбираем по `sessionId` сообщения и по `id` строки
+     * переписки. Остальным чатам бейдж и превью принесут строки списков, а не сообщения.
+     */
+    private fun observeLiveEvents() {
         viewModelScope.launch {
-            realtime.sessionEvents(sessionId).collect { event ->
+            realtime.events.collect { event ->
                 when (event) {
-                    is SessionEvent.Message -> applyLiveMessage(event.payload)
-                    is SessionEvent.Status -> {
-                        channelStatus = event.status
-                        publishRealtimeStatus()
+                    is RealtimeEvent.Message ->
+                        if (event.payload.sessionId == sessionId) applyLiveMessage(event.payload)
+                    is RealtimeEvent.Session ->
+                        if (event.row.id == sessionId) applySessionRow(ChatSession.from(event.row))
+                    RealtimeEvent.Resync -> {
+                        loadFirstPage(resync = true)
+                        loadSessionState()
                     }
+                    is RealtimeEvent.Contact -> Unit
                 }
             }
         }
     }
 
-    private fun observeRealtimeStatus() {
-        viewModelScope.launch {
-            realtime.status.collect { status ->
-                connectionStatus = status
-                publishRealtimeStatus()
+    /**
+     * Строка переписки — из листинга при открытии или живьём. Закрыть переписку и остановить
+     * ответ могли на другом устройстве, и узнаём мы об этом только отсюда.
+     */
+    private fun applySessionRow(session: ChatSession) {
+        // Правило то же, что в [closeSession]: в закрытую переписку писать нельзя, черновику там
+        // висеть незачем — живучий черновик уводил бы тап по контакту в мёртвую переписку.
+        if (session.isClosed) drafts.clear(sessionId)
+        val running = when {
+            session.isRunning -> {
+                endRunGrace()
+                true
             }
+            runGraceJob?.isActive == true -> {
+                deferredIdleRow = true
+                null
+            }
+            else -> false
+        }
+        _state.update {
+            it.copy(closed = session.isClosed, isRunning = running ?: it.isRunning)
         }
     }
 
-    private fun publishRealtimeStatus() {
-        val merged = RealtimeStatus.worseOf(connectionStatus, channelStatus)
-        _state.update { it.copy(realtime = merged) }
+    /** Своё сообщение ушло — открыть окно, в котором погасший признак из строки откладывается. */
+    private fun startRunGrace() {
+        runGraceJob?.cancel()
+        deferredIdleRow = false
+        runGraceJob = viewModelScope.launch {
+            delay(RUN_GRACE_MS)
+            // Запуск так и не отчитался, а строка говорит «не работает» — верим строке.
+            if (deferredIdleRow) _state.update { it.copy(isRunning = false) }
+            deferredIdleRow = false
+        }
+    }
+
+    private fun endRunGrace() {
+        runGraceJob?.cancel()
+        runGraceJob = null
+        deferredIdleRow = false
+    }
+
+    private fun observeRealtimeStatus() {
+        viewModelScope.launch {
+            realtime.status.collect(::publishRealtimeStatus)
+        }
+    }
+
+    private fun publishRealtimeStatus(status: RealtimeStatus) {
+        _state.update { it.copy(realtime = status) }
 
         slowConnectJob?.cancel()
-        if (merged == RealtimeStatus.Connected) return
+        if (status == RealtimeStatus.Connected) return
         // Centrifugo повторяет подключение молча и бесконечно, о новых попытках не сообщая. Значит,
         // «подключаюсь» само по себе никогда не станет ошибкой, и неверный адрес WebSocket выглядит
         // как исправный чат, в который просто ничего не приходит. Считаем затянувшееся подключение
@@ -391,6 +448,7 @@ class ChatViewModel @Inject constructor(
         val merge = mergeLiveMessage(messages, incoming)
         messages = merge.messages
         if (!merge.applied) return
+        if (incoming.stream != MessageStream.NONE) endRunGrace()
 
         // Лента и признак работы обновляются одним разом. Двумя обновлениями заготовка ответа
         // гасла бы в одном кадре, а сам ответ встал бы в следующем — между ними лента осталась бы
@@ -459,6 +517,7 @@ class ChatViewModel @Inject constructor(
             )
         }
 
+        startRunGrace()
         viewModelScope.launch {
             try {
                 val response = repository.send(sessionId, text, fileIds)
@@ -475,6 +534,7 @@ class ChatViewModel @Inject constructor(
                     _state.update { it.copy(sending = false, isRunning = true) }
                     return@launch
                 }
+                endRunGrace()
                 val error = e.toApiException()
                 updateLocal(localId) { it.copy(pending = false, failed = true) }
                 _state.update { it.copy(sending = false, sendError = error.text) }
@@ -744,7 +804,10 @@ class ChatViewModel @Inject constructor(
     fun stop() {
         viewModelScope.launch {
             runCatching { repository.cancelSession(sessionId) }
-                .onSuccess { _state.update { it.copy(isRunning = false) } }
+                .onSuccess {
+                    endRunGrace()
+                    _state.update { it.copy(isRunning = false) }
+                }
                 .onFailure { error -> _state.update { it.copy(sendError = error.toApiException().text) } }
         }
     }
@@ -801,6 +864,9 @@ class ChatViewModel @Inject constructor(
     private companion object {
         /** Сколько ждать живую связь, прежде чем признать её потерянной. */
         const val SLOW_CONNECT_MS = 10_000L
+
+        /** Сколько ждать постановки запуска после своего сообщения — с запасом на очередь. */
+        const val RUN_GRACE_MS = 15_000L
 
         /** Сколько висит строка о законченном деле с файлом. */
         const val NOTICE_MILLIS = 4_000L

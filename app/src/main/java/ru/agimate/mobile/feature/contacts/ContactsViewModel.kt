@@ -13,15 +13,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.network.toApiException
-import ru.agimate.mobile.core.realtime.OpenChatTracker
 import ru.agimate.mobile.core.realtime.RealtimeClient
+import ru.agimate.mobile.core.realtime.RealtimeEvent
 import ru.agimate.mobile.core.realtime.RealtimeStatus
-import ru.agimate.mobile.core.realtime.WebchatActivityPayload
+import ru.agimate.mobile.core.realtime.upsertByActivity
 import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.webchat.Contact
-import ru.agimate.mobile.data.webchat.MessagePreview
-import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import javax.inject.Inject
 
@@ -55,7 +53,6 @@ data class ContactsUiState(
 class ContactsViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
-    private val openChats: OpenChatTracker,
     drafts: DraftStore,
 ) : ViewModel() {
 
@@ -65,8 +62,7 @@ class ContactsViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
-        realtime.start()
-        observeActivity()
+        observeLiveRows()
         observeRealtimeStatus()
         load()
         observeDrafts(drafts)
@@ -140,8 +136,6 @@ class ContactsViewModel @Inject constructor(
      * контакту в мессенджере значит «написать», а не «посмотреть список переписок».
      */
     fun openChat(contact: Contact, onReady: (String) -> Unit) {
-        markContactRead(contact.agentId)
-
         // Переписка с черновиком важнее последней: метка в строке обещает именно её, и открыться
         // должна она, иначе человек увидит пустое поле и решит, что набранное потерялось.
         val existing = _state.value.drafts[contact.agentId]?.sessionId ?: contact.lastSessionId
@@ -171,59 +165,38 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
-    /** Бейдж агента гасится при открытии его переписки. */
-    fun markContactRead(agentId: String) {
-        _state.update { current ->
-            current.copy(
-                contacts = current.contacts.map {
-                    if (it.agentId == agentId) it.copy(unreadCount = 0) else it
-                }
-            )
-        }
-    }
-
-    private fun observeActivity() {
+    /**
+     * Строка контакта приходит целиком и заменяет прежнюю. Счётчик в ней — уже сумма по всем
+     * перепискам агента: ни прибавлять к нему, ни гасить его здесь нельзя. Бейдж гаснет сам, когда
+     * открытый чат отметит прочтение и сервер пришлёт строку заново.
+     *
+     * Список дочитан до конца, поэтому контакт, которого в нём нет, — новый агент, а не строка с
+     * чужой страницы: его вставляем.
+     */
+    private fun observeLiveRows() {
         viewModelScope.launch {
-            realtime.activity.collect { event -> applyActivity(event) }
+            realtime.events.collect { event ->
+                when (event) {
+                    is RealtimeEvent.Contact -> _state.update { current ->
+                        current.copy(
+                            contacts = current.contacts.upsertByActivity(
+                                Contact.from(event.row),
+                                insertIfAbsent = true,
+                                key = Contact::agentId,
+                                activity = Contact::lastActivityAt,
+                            )
+                        )
+                    }
+                    RealtimeEvent.Resync -> load(refresh = false)
+                    is RealtimeEvent.Session, is RealtimeEvent.Message -> Unit
+                }
+            }
         }
     }
 
     private fun observeRealtimeStatus() {
         viewModelScope.launch {
             realtime.status.collect { status -> _state.update { it.copy(realtime = status) } }
-        }
-    }
-
-    /**
-     * Событие тонкое: поднимает счётчик и обновляет превью, но список не пересортировывает — ключ
-     * сортировки серверный, и восстановить его на клиенте между страницами нельзя.
-     */
-    private fun applyActivity(event: WebchatActivityPayload) {
-        val agentId = event.agentId ?: return
-        if (!MessageStream.parse(event.stream).countsAsUnread) return
-
-        // Открытый прямо сейчас чат рисует сообщение сам — счётчик для него не растим.
-        val countsToBadge = event.sessionId != null && event.sessionId != openChats.openSessionId
-
-        _state.update { current ->
-            current.copy(
-                contacts = current.contacts.map { contact ->
-                    if (contact.agentId != agentId) return@map contact
-                    contact.copy(
-                        unreadCount = if (countsToBadge) contact.unreadCount + 1 else contact.unreadCount,
-                        lastSessionId = event.sessionId ?: contact.lastSessionId,
-                        lastActivityAt = event.createdAt ?: contact.lastActivityAt,
-                        preview = MessagePreview(
-                            text = event.preview,
-                            fromAgent = true,
-                            hasAttachments = event.preview.isNullOrBlank(),
-                            createdAt = event.createdAt,
-                        ),
-                        // Ответ пришёл — агент закончил работу.
-                        isRunning = false,
-                    )
-                }
-            )
         }
     }
 

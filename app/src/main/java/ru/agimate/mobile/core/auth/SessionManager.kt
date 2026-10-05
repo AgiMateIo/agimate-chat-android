@@ -125,6 +125,9 @@ class SessionManager @Inject constructor(
                 apiCall { userApi.me() }.unwrap("профиль пользователя")
             )
             _state.value = if (profile.role.approved) {
+                // Одна подписка на всё приложение и до любого экрана: чат, открытый пушем мимо
+                // контактов, иначе остался бы без живых сообщений. Повторный вызов ничего не делает.
+                realtime.start()
                 AppSession.Active(profile)
             } else {
                 AppSession.AwaitingApproval(profile)

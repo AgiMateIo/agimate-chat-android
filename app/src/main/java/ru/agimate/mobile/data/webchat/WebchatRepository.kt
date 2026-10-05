@@ -86,9 +86,6 @@ class WebchatRepository @Inject constructor(
     suspend fun userChannelToken(): CentrifugoTokenDto =
         apiCall { api.userToken() }.unwrap("токен личного канала")
 
-    suspend fun sessionChannelToken(sessionId: String): CentrifugoTokenDto =
-        apiCall { api.sessionToken(sessionId) }.unwrap("токен канала переписки")
-
     private fun <D, T> PageEnvelope<D>.toPaged(map: (D) -> T) = Paged(
         items = content.map(map),
         isLast = isLastPage,

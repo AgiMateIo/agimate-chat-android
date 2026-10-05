@@ -219,4 +219,17 @@ class ChatMergeTest {
         assertEquals(3, feed.size)
         assertEquals("рисую график", feed.first().text)
     }
+
+    @Test
+    fun `resync starts the feed over and keeps only unsent bubbles`() {
+        val oldHistory = agent("old", "давнее")
+        val failed = optimistic("l1", "не ушло").copy(failed = true)
+        val pending = optimistic("l2", "в пути")
+        val page = listOf(agent("new", "свежее"))
+
+        val result = resyncNewestPage(listOf(pending, failed, oldHistory), page)
+
+        assertEquals(listOf("l2", "l1", null), result.map { it.localId })
+        assertEquals("new", result.last().messageId)
+    }
 }

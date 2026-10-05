@@ -20,7 +20,7 @@ import ru.agimate.mobile.core.network.PageEnvelope
  * Путей два семейства, и делятся они не по экранам, а по природе. Сама переписка — один ресурс
  * `/manage/sessions` независимо от того, чем она идёт: листинг, история, отметка прочтения и
  * закрытие общие для веб-чата, мессенджеров и IDE. В `/manage/webchat` остался только транспорт:
- * начать чат, отправить сообщение, взять токен на живой канал, список агентов как контактов.
+ * начать чат, отправить сообщение, список агентов как контактов.
  *
  * **Листинг сессий без `connectorCode` отдаёт все переписки пользователя**, а не только чаты: у
  * агента бывают сессии в мессенджерах и поток событий подключения вовсе без канала. Приложение
@@ -102,10 +102,6 @@ interface WebchatApi {
         @Path("id") sessionId: String,
         @Body body: MarkReadRequest,
     ): ApiEnvelope<String?>
-
-    /** Токены на канал одной переписки: `webchat:{sessionId}`. */
-    @POST("control/manage/webchat/sessions/{id}/token")
-    suspend fun sessionToken(@Path("id") sessionId: String): ApiEnvelope<CentrifugoTokenDto>
 
     /** Токены на личный канал пользователя: `user:{userId}`. Одна подписка на всё приложение. */
     @POST("control/manage/centrifugo/token")
