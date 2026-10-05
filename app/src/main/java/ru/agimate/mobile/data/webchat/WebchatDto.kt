@@ -78,6 +78,8 @@ data class WebchatSessionDto(
      * `isRunning` приходят нулями — их непрочитанное ведёт сам мессенджер.
      */
     val connectorCode: String? = null,
+    /** У сессии субагента — переписка, на которую он работает; у обычной `null`. */
+    val parentSessionId: String? = null,
     /** Генерируется из первого сообщения, режется до 80 символов; переименование его перекрывает. */
     val title: String? = null,
     @Serializable(with = InstantSerializer::class)

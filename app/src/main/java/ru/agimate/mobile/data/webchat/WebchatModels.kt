@@ -69,6 +69,10 @@ data class ChatSession(
     /** В ответе это `id`: сессия — самостоятельный ресурс, а не деталь веб-чата. */
     val sessionId: String,
     val agentId: String?,
+    /** Чем идёт переписка; приложение показывает только [WebchatRepository.CONNECTOR_WEBCHAT]. */
+    val connectorCode: String?,
+    /** У сессии субагента — переписка, на которую он работает. Такие приложение не показывает. */
+    val parentSessionId: String?,
     val title: String?,
     /** Свежесть переписки целиком, а не только последнего сообщения. */
     val lastActivityAt: Instant?,
@@ -84,6 +88,8 @@ data class ChatSession(
         fun from(dto: WebchatSessionDto) = ChatSession(
             sessionId = dto.id,
             agentId = dto.agentId,
+            connectorCode = dto.connectorCode,
+            parentSessionId = dto.parentSessionId,
             title = dto.title,
             lastActivityAt = dto.lastActivityAt,
             closedAt = dto.closedAt,

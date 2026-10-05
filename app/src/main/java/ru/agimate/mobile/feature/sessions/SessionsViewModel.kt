@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.network.toApiException
+import ru.agimate.mobile.core.realtime.RealtimeClient
+import ru.agimate.mobile.core.realtime.RealtimeEvent
+import ru.agimate.mobile.core.realtime.upsertByActivity
 import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.webchat.ChatSession
@@ -44,6 +47,7 @@ data class SessionsUiState(
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val repository: WebchatRepository,
+    private val realtime: RealtimeClient,
     drafts: DraftStore,
     savedState: SavedStateHandle,
 ) : ViewModel() {
@@ -58,6 +62,7 @@ class SessionsViewModel @Inject constructor(
     private var nextPage = 0
 
     init {
+        observeLiveRows()
         load()
         // Черновики локальные, и приходят они отдельно от серверного списка: строка знает про свой
         // по идентификатору переписки. Порядок строк при этом не меняется — он серверный, и между
@@ -66,6 +71,48 @@ class SessionsViewModel @Inject constructor(
             drafts.drafts.collect { map -> _state.update { it.copy(drafts = map) } }
         }
     }
+
+    /**
+     * Строки переписок приходят целиком: заголовок, который платформа дала сама, закрытие с другого
+     * устройства, счётчик, «печатает…». Канал общий на всё приложение, поэтому чужие строки
+     * отбрасываем: другого агента, другого коннектора и субагентов.
+     *
+     * Новая переписка встаёт по свежести, то есть наверх. Обновлённой, которой на экране нет, не
+     * вставляем: список постраничный, и она просто лежит на непрочитанной странице.
+     */
+    private fun observeLiveRows() {
+        viewModelScope.launch {
+            realtime.events.collect { event ->
+                when (event) {
+                    is RealtimeEvent.Session -> {
+                        val session = ChatSession.from(event.row)
+                        if (!belongsHere(session)) return@collect
+                        _state.update { current ->
+                            current.copy(
+                                sessions = current.sessions.upsertByActivity(
+                                    session,
+                                    insertIfAbsent = event.created,
+                                    key = ChatSession::sessionId,
+                                    activity = ChatSession::lastActivityAt,
+                                ),
+                                // Диалог переименования держит снимок строки — пусть он не отстаёт.
+                                renaming = current.renaming?.let {
+                                    if (it.sessionId == session.sessionId) session else it
+                                },
+                            )
+                        }
+                    }
+                    RealtimeEvent.Resync -> load()
+                    is RealtimeEvent.Contact, is RealtimeEvent.Message -> Unit
+                }
+            }
+        }
+    }
+
+    private fun belongsHere(session: ChatSession): Boolean =
+        session.agentId == agentId &&
+            session.connectorCode == WebchatRepository.CONNECTOR_WEBCHAT &&
+            session.parentSessionId == null
 
     fun load() {
         viewModelScope.launch {
