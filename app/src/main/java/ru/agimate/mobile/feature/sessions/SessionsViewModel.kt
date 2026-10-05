@@ -62,17 +62,6 @@ class SessionsViewModel @Inject constructor(
 
     private var nextPage = 0
 
-    init {
-        observeLiveRows()
-        load()
-        // Черновики локальные, и приходят они отдельно от серверного списка: строка знает про свой
-        // по идентификатору переписки. Порядок строк при этом не меняется — он серверный, и между
-        // страницами его не восстановить.
-        viewModelScope.launch {
-            drafts.drafts.collect { map -> _state.update { it.copy(drafts = map) } }
-        }
-    }
-
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
 
@@ -84,6 +73,17 @@ class SessionsViewModel @Inject constructor(
      * и без повторного наложения вернул бы старый заголовок или погасшее «печатает…».
      */
     private var liveDuringLoad = mutableListOf<RealtimeEvent.Session>()
+
+    init {
+        observeLiveRows()
+        load()
+        // Черновики локальные, и приходят они отдельно от серверного списка: строка знает про свой
+        // по идентификатору переписки. Порядок строк при этом не меняется — он серверный, и между
+        // страницами его не восстановить.
+        viewModelScope.launch {
+            drafts.drafts.collect { map -> _state.update { it.copy(drafts = map) } }
+        }
+    }
 
     /**
      * Строки переписок приходят целиком: заголовок, который платформа дала сама, закрытие с другого

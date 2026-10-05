@@ -157,10 +157,10 @@ class ChatViewModel @Inject constructor(
      * строка: так остановка с другого устройства не потеряется, даже случившись в это же окно.
      */
     private var runGraceJob: Job? = null
+    private var deferredIdleRow = false
 
     /** Сколько живых строк этой переписки пришло — чтобы снимок по REST не перекрыл свежую. */
     private var liveSessionRows = 0
-    private var deferredIdleRow = false
 
     init {
         restoreDraft()
