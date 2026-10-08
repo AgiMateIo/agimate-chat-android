@@ -138,7 +138,7 @@ class ChatViewModel @Inject constructor(
     /** Дело с файлом — одно за раз; строка о нём — тоже одна. */
     private var fileJob: Job? = null
 
-    /** Вложения, за свежей подписью которых уже ходили ради картинки. */
+    /** Вложения (id и версия), за свежей подписью которых уже ходили ради картинки. */
     private val refreshedImages = mutableSetOf<String>()
     private var noticeJob: Job? = null
 
@@ -718,7 +718,8 @@ class ChatViewModel @Inject constructor(
      * при этом на месте, и говорить человеку про доступ — врать. Ссылки нет вовсе у только что
      * отправленного своего вложения — там она и не приходила, и путь ровно тот же.
      *
-     * Не нашлось в листинге переписки — вот тогда файл действительно ушёл по сроку.
+     * Не нашлось в истории — вложение пропало вместе с сообщением. Удалённый или истёкший файл
+     * скажет о себе сам: по свежей подписи придёт `404`.
      */
     private suspend fun withFreshLink(
         attachment: Attachment,
@@ -736,10 +737,10 @@ class ChatViewModel @Inject constructor(
 
         val fresh = freshUrl(attachment) ?: throw ApiException.NotFound(
             uiText(R.string.error_file_gone),
-            "file $fileId gone from listing",
+            "file $fileId v${attachment.version} gone from history",
         )
         // Вложение запоминает новый адрес: следующему действию ходить за ним второй раз незачем.
-        patchUrl(fileId, fresh)
+        patchUrl(fileId, attachment.version, fresh)
         return block(attachment.remote(origins.fileUrl(fresh)))
     }
 
@@ -753,35 +754,40 @@ class ChatViewModel @Inject constructor(
      */
     fun onImageFailed(attachment: Attachment) {
         val fileId = attachment.fileId ?: return
-        if (!refreshedImages.add(fileId)) return
+        if (!refreshedImages.add("$fileId@${attachment.version}")) return
         viewModelScope.launch {
             val fresh = runCatching { freshUrl(attachment) }.getOrNull() ?: return@launch
-            patchUrl(fileId, fresh)
+            patchUrl(fileId, attachment.version, fresh)
         }
     }
 
-    /** Файлы переписки — та же выдача, что открывает вложения экраном файлов, только фильтром. */
+    /**
+     * Свежая подпись — из истории, а не из листинга файлов: листинг подписывает текущую версию, а
+     * вложению нужна своя. Сообщение лежит не глубже загруженного лентой; страница сверху — запас на
+     * то, что живые сообщения сдвинули его вниз.
+     */
     private suspend fun freshUrl(attachment: Attachment): String? =
-        storedFiles.freshUrl(
-            fileId = attachment.fileId ?: return null,
+        repository.freshAttachmentUrl(
             sessionId = sessionId,
-            name = attachment.name,
+            fileId = attachment.fileId ?: return null,
+            version = attachment.version,
+            pages = nextPage + 1,
         )
 
-    private fun patchUrl(fileId: String, url: String) {
+    /** Подпись принадлежит версии: соседнее сообщение с тем же файлом другой версии её не получает. */
+    private fun patchUrl(fileId: String, version: Int, url: String) {
+        fun Attachment.matches() = this.fileId == fileId && this.version == version
         messages = messages.map { message ->
-            if (message.attachments.none { it.fileId == fileId }) return@map message
+            if (message.attachments.none { it.matches() }) return@map message
             message.copy(
-                attachments = message.attachments.map {
-                    if (it.fileId == fileId) it.copy(url = url) else it
-                }
+                attachments = message.attachments.map { if (it.matches()) it.copy(url = url) else it }
             )
         }
         publishItems()
     }
 
     private fun Attachment.remote(address: String) =
-        RemoteFile(id = fileId, url = address, name = name, mime = mime)
+        RemoteFile(id = fileId, url = address, name = name, mime = mime, version = version)
 
     private fun handOff(intent: Intent) {
         _effects.trySend(ChatEffect.Launch(intent))

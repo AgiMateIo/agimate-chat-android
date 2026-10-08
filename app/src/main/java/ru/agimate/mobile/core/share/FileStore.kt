@@ -32,6 +32,11 @@ data class RemoteFile(
     val url: String,
     val name: String?,
     val mime: String?,
+    /**
+     * Версия содержимого. У вложения переписки она известна; листинг файлов её не отдаёт, и тогда
+     * версию называет сама ссылка — она подписана на одну версию.
+     */
+    val version: Int? = null,
 ) {
     val isImage: Boolean get() = mime?.startsWith("image/") == true
 }
@@ -68,7 +73,8 @@ class FileStore @Inject constructor(
         }
 
         val target = File(slot, diskName(file))
-        // Файл на сервере неизменен: тот же id — тот же файл, второй раз качать его незачем.
+        // Версия файла на сервере неизменна: тот же id той же версии — тот же файл, второй раз
+        // качать его незачем. Сам id этого не гарантирует: агент переписывает файл, не меняя его.
         if (target.length() == 0L) {
             // Пишется рядом и переименовывается: оборвавшаяся закачка оставила бы огрызок, который
             // при следующей попытке был бы принят за готовый файл.
@@ -196,12 +202,22 @@ class FileStore @Inject constructor(
     private val authority: String get() = context.packageName + FILE_PROVIDER_SUFFIX
 
     /**
-     * Имя каталога в кэше — хэш идентификатора, а не он сам: id приходит с сервера, а из чужой
-     * строки не должно получаться ни пути, ни имени. Столкновение хэшей стоит одной лишней
+     * Имя каталога в кэше — хэш идентификатора и версии, а не они сами: id приходит с сервера, а из
+     * чужой строки не должно получаться ни пути, ни имени. Столкновение хэшей стоит одной лишней
      * закачки, и то раз в жизни.
      */
-    private fun cacheKey(file: RemoteFile): String =
-        (file.id ?: file.url.substringBefore('?')).hashCode().toUInt().toString(16)
+    private fun cacheKey(file: RemoteFile): String {
+        val address = file.url.substringBefore('?')
+        // Ссылка control-api несёт версию параметром `v`; прямая ссылка хранилища ведёт на объект
+        // одной версии, и её отличает сам путь.
+        val version = file.version?.toString() ?: versionParam(file.url) ?: address
+        return "${file.id ?: address}@$version".hashCode().toUInt().toString(16)
+    }
+
+    private fun versionParam(url: String): String? =
+        url.substringAfter('?', "").split('&')
+            .firstOrNull { it.startsWith("v=") }
+            ?.removePrefix("v=")
 
     /**
      * Кэш для «поделиться» — не хранилище: файл нужен ровно на время, пока чужое приложение его

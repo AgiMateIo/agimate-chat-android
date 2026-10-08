@@ -37,6 +37,25 @@ class WebchatRepository @Inject constructor(
             .unwrap("история переписки")
             .toPaged(ChatMessage::from)
 
+    /**
+     * Свежая подпись вложения ровно той версии, что несёт сообщение. Листинг файлов для этого не
+     * годится: он подписывает текущую версию, и старое сообщение открыло бы чужое содержимое.
+     * Поэтому — история, страницу за страницей; глубже уже загруженного лентой искать незачем.
+     *
+     * `null` — вложения в просмотренных страницах нет.
+     */
+    suspend fun freshAttachmentUrl(sessionId: String, fileId: String, version: Int, pages: Int): String? {
+        for (page in 0 until pages.coerceAtLeast(1)) {
+            val chunk = apiCall { api.messages(sessionId, page, PAGE_SIZE) }.unwrap("история переписки")
+            chunk.content.asSequence()
+                .flatMap { it.parts.orEmpty() }
+                .firstOrNull { it.fileId == fileId && it.version == version && !it.url.isNullOrBlank() }
+                ?.let { return it.url }
+            if (chunk.isLastPage) return null
+        }
+        return null
+    }
+
     suspend fun startSession(agentId: String): ChatSession =
         ChatSession.from(
             apiCall { api.startSession(StartSessionRequest(agentId)) }.unwrap("новая переписка")

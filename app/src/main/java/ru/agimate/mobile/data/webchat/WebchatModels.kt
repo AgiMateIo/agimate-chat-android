@@ -106,6 +106,8 @@ data class Attachment(
     val mime: String?,
     val size: Long?,
     val name: String?,
+    /** Версия файла этого сообщения — см. [WebchatAttachmentDto.version]. */
+    val version: Int = 1,
     /** Подписанный адрес как его отдал сервер: относительный или абсолютный. См. OriginProvider.fileUrl. */
     val url: String?,
 ) {
@@ -117,6 +119,7 @@ data class Attachment(
             mime = dto.mime,
             size = dto.size,
             name = dto.name,
+            version = dto.version,
             url = dto.url,
         )
     }
