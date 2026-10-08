@@ -18,7 +18,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         // SDK пуш-уведомлений RuStore в Maven Central не публикуется — только сюда.
-        maven("https://artifactory-external.vkpartner.ru/artifactory/maven") {
+        maven("https://nexus-external.rustore.ru/repository/maven-rustore-exposed") {
             content { includeGroupByRegex("ru\\.rustore.*") }
         }
     }
