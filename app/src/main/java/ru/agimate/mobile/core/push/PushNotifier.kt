@@ -75,7 +75,7 @@ class PushNotifier @Inject constructor(
             putExtra(PushExtras.AGENT_ID, message.agentId)
             putExtra(PushExtras.AGENT_NAME, agentName)
         }
-        val requestCode = message.sessionId.hashCode()
+        val requestCode = notificationId(message.sessionId)
         val pending = PendingIntent.getActivity(
             context,
             requestCode,
@@ -98,8 +98,18 @@ class PushNotifier @Inject constructor(
         // Идентификатор — по переписке, а не по сообщению: второе сообщение подряд заменяет первое,
         // а не копится в шторке. Заодно это и дедупликация: доставка at-least-once, и тот же пуш
         // может прийти дважды.
-        NotificationManagerCompat.from(context).notify(message.sessionId.hashCode(), notification)
+        NotificationManagerCompat.from(context).notify(notificationId(message.sessionId), notification)
     }
+
+    /**
+     * Убрать уведомление переписки, которую открыли. Прочитанное, оставшись в шторке, выглядит
+     * непрочитанным — и тянет открыть то, что человек уже видел.
+     */
+    fun cancel(sessionId: String) {
+        NotificationManagerCompat.from(context).cancel(notificationId(sessionId))
+    }
+
+    private fun notificationId(sessionId: String): Int = sessionId.hashCode()
 
     /**
      * Убрать из шторки всё своё.

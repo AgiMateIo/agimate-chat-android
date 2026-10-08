@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.network.toApiException
+import ru.agimate.mobile.core.push.PushNotifier
 import ru.agimate.mobile.core.realtime.OpenChatTracker
 import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeEvent
@@ -110,6 +111,7 @@ class ChatViewModel @Inject constructor(
     private val sharing: Sharing,
     private val origins: OriginProvider,
     private val openChats: OpenChatTracker,
+    private val notifications: PushNotifier,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -183,6 +185,9 @@ class ChatViewModel @Inject constructor(
      */
     fun onScreenShown() {
         openChats.open(sessionId)
+        // Пока переписка на экране, новые уведомления о ней не показываются; висящее с прошлого
+        // раза убирается здесь же — открыта ли она тапом по нему или из списка.
+        notifications.cancel(sessionId)
     }
 
     fun onScreenHidden() {
