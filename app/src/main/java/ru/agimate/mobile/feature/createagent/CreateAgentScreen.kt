@@ -117,12 +117,31 @@ private fun PresetGallery(
                         modifier = Modifier.padding(bottom = AgiTheme.spacing.sm),
                     )
                 }
-                items(state.presets, key = { it.id }) { preset ->
-                    PresetCard(preset = preset, onClick = { onSelect(preset) })
+                for (section in state.sections) {
+                    if (section.label != null) {
+                        item(key = "section:${section.label}", contentType = "section") {
+                            SectionHeader(section.label)
+                        }
+                    }
+                    items(section.presets, key = { it.id }, contentType = { "preset" }) { preset ->
+                        PresetCard(preset = preset, onClick = { onSelect(preset) })
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun SectionHeader(label: String) {
+    Text(
+        text = label,
+        style = AgiTheme.typography.caption,
+        color = AgiTheme.colors.textTertiary,
+        // Шаг между карточками уже даёт spacedBy; сверху добавлено столько, чтобы секции отделялись
+        // друг от друга заметнее, чем карточки внутри одной.
+        modifier = Modifier.padding(top = AgiTheme.spacing.sm),
+    )
 }
 
 @Composable

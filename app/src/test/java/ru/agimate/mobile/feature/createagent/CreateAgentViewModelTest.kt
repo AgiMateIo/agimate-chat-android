@@ -45,6 +45,8 @@ class CreateAgentViewModelTest {
 
     private var presets = PRESETS
 
+    private var taxonomyFails = false
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -53,6 +55,11 @@ class CreateAgentViewModelTest {
                 val path = request.url.encodedPath
                 return when {
                     path.endsWith("/agent-presets/") -> ok(presets)
+                    path.endsWith("/taxonomy/") -> if (taxonomyFails) {
+                        MockResponse(code = 500)
+                    } else {
+                        ok(TAXONOMY)
+                    }
                     path.endsWith("/connections/") -> if (bindFailures-- > 0) {
                         MockResponse(code = 503)
                     } else {
@@ -104,7 +111,8 @@ class CreateAgentViewModelTest {
         assertEquals("agent-1", result.agentId)
         assertEquals("s-1", result.sessionId)
 
-        val calls = requests()
+        // Словарь грузится параллельно с галереей, и место его запроса в очереди не определено.
+        val calls = requests().filterNot { it.url.encodedPath.endsWith("/taxonomy/") }
         assertEquals(
             listOf(
                 "/control/manage/agent-presets/",
@@ -155,6 +163,32 @@ class CreateAgentViewModelTest {
         assertEquals(listOf("personal-assistant", "untyped"), shown.map { it.name })
     }
 
+    @Test
+    fun `gallery is split into dictionary sections`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        presets = MIXED_PRESETS
+        val vm = CreateAgentViewModel(api, webchat)
+
+        val sections = vm.state.first { !it.loading }.sections
+        assertEquals(
+            listOf("Дом и быт" to listOf("personal-assistant"), "Прочее" to listOf("untyped")),
+            sections.map { it.label to it.presets.map { p -> p.name } },
+        )
+    }
+
+    @Test
+    fun `a failed dictionary leaves the gallery as one list`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        presets = MIXED_PRESETS
+        taxonomyFails = true
+        val vm = CreateAgentViewModel(api, webchat)
+
+        val state = vm.state.first { !it.loading }
+        assertEquals(null, state.error)
+        assertEquals(listOf<String?>(null), state.sections.map { it.label })
+        assertEquals(2, state.sections.single().presets.size)
+    }
+
     private companion object {
         const val PRESETS = """
             {"response":[{"id":"p-1","name":"personal-assistant","title":"Личный ассистент",
@@ -166,10 +200,16 @@ class CreateAgentViewModelTest {
 
         const val MIXED_PRESETS = """
             {"response":[
-            {"id":"p-1","name":"personal-assistant","agentType":"GENERIC","sortOrder":0,"enabled":true},
+            {"id":"p-1","name":"personal-assistant","agentType":"GENERIC","category":"HOME","sortOrder":0,
+            "enabled":true},
             {"id":"p-2","name":"webhook-bot","agentType":"WEBHOOK","sortOrder":1,"enabled":true},
             {"id":"p-3","name":"untyped","sortOrder":2,"enabled":true},
             {"id":"p-4","name":"mcp-bot","agentType":"MCP","sortOrder":3,"enabled":true}]}
+        """
+
+        const val TAXONOMY = """
+            {"response":{"categories":[{"code":"PLATFORM","label":"Платформа"},
+            {"code":"HOME","label":"Дом и быт"},{"code":"OTHER","label":"Прочее"}],"tagGroups":[]}}
         """
 
         const val CREATED = """

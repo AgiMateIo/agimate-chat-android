@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,10 +23,15 @@ import ru.agimate.mobile.data.agents.AgentPresetDto
 import ru.agimate.mobile.data.agents.AgentsApi
 import ru.agimate.mobile.data.agents.BindConnectorRequest
 import ru.agimate.mobile.data.agents.CreateAgentRequest
+import ru.agimate.mobile.data.agents.TaxonomyItemDto
 import ru.agimate.mobile.data.webchat.WebchatRepository
+
+/** Секция галереи. `label == null` — словарь не загрузился, и галерея идёт одним списком. */
+data class PresetSection(val label: String?, val presets: List<AgentPresetDto>)
 
 data class CreateAgentUiState(
     val presets: List<AgentPresetDto> = emptyList(),
+    val sections: List<PresetSection> = emptyList(),
     val loading: Boolean = true,
     val error: UiText? = null,
     /** Выбранная роль — второй шаг мастера. */
@@ -66,20 +73,44 @@ class CreateAgentViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             try {
-                val presets = apiCall { api.presets() }
-                    .unwrap("галерея ролей")
-                    // Мессенджеру доступны только агенты, чей «мозг» живёт на платформе: остальным
-                    // типам нужен внешний исполнитель, настроить который отсюда негде. Пресет без
-                    // типа — тоже GENERIC.
-                    .filter { it.enabled && (it.agentType ?: AGENT_TYPE) == AGENT_TYPE }
-                    .sortedBy { it.sortOrder }
-                _state.update { it.copy(presets = presets, loading = false) }
+                val (presets, categories) = coroutineScope {
+                    val categories = async { loadCategories() }
+                    loadPresets() to categories.await()
+                }
+                _state.update {
+                    it.copy(
+                        presets = presets,
+                        sections = presetSections(presets, categories),
+                        loading = false,
+                    )
+                }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 _state.update { it.copy(loading = false, error = e.toApiException().text) }
             }
         }
     }
+
+    private suspend fun loadPresets(): List<AgentPresetDto> =
+        apiCall { api.presets() }
+            .unwrap("галерея ролей")
+            // Мессенджеру доступны только агенты, чей «мозг» живёт на платформе: остальным
+            // типам нужен внешний исполнитель, настроить который отсюда негде. Пресет без
+            // типа — тоже GENERIC.
+            .filter { it.enabled && (it.agentType ?: AGENT_TYPE) == AGENT_TYPE }
+            .sortedBy { it.sortOrder }
+
+    /**
+     * Словарь — украшение, а не условие: без него роли всё равно выбираются, просто одним списком.
+     * Поэтому его ошибка галерею не роняет.
+     */
+    private suspend fun loadCategories(): List<TaxonomyItemDto>? =
+        try {
+            apiCall { api.taxonomy() }.unwrap("словарь категорий").categories
+        } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            null
+        }
 
     fun select(preset: AgentPresetDto) {
         _state.update {
@@ -193,4 +224,28 @@ class CreateAgentViewModel @Inject constructor(
     private companion object {
         const val AGENT_TYPE = "GENERIC"
     }
+}
+
+/** Куда попадает пресет, которого никто не разложил, — и сервер без таксономии. */
+private const val OTHER_CATEGORY = "OTHER"
+
+/**
+ * Раскладка галереи по категориям — те же правила, что в вебе: секции в порядке словаря, пустые не
+ * показываются, внутри секции порядок `sortOrder` сохраняется. Код, которого словарь не знает
+ * (сервер новее приложения), получает секцию с самим кодом в подписи — в конце, а не теряется.
+ */
+internal fun presetSections(
+    presets: List<AgentPresetDto>,
+    categories: List<TaxonomyItemDto>?,
+): List<PresetSection> {
+    if (presets.isEmpty()) return emptyList()
+    if (categories.isNullOrEmpty()) return listOf(PresetSection(label = null, presets = presets))
+
+    val byCode = presets.groupBy { it.category?.takeIf { code -> code.isNotBlank() } ?: OTHER_CATEGORY }
+    val known = categories.mapNotNull { category ->
+        byCode[category.code]?.let { PresetSection(category.label.ifBlank { category.code }, it) }
+    }
+    val knownCodes = categories.map { it.code }.toSet()
+    val unknown = byCode.filterKeys { it !in knownCodes }.map { (code, items) -> PresetSection(code, items) }
+    return known + unknown
 }

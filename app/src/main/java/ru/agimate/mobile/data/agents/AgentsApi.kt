@@ -29,9 +29,21 @@ data class AgentPresetDto(
     val connectorCodes: List<String> = emptyList(),
     /** `null` — тип не задан пресетом, выбирает клиент. */
     val agentType: String? = null,
+    /** Код категории из словаря [TaxonomyDto]; сервер без таксономии поле не отдаёт. */
+    val category: String? = null,
     val sortOrder: Int = 0,
     val enabled: Boolean = true,
 )
+
+@Serializable
+data class TaxonomyItemDto(val code: String, val label: String = "")
+
+/**
+ * Словарь каталога. Нужны только категории: в них и порядок секций, и подписи — у пресета лежит один
+ * код. Подписи на языке контента инсталляции, а не телефона.
+ */
+@Serializable
+data class TaxonomyDto(val categories: List<TaxonomyItemDto> = emptyList())
 
 /**
  * Отдельного «создать из пресета» на бэкенде нет — запрос собирает приложение.
@@ -83,6 +95,9 @@ interface AgentsApi {
     /** Не постраничный список. Сортировать по `sortOrder`. */
     @GET("control/manage/agent-presets/")
     suspend fun presets(): ApiEnvelope<List<AgentPresetDto>>
+
+    @GET("control/manage/taxonomy/")
+    suspend fun taxonomy(): ApiEnvelope<TaxonomyDto>
 
     @POST("control/manage/agents/")
     suspend fun createAgent(@Body body: CreateAgentRequest): ApiEnvelope<AgentCreatedDto>
