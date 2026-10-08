@@ -43,6 +43,8 @@ class CreateAgentViewModelTest {
     /** Сколько первых открытий коннектора уронить: так проверяется повтор после ошибки. */
     private var bindFailures = 0
 
+    private var presets = PRESETS
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -50,7 +52,7 @@ class CreateAgentViewModelTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.url.encodedPath
                 return when {
-                    path.endsWith("/agent-presets/") -> ok(PRESETS)
+                    path.endsWith("/agent-presets/") -> ok(presets)
                     path.endsWith("/connections/") -> if (bindFailures-- > 0) {
                         MockResponse(code = 503)
                     } else {
@@ -143,6 +145,16 @@ class CreateAgentViewModelTest {
         assertEquals(1, creates)
     }
 
+    @Test
+    fun `gallery offers only generic presets`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        presets = MIXED_PRESETS
+        val vm = CreateAgentViewModel(api, webchat)
+
+        val shown = vm.state.first { !it.loading }.presets
+        assertEquals(listOf("personal-assistant", "untyped"), shown.map { it.name })
+    }
+
     private companion object {
         const val PRESETS = """
             {"response":[{"id":"p-1","name":"personal-assistant","title":"Личный ассистент",
@@ -150,6 +162,14 @@ class CreateAgentViewModelTest {
             "skills":[{"id":"s-time","name":"time"},{"id":"s-memory","name":"persist-memory"}],
             "connectorCodes":["time","persist-memory"],"agentType":"GENERIC","sortOrder":0,
             "enabled":true}]}
+        """
+
+        const val MIXED_PRESETS = """
+            {"response":[
+            {"id":"p-1","name":"personal-assistant","agentType":"GENERIC","sortOrder":0,"enabled":true},
+            {"id":"p-2","name":"webhook-bot","agentType":"WEBHOOK","sortOrder":1,"enabled":true},
+            {"id":"p-3","name":"untyped","sortOrder":2,"enabled":true},
+            {"id":"p-4","name":"mcp-bot","agentType":"MCP","sortOrder":3,"enabled":true}]}
         """
 
         const val CREATED = """

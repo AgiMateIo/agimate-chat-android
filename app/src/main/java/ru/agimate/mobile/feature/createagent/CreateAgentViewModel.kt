@@ -68,7 +68,10 @@ class CreateAgentViewModel @Inject constructor(
             try {
                 val presets = apiCall { api.presets() }
                     .unwrap("галерея ролей")
-                    .filter { it.enabled }
+                    // Мессенджеру доступны только агенты, чей «мозг» живёт на платформе: остальным
+                    // типам нужен внешний исполнитель, настроить который отсюда негде. Пресет без
+                    // типа — тоже GENERIC.
+                    .filter { it.enabled && (it.agentType ?: AGENT_TYPE) == AGENT_TYPE }
                     .sortedBy { it.sortOrder }
                 _state.update { it.copy(presets = presets, loading = false) }
             } catch (e: Throwable) {
@@ -143,9 +146,7 @@ class CreateAgentViewModel @Inject constructor(
                                 name = name,
                                 description = preset.description,
                                 instructions = current.instructions,
-                                // У пресета тип может быть не задан. Тогда это агент, чей «мозг» живёт
-                                // на платформе, — GENERIC.
-                                type = preset.agentType ?: DEFAULT_AGENT_TYPE,
+                                type = AGENT_TYPE,
                                 skillIds = preset.skills.map { it.id },
                                 presetName = preset.name,
                             )
@@ -190,6 +191,6 @@ class CreateAgentViewModel @Inject constructor(
     }
 
     private companion object {
-        const val DEFAULT_AGENT_TYPE = "GENERIC"
+        const val AGENT_TYPE = "GENERIC"
     }
 }
