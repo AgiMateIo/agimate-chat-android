@@ -153,6 +153,7 @@
     <string name="chat_attachment_uploading">загружается…</string>
     <string name="chat_empty_title">Напишите первое сообщение</string>
     <string name="chat_empty_description">Обычным языком — как человеку. Можно приложить фото или документ.</string>
+    <string name="chat_starter_hide">Скрыть подсказку</string>
     <string name="chat_input_hint">Сообщение</string>
     <string name="chat_composer_closed">Переписка закрыта — начните новую</string>
     <string name="chat_composer_agent_disabled">Агент выключен</string>

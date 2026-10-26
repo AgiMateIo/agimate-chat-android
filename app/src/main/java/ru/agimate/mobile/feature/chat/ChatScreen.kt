@@ -13,6 +13,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +60,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -97,6 +101,8 @@ import ru.agimate.mobile.core.ui.theme.AgiMotion
 import ru.agimate.mobile.core.ui.theme.AgiShapes
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
+import ru.agimate.mobile.data.agents.Starter
+import ru.agimate.mobile.data.agents.Starters
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
@@ -159,6 +165,9 @@ fun ChatScreen(
     onOpenFiles: () -> Unit,
     /** Свои файлы — выбрать вложение. Тот же экран, но без фильтра и с прикреплением по тапу. */
     onPickStored: () -> Unit,
+    /** Подсказка пустого чата — отправить её текст обычным сообщением. */
+    onStarter: (Starter) -> Unit,
+    onHideStarter: (Starter) -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -266,7 +275,13 @@ fun ChatScreen(
                         onRetry = onRetryLoad,
                     )
 
-                    state.items.isEmpty() -> EmptyChatHint(agentName = state.agentName)
+                    state.items.isEmpty() -> EmptyChatHint(
+                        agentName = state.agentName,
+                        starters = state.visibleStarters,
+                        startersEnabled = state.canSendStarter,
+                        onStarter = onStarter,
+                        onHideStarter = onHideStarter,
+                    )
 
                     else -> LazyColumn(
                         state = listState,
@@ -985,30 +1000,115 @@ private fun OlderPageError(message: String, onRetry: () -> Unit) {
     }
 }
 
+/**
+ * Пустая переписка. Приветствие агента — не реплика: пузырём оно не рисуется и в историю не
+ * попадает. Без него остаётся общее приглашение написать.
+ *
+ * Прокрутка — потому что приветствие бывает до тысячи знаков, а подсказок до десятка своих плюс
+ * навыков: с клавиатурой на экране всё это в высоту не влезает.
+ */
 @Composable
-private fun EmptyChatHint(agentName: String) {
+private fun EmptyChatHint(
+    agentName: String,
+    starters: Starters?,
+    /** Писать нельзя — закрыта переписка или выключен агент: подсказки нажать некуда. */
+    startersEnabled: Boolean,
+    onStarter: (Starter) -> Unit,
+    onHideStarter: (Starter) -> Unit,
+) {
     val colors = AgiTheme.colors
+    val greeting = starters?.greeting
+    val items = starters?.items.orEmpty().takeIf { startersEnabled }.orEmpty()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = AgiTheme.spacing.xl),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = AgiTheme.spacing.xl, vertical = AgiTheme.spacing.lg),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AgentAvatar(name = agentName, size = 64.dp)
         Spacer(Modifier.height(AgiTheme.spacing.lg))
+        if (greeting != null) {
+            Text(
+                text = greeting,
+                style = AgiTheme.typography.body,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.chat_empty_title),
+                style = AgiTheme.typography.subtitle,
+                color = colors.textPrimary,
+            )
+            Spacer(Modifier.height(AgiTheme.spacing.sm))
+            Text(
+                text = stringResource(R.string.chat_empty_description),
+                style = AgiTheme.typography.secondary,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (items.isNotEmpty()) {
+            Spacer(Modifier.height(AgiTheme.spacing.lg))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                items.forEach { starter ->
+                    key(starter.key) {
+                        StarterChip(
+                            starter = starter,
+                            onClick = { onStarter(starter) },
+                            onHide = { onHideStarter(starter) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Подсказка показывается целиком, без многоточия: подсказки навыков из каталога пишут чужие люди, а
+ * уходят они от имени человека — он должен видеть, что отправит. Сервер держит их в одну строку до
+ * 150 знаков, так что больше двух-трёх строк чип не займёт.
+ */
+@Composable
+private fun StarterChip(starter: Starter, onClick: () -> Unit, onHide: () -> Unit) {
+    val colors = AgiTheme.colors
+    var menuOpen by remember { mutableStateOf(false) }
+    val shape = AgiShapes.bubble
+    Box {
         Text(
-            text = stringResource(R.string.chat_empty_title),
-            style = AgiTheme.typography.subtitle,
+            text = starter.text,
+            style = AgiTheme.typography.body,
             color = colors.textPrimary,
-        )
-        Spacer(Modifier.height(AgiTheme.spacing.sm))
-        Text(
-            text = stringResource(R.string.chat_empty_description),
-            style = AgiTheme.typography.secondary,
-            color = colors.textSecondary,
             textAlign = TextAlign.Center,
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .clip(shape)
+                .background(colors.surface, shape)
+                .border(1.dp, colors.hairline, shape)
+                .combinedClickable(
+                    onClick = onClick,
+                    // Скрыть можно только подсказку навыка — свою агент правит списком.
+                    onLongClick = if (starter.hideable) ({ menuOpen = true }) else null,
+                )
+                .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm),
         )
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.chat_starter_hide),
+                        style = AgiTheme.typography.body,
+                    )
+                },
+                onClick = { menuOpen = false; onHide() },
+            )
+        }
     }
 }
 

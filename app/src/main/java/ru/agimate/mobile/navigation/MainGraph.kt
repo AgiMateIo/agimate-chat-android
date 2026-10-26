@@ -293,6 +293,8 @@ fun MainGraph(
                 },
                 onOpenFiles = { files = FilesMode.Browse },
                 onPickStored = { files = FilesMode.Pick },
+                onStarter = viewModel::sendStarter,
+                onHideStarter = viewModel::hideStarter,
             )
         }
 

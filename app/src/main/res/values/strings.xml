@@ -160,6 +160,7 @@
     <string name="chat_attachment_uploading">uploading…</string>
     <string name="chat_empty_title">Write the first message</string>
     <string name="chat_empty_description">In plain words — the way you would write to a person. You can attach a photo or a document.</string>
+    <string name="chat_starter_hide">Hide suggestion</string>
     <string name="chat_input_hint">Message</string>
     <string name="chat_composer_closed">The conversation is closed — start a new one</string>
     <string name="chat_composer_agent_disabled">The agent is off</string>

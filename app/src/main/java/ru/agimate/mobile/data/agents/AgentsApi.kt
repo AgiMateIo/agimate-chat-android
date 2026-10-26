@@ -66,6 +66,8 @@ data class AgentDto(
     val name: String = "",
     val description: String? = null,
     val enabled: Boolean = true,
+    /** `GENERIC`, `CENTRIFUGO`, `MCP`, `WEBHOOK`. Список контактов типа не несёт — только карточка. */
+    val type: String? = null,
 )
 
 /**
@@ -90,6 +92,29 @@ data class AgentConnectionDto(
     val connectorCode: String? = null,
 )
 
+/**
+ * Подсказка пустого чата. Своя у агента — с [id], её правят списком целиком; от навыка — с
+ * [agentSkillId], её только скрывают.
+ */
+@Serializable
+data class AgentStarterDto(
+    val id: String? = null,
+    val agentSkillId: String? = null,
+    val skillTitle: String? = null,
+    val text: String,
+)
+
+/** Что показать над пустым чатом. Приветствие — не реплика агента: в историю оно не попадает. */
+@Serializable
+data class AgentStartersDto(
+    val greeting: String? = null,
+    val starters: List<AgentStarterDto> = emptyList(),
+)
+
+/** Скрыть подсказку навыка: адресуется привязкой и текстом — своего id у неё нет. */
+@Serializable
+data class HideStarterRequest(val agentSkillId: String, val text: String)
+
 interface AgentsApi {
 
     /** Не постраничный список. Сортировать по `sortOrder`. */
@@ -112,4 +137,18 @@ interface AgentsApi {
         @Path("agentId") agentId: String,
         @Body body: BindConnectorRequest,
     ): ApiEnvelope<AgentConnectionDto>
+
+    @GET("control/manage/agents/{agentId}")
+    suspend fun agent(@Path("agentId") agentId: String): ApiEnvelope<AgentDto>
+
+    /** Порядок уже серверный: свои подсказки агента, затем навыков в порядке привязки. */
+    @GET("control/manage/agents/{agentId}/starters/")
+    suspend fun starters(@Path("agentId") agentId: String): ApiEnvelope<AgentStartersDto>
+
+    /** Повтор — не ошибка. `404` — у навыка такой подсказки уже нет. */
+    @POST("control/manage/agents/{agentId}/starters/hidden")
+    suspend fun hideStarter(
+        @Path("agentId") agentId: String,
+        @Body body: HideStarterRequest,
+    ): ApiEnvelope<String?>
 }

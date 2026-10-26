@@ -37,6 +37,9 @@ import ru.agimate.mobile.core.share.SavedTo
 import ru.agimate.mobile.core.share.Sharing
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.agents.Starter
+import ru.agimate.mobile.data.agents.Starters
+import ru.agimate.mobile.data.agents.StartersRepository
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.files.FilesRepository
 import ru.agimate.mobile.data.files.StoredFile
@@ -86,6 +89,8 @@ data class ChatUiState(
     /** Что сейчас происходит с файлом или буфером обмена. */
     val fileNotice: FileNotice? = null,
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
+    /** Приветствие и подсказки агента; `null` — не пришли или агенту не положены. */
+    val starters: Starters? = null,
 ) {
     val canSend: Boolean
         get() = agentEnabled && !closed && !sending &&
@@ -98,6 +103,17 @@ data class ChatUiState(
             !agentEnabled -> uiText(R.string.chat_composer_agent_disabled)
             else -> null
         }
+
+    /**
+     * Блок над пустой сессией: первое сообщение — и он уходит. Пока лента грузится или не
+     * загрузилась, пустота ещё ничего не значит.
+     */
+    val visibleStarters: Starters?
+        get() = starters?.takeIf { !loading && error == null && items.isEmpty() && !it.isEmpty }
+
+    /** Подсказка — то же сообщение: куда нельзя писать, туда нельзя и нажать. */
+    val canSendStarter: Boolean
+        get() = agentEnabled && !closed && !sending
 }
 
 @HiltViewModel
@@ -112,6 +128,7 @@ class ChatViewModel @Inject constructor(
     private val origins: OriginProvider,
     private val openChats: OpenChatTracker,
     private val notifications: PushNotifier,
+    private val startersRepository: StartersRepository,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -164,6 +181,9 @@ class ChatViewModel @Inject constructor(
     /** Сколько живых строк этой переписки пришло — чтобы снимок по REST не перекрыл свежую. */
     private var liveSessionRows = 0
 
+    /** Агент, чьи подсказки показаны. Из маршрута или, при открытии по пушу, из самой переписки. */
+    private var startersAgentId: String? = null
+
     init {
         restoreDraft()
         observeDraftAttachments()
@@ -171,6 +191,7 @@ class ChatViewModel @Inject constructor(
         observeLiveEvents()
         loadFirstPage()
         loadSessionState()
+        agentId?.let(::loadStarters)
         // При открытии чата — отметка прочтения без тела: сессия прочитана до конца.
         markReadWholeSession()
     }
@@ -356,6 +377,8 @@ class ChatViewModel @Inject constructor(
                     // Пока шёл запрос, живая строка уже пришла — она свежее снимка, и снимок
                     // вернул бы погасшее «печатает…» или открыл закрытую переписку.
                     if (liveSessionRows == seenBefore) applySessionRow(session)
+                    // Открыли по пушу — агент известен только из самой переписки.
+                    session.agentId?.let(::loadStarters)
                 }
         }
     }
@@ -493,6 +516,55 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(items = buildChatItems(messages)) }
     }
 
+    // ---------------------------------------------------------------- подсказки
+
+    /**
+     * Приветствие и подсказки — один раз на экран. Запрашиваются, даже если переписка окажется не
+     * пустой: ждать истории значило бы показывать их с задержкой ровно там, где они нужны. Не
+     * пришли — пустой чат остаётся прежним, ошибку показывать не о чем.
+     */
+    private fun loadStarters(agentId: String) {
+        if (agentId.isBlank() || startersAgentId != null) return
+        startersAgentId = agentId
+        viewModelScope.launch {
+            runCatching { startersRepository.forChat(agentId) }
+                .onSuccess { starters -> _state.update { it.copy(starters = starters) } }
+        }
+    }
+
+    /** Нажатие на подсказку — обычное сообщение; набранное в поле при этом не трогается. */
+    fun sendStarter(starter: Starter) {
+        if (!_state.value.canSendStarter) return
+        dispatch(text = starter.text, attachments = emptyList(), fromComposer = false)
+    }
+
+    /** Подсказка навыка уходит сразу, не дожидаясь сервера: `404` и повтор итог не меняют. */
+    fun hideStarter(starter: Starter) {
+        val agent = startersAgentId ?: return
+        if (!starter.hideable) return
+        val index = _state.value.starters?.items?.indexOf(starter)?.takeIf { it >= 0 } ?: return
+        _state.update { state ->
+            state.copy(starters = state.starters?.let { s -> s.copy(items = s.items - starter) })
+        }
+        viewModelScope.launch {
+            runCatching { startersRepository.hide(agent, starter) }
+                .onFailure { error ->
+                    // На сервере она осталась и вернётся в следующем чате — экран не должен врать.
+                    _state.update { state ->
+                        state.copy(
+                            starters = state.starters?.let { s ->
+                                if (starter in s.items) s
+                                else s.copy(items = s.items.toMutableList().apply {
+                                    add(index.coerceAtMost(size), starter)
+                                })
+                            },
+                            sendError = error.toApiException().text,
+                        )
+                    }
+                }
+        }
+    }
+
     // ---------------------------------------------------------------- отправка
 
     /**
@@ -502,9 +574,19 @@ class ChatViewModel @Inject constructor(
     fun send() {
         val current = _state.value
         if (!current.canSend) return
+        dispatch(
+            text = current.input.trim().takeIf { it.isNotBlank() },
+            attachments = current.attachments,
+            fromComposer = true,
+        )
+    }
 
-        val text = current.input.trim().takeIf { it.isNotBlank() }
-        val fileIds = current.attachments.mapNotNull { it.fileId }
+    /**
+     * @param fromComposer сообщение собрано в поле ввода — его и черновик пора очистить. Подсказка
+     *                     уходит мимо поля, и набранное там остаётся.
+     */
+    private fun dispatch(text: String?, attachments: List<PendingAttachment>, fromComposer: Boolean) {
+        val fileIds = attachments.mapNotNull { it.fileId }
         val localId = UUID.randomUUID().toString()
 
         val optimistic = ChatMessage(
@@ -513,7 +595,7 @@ class ChatViewModel @Inject constructor(
             direction = MessageDirection.USER,
             stream = MessageStream.NONE,
             text = text,
-            attachments = current.attachments.map {
+            attachments = attachments.map {
                 Attachment(fileId = it.fileId, mime = it.mime, size = it.sizeBytes, name = it.name, url = null)
             },
             createdAt = Instant.now(),
@@ -524,15 +606,10 @@ class ChatViewModel @Inject constructor(
         messages = listOf(optimistic) + messages
         // Сообщение ушло в ленту — черновика больше нет. Неудачная отправка его не воскрешает:
         // сообщение остаётся в ленте с повтором, и второе место для того же текста только запутает.
-        drafts.clear(sessionId)
+        if (fromComposer) drafts.clear(sessionId)
         _state.update {
-            it.copy(
-                input = "",
-                attachments = emptyList(),
-                sending = true,
-                sendError = null,
-                items = buildChatItems(messages),
-            )
+            val sent = it.copy(sending = true, sendError = null, items = buildChatItems(messages))
+            if (fromComposer) sent.copy(input = "", attachments = emptyList()) else sent
         }
 
         startRunGrace()
