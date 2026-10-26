@@ -3,6 +3,7 @@ package ru.agimate.mobile.data.agents
 import kotlinx.serialization.Serializable
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import ru.agimate.mobile.core.network.ApiEnvelope
@@ -115,6 +116,10 @@ data class AgentStartersDto(
 @Serializable
 data class HideStarterRequest(val agentSkillId: String, val text: String)
 
+/** Тело `PATCH` агента — только имя: поля, которых нет в теле, сервер не трогает. */
+@Serializable
+data class RenameAgentRequest(val name: String)
+
 interface AgentsApi {
 
     /** Не постраничный список. Сортировать по `sortOrder`. */
@@ -140,6 +145,13 @@ interface AgentsApi {
 
     @GET("control/manage/agents/{agentId}")
     suspend fun agent(@Path("agentId") agentId: String): ApiEnvelope<AgentDto>
+
+    /** Частичная правка: пишутся только присланные поля. Ответ — карточка агента. */
+    @PATCH("control/manage/agents/{agentId}")
+    suspend fun patchAgent(
+        @Path("agentId") agentId: String,
+        @Body body: RenameAgentRequest,
+    ): ApiEnvelope<AgentDto>
 
     /** Порядок уже серверный: свои подсказки агента, затем навыков в порядке привязки. */
     @GET("control/manage/agents/{agentId}/starters/")

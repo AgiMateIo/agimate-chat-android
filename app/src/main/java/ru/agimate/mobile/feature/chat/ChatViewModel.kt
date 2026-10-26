@@ -39,7 +39,7 @@ import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
 import ru.agimate.mobile.data.agents.Starter
 import ru.agimate.mobile.data.agents.Starters
-import ru.agimate.mobile.data.agents.StartersRepository
+import ru.agimate.mobile.data.agents.AgentsRepository
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.files.FilesRepository
 import ru.agimate.mobile.data.files.StoredFile
@@ -91,6 +91,12 @@ data class ChatUiState(
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
     /** Приветствие и подсказки агента; `null` — не пришли или агенту не положены. */
     val starters: Starters? = null,
+    /** Агент известен — из маршрута или из самой переписки: без него переименовывать некого. */
+    val agentKnown: Boolean = false,
+    /** Открыт диалог переименования агента. */
+    val renamingAgent: Boolean = false,
+    val renameBusy: Boolean = false,
+    val renameError: UiText? = null,
 ) {
     val canSend: Boolean
         get() = agentEnabled && !closed && !sending &&
@@ -128,7 +134,7 @@ class ChatViewModel @Inject constructor(
     private val origins: OriginProvider,
     private val openChats: OpenChatTracker,
     private val notifications: PushNotifier,
-    private val startersRepository: StartersRepository,
+    private val agents: AgentsRepository,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -181,8 +187,8 @@ class ChatViewModel @Inject constructor(
     /** Сколько живых строк этой переписки пришло — чтобы снимок по REST не перекрыл свежую. */
     private var liveSessionRows = 0
 
-    /** Агент, чьи подсказки показаны. Из маршрута или, при открытии по пушу, из самой переписки. */
-    private var startersAgentId: String? = null
+    /** Агент переписки. Из маршрута или, при открытии по пушу, из самой переписки. */
+    private var knownAgentId: String? = null
 
     init {
         restoreDraft()
@@ -191,7 +197,7 @@ class ChatViewModel @Inject constructor(
         observeLiveEvents()
         loadFirstPage()
         loadSessionState()
-        agentId?.let(::loadStarters)
+        agentId?.let(::learnAgent)
         // При открытии чата — отметка прочтения без тела: сессия прочитана до конца.
         markReadWholeSession()
     }
@@ -378,7 +384,7 @@ class ChatViewModel @Inject constructor(
                     // вернул бы погасшее «печатает…» или открыл закрытую переписку.
                     if (liveSessionRows == seenBefore) applySessionRow(session)
                     // Открыли по пушу — агент известен только из самой переписки.
-                    session.agentId?.let(::loadStarters)
+                    session.agentId?.let(::learnAgent)
                 }
         }
     }
@@ -516,18 +522,66 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(items = buildChatItems(messages)) }
     }
 
+    // ---------------------------------------------------------------- агент
+
+    /** Агент стал известен — один раз на экран: повторное чтение переписки его не меняет. */
+    private fun learnAgent(agentId: String) {
+        if (agentId.isBlank() || knownAgentId != null) return
+        knownAgentId = agentId
+        _state.update { it.copy(agentKnown = true) }
+        loadStarters(agentId)
+    }
+
+    fun startRenameAgent() {
+        if (knownAgentId == null) return
+        _state.update { it.copy(renamingAgent = true, renameError = null) }
+    }
+
+    fun dismissRenameAgent() {
+        if (_state.value.renameBusy) return
+        _state.update { it.copy(renamingAgent = false, renameError = null) }
+    }
+
+    /** Ошибка остаётся в диалоге: закрыть его на отказе значит потерять набранное. */
+    fun renameAgent(name: String) {
+        val agent = knownAgentId ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || _state.value.renameBusy) return
+        if (trimmed == _state.value.agentName) {
+            dismissRenameAgent()
+            return
+        }
+        _state.update { it.copy(renameBusy = true, renameError = null) }
+        viewModelScope.launch {
+            runCatching { agents.rename(agent, trimmed) }
+                .onSuccess { saved ->
+                    _state.update {
+                        it.copy(
+                            agentName = saved.ifBlank { trimmed },
+                            renamingAgent = false,
+                            renameBusy = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    _state.update {
+                        it.copy(renameBusy = false, renameError = error.toApiException().text)
+                    }
+                }
+        }
+    }
+
     // ---------------------------------------------------------------- подсказки
 
     /**
-     * Приветствие и подсказки — один раз на экран. Запрашиваются, даже если переписка окажется не
+     * Приветствие и подсказки — один раз на экран, вместе с [learnAgent]. Запрашиваются, даже если переписка окажется не
      * пустой: ждать истории значило бы показывать их с задержкой ровно там, где они нужны. Не
      * пришли — пустой чат остаётся прежним, ошибку показывать не о чем.
      */
     private fun loadStarters(agentId: String) {
-        if (agentId.isBlank() || startersAgentId != null) return
-        startersAgentId = agentId
         viewModelScope.launch {
-            runCatching { startersRepository.forChat(agentId) }
+            runCatching { agents.forChat(agentId) }
                 .onSuccess { starters -> _state.update { it.copy(starters = starters) } }
         }
     }
@@ -540,14 +594,14 @@ class ChatViewModel @Inject constructor(
 
     /** Подсказка навыка уходит сразу, не дожидаясь сервера: `404` и повтор итог не меняют. */
     fun hideStarter(starter: Starter) {
-        val agent = startersAgentId ?: return
+        val agent = knownAgentId ?: return
         if (!starter.hideable) return
         val index = _state.value.starters?.items?.indexOf(starter)?.takeIf { it >= 0 } ?: return
         _state.update { state ->
             state.copy(starters = state.starters?.let { s -> s.copy(items = s.items - starter) })
         }
         viewModelScope.launch {
-            runCatching { startersRepository.hide(agent, starter) }
+            runCatching { agents.hide(agent, starter) }
                 .onFailure { error ->
                     // На сервере она осталась и вернётся в следующем чате — экран не должен врать.
                     _state.update { state ->

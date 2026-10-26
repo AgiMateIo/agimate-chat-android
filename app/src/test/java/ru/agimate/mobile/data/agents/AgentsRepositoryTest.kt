@@ -21,10 +21,10 @@ import ru.agimate.mobile.core.network.ApiJson
  * Слэш на конце `GET .../starters/` значим — без него 404. Подсказки агента и карточка с его типом
  * уходят параллельно, поэтому ответы раздаются по пути, а не очередью.
  */
-class StartersRepositoryTest {
+class AgentsRepositoryTest {
 
     private lateinit var server: MockWebServer
-    private lateinit var repository: StartersRepository
+    private lateinit var repository: AgentsRepository
     private var agentType = "GENERIC"
     private var hideCode = 200
 
@@ -43,7 +43,7 @@ class StartersRepositoryTest {
             }
         }
         server.start()
-        repository = StartersRepository(
+        repository = AgentsRepository(
             Retrofit.Builder()
                 .baseUrl(server.url("/"))
                 .addConverterFactory(ApiJson.asConverterFactory("application/json".toMediaType()))
@@ -91,6 +91,15 @@ class StartersRepositoryTest {
             """{"agentSkillId":"s1","text":"Построй мою натальную карту"}""",
             request.body?.utf8(),
         )
+    }
+
+    @Test
+    fun `renaming patches only the name`() = runTest {
+        repository.rename("a1", "Луна")
+
+        val request = generateSequence { server.takeRequest() }.first { it.method == "PATCH" }
+        assertEquals("/control/manage/agents/a1", request.target)
+        assertEquals("""{"name":"Луна"}""", request.body?.utf8())
     }
 
     @Test

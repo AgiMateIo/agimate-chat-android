@@ -295,6 +295,9 @@ fun MainGraph(
                 onPickStored = { files = FilesMode.Pick },
                 onStarter = viewModel::sendStarter,
                 onHideStarter = viewModel::hideStarter,
+                onRenameAgent = viewModel::startRenameAgent,
+                onRenameAgentConfirm = viewModel::renameAgent,
+                onRenameAgentDismiss = viewModel::dismissRenameAgent,
             )
         }
 

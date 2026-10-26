@@ -152,6 +152,8 @@
     <string name="chat_menu_new_session">New conversation</string>
     <string name="chat_menu_close_session">Close conversation</string>
     <string name="chat_menu_files">Files</string>
+    <string name="chat_menu_rename_agent">Rename agent</string>
+    <string name="chat_rename_agent_title">Agent name</string>
     <string name="chat_message_failed">not sent · retry</string>
     <string name="chat_message_sending">sending…</string>
     <string name="chat_attachment_generic">Attachment</string>

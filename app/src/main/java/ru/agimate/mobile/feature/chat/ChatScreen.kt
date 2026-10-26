@@ -93,6 +93,7 @@ import ru.agimate.mobile.core.ui.components.AgentAvatar
 import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.ImageViewer
 import ru.agimate.mobile.core.ui.components.MarkdownText
+import ru.agimate.mobile.core.ui.components.RenameDialog
 import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.components.ViewerImage
@@ -171,6 +172,9 @@ fun ChatScreen(
     /** Подсказка пустого чата — отправить её текст обычным сообщением. */
     onStarter: (Starter) -> Unit,
     onHideStarter: (Starter) -> Unit,
+    onRenameAgent: () -> Unit,
+    onRenameAgentConfirm: (String) -> Unit,
+    onRenameAgentDismiss: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -246,6 +250,7 @@ fun ChatScreen(
                 onNewSession = onNewSession,
                 onCloseSession = onCloseSession,
                 onOpenFiles = onOpenFiles,
+                onRenameAgent = onRenameAgent,
             )
 
             // Полоска забирает высоту у ленты, и появлением встык она сдвигает всё содержимое
@@ -382,6 +387,18 @@ fun ChatScreen(
             )
         }
     }
+
+    if (state.renamingAgent) {
+        RenameDialog(
+            key = "agent",
+            title = stringResource(R.string.chat_rename_agent_title),
+            initial = state.agentName,
+            busy = state.renameBusy,
+            error = state.renameError?.resolve(),
+            onConfirm = onRenameAgentConfirm,
+            onDismiss = onRenameAgentDismiss,
+        )
+    }
 }
 
 private fun LazyListScope.chatItems(
@@ -425,6 +442,7 @@ private fun ChatHeader(
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
     onOpenFiles: () -> Unit,
+    onRenameAgent: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -519,6 +537,17 @@ private fun ChatHeader(
                     },
                     onClick = { menuOpen = false; onOpenFiles() },
                 )
+                if (state.agentKnown) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_menu_rename_agent),
+                                style = AgiTheme.typography.body,
+                            )
+                        },
+                        onClick = { menuOpen = false; onRenameAgent() },
+                    )
+                }
                 if (!state.closed) {
                     DropdownMenuItem(
                         text = {

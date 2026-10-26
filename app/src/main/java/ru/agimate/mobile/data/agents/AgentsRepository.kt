@@ -26,8 +26,9 @@ data class Starters(val greeting: String?, val items: List<Starter>) {
     val isEmpty: Boolean get() = greeting.isNullOrBlank() && items.isEmpty()
 }
 
+/** Агент глазами мессенджера: имя и то, что показать над пустым чатом. */
 @Singleton
-class StartersRepository @Inject constructor(
+class AgentsRepository @Inject constructor(
     private val api: AgentsApi,
 ) {
     /**
@@ -62,6 +63,18 @@ class StartersRepository @Inject constructor(
             // Уже нет — убрать локально и всё.
         }
     }
+
+    /**
+     * Переименование. `PATCH` пишет только присланные поля — остальное в агенте не трогается.
+     * Пустое имя сервер отклоняет: у агента оно обязательно.
+     *
+     * Живой строки контакта правка агента не порождает — список узнаёт новое имя, перечитываясь
+     * при возврате на экран.
+     */
+    suspend fun rename(agentId: String, name: String): String =
+        apiCall { api.patchAgent(agentId, RenameAgentRequest(name)) }
+            .unwrap("переименование агента")
+            .name
 
     private companion object {
         val EXTERNAL_TYPES = setOf("MCP", "WEBHOOK")
