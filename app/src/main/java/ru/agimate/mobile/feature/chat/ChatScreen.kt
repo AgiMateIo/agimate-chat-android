@@ -110,6 +110,7 @@ import ru.agimate.mobile.data.agents.Starters
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
+import ru.agimate.mobile.data.webchat.WebchatRepository
 import ru.agimate.mobile.data.files.PendingAttachment
 
 /**
@@ -172,9 +173,9 @@ fun ChatScreen(
     /** Подсказка пустого чата — отправить её текст обычным сообщением. */
     onStarter: (Starter) -> Unit,
     onHideStarter: (Starter) -> Unit,
-    onRenameAgent: () -> Unit,
-    onRenameAgentConfirm: (String) -> Unit,
-    onRenameAgentDismiss: () -> Unit,
+    onRename: (RenameTarget) -> Unit,
+    onRenameConfirm: (String) -> Unit,
+    onRenameDismiss: () -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
@@ -250,7 +251,7 @@ fun ChatScreen(
                 onNewSession = onNewSession,
                 onCloseSession = onCloseSession,
                 onOpenFiles = onOpenFiles,
-                onRenameAgent = onRenameAgent,
+                onRename = onRename,
             )
 
             // Полоска забирает высоту у ленты, и появлением встык она сдвигает всё содержимое
@@ -388,15 +389,24 @@ fun ChatScreen(
         }
     }
 
-    if (state.renamingAgent) {
+    state.renaming?.let { target ->
         RenameDialog(
-            key = "agent",
-            title = stringResource(R.string.chat_rename_agent_title),
-            initial = state.agentName,
+            key = target.name,
+            title = stringResource(
+                when (target) {
+                    RenameTarget.AGENT -> R.string.chat_rename_agent_title
+                    RenameTarget.SESSION -> R.string.sessions_rename_title
+                }
+            ),
+            initial = when (target) {
+                RenameTarget.AGENT -> state.agentName
+                RenameTarget.SESSION -> state.sessionTitle.orEmpty()
+            },
+            maxLength = WebchatRepository.TITLE_MAX_LENGTH.takeIf { target == RenameTarget.SESSION },
             busy = state.renameBusy,
             error = state.renameError?.resolve(),
-            onConfirm = onRenameAgentConfirm,
-            onDismiss = onRenameAgentDismiss,
+            onConfirm = onRenameConfirm,
+            onDismiss = onRenameDismiss,
         )
     }
 }
@@ -442,7 +452,7 @@ private fun ChatHeader(
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
     onOpenFiles: () -> Unit,
-    onRenameAgent: () -> Unit,
+    onRename: (RenameTarget) -> Unit,
 ) {
     val colors = AgiTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -471,7 +481,12 @@ private fun ChatHeader(
 
         Spacer(Modifier.width(AgiTheme.spacing.md))
 
-        Column(modifier = Modifier.weight(1f)) {
+        // Нажатие на шапку — переименовать переписку: заголовок живёт здесь же, второй строкой.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onRename(RenameTarget.SESSION) },
+        ) {
             Text(
                 text = state.agentName,
                 style = AgiTheme.typography.subtitle,
@@ -479,17 +494,22 @@ private fun ChatHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = when {
+            // Состояние важнее названия и вытесняет его, пока длится: «печатает…» — на время
+            // ответа, закрытость и выключенный агент — пока не изменятся.
+            val status = when {
                 state.isRunning -> R.string.chat_status_typing
                 state.closed -> R.string.chat_status_closed
                 !state.agentEnabled -> R.string.chat_status_agent_disabled
                 else -> null
             }
+            val subtitle = status?.let { stringResource(it) } ?: state.sessionTitle
             if (subtitle != null) {
                 Text(
-                    text = stringResource(subtitle),
+                    text = subtitle,
                     style = AgiTheme.typography.caption,
                     color = if (state.isRunning) colors.accent else colors.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -545,7 +565,7 @@ private fun ChatHeader(
                                 style = AgiTheme.typography.body,
                             )
                         },
-                        onClick = { menuOpen = false; onRenameAgent() },
+                        onClick = { menuOpen = false; onRename(RenameTarget.AGENT) },
                     )
                 }
                 if (!state.closed) {

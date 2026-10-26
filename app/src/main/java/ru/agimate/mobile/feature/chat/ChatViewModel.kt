@@ -66,6 +66,8 @@ sealed interface ChatEffect {
     data class Launch(val intent: Intent) : ChatEffect
 }
 
+enum class RenameTarget { AGENT, SESSION }
+
 data class ChatUiState(
     val agentName: String = "",
     /** Выключенный агент: историю показываем, отправку запрещаем. */
@@ -93,8 +95,10 @@ data class ChatUiState(
     val starters: Starters? = null,
     /** Агент известен — из маршрута или из самой переписки: без него переименовывать некого. */
     val agentKnown: Boolean = false,
-    /** Открыт диалог переименования агента. */
-    val renamingAgent: Boolean = false,
+    /** Заголовок переписки; `null`, пока сервер не сгенерировал его по первому сообщению. */
+    val sessionTitle: String? = null,
+    /** Что сейчас переименовывают; `null` — диалог закрыт. */
+    val renaming: RenameTarget? = null,
     val renameBusy: Boolean = false,
     val renameError: UiText? = null,
 ) {
@@ -438,7 +442,11 @@ class ChatViewModel @Inject constructor(
             else -> false
         }
         _state.update {
-            it.copy(closed = session.isClosed, isRunning = running ?: it.isRunning)
+            it.copy(
+                closed = session.isClosed,
+                isRunning = running ?: it.isRunning,
+                sessionTitle = session.title?.takeIf(String::isNotBlank),
+            )
         }
     }
 
@@ -532,43 +540,56 @@ class ChatViewModel @Inject constructor(
         loadStarters(agentId)
     }
 
-    fun startRenameAgent() {
-        if (knownAgentId == null) return
-        _state.update { it.copy(renamingAgent = true, renameError = null) }
+    fun startRename(target: RenameTarget) {
+        if (target == RenameTarget.AGENT && knownAgentId == null) return
+        _state.update { it.copy(renaming = target, renameError = null) }
     }
 
-    fun dismissRenameAgent() {
+    fun dismissRename() {
         if (_state.value.renameBusy) return
-        _state.update { it.copy(renamingAgent = false, renameError = null) }
+        _state.update { it.copy(renaming = null, renameError = null) }
     }
 
-    /** Ошибка остаётся в диалоге: закрыть его на отказе значит потерять набранное. */
-    fun renameAgent(name: String) {
-        val agent = knownAgentId ?: return
-        val trimmed = name.trim()
-        if (trimmed.isEmpty() || _state.value.renameBusy) return
-        if (trimmed == _state.value.agentName) {
-            dismissRenameAgent()
+    /**
+     * Переименовать агента или переписку — что открыто в диалоге. Ошибка остаётся в диалоге:
+     * закрыть его на отказе значит потерять набранное.
+     *
+     * Своё имя переписки перекрывает сгенерированное насовсем, поэтому и неизменённое поле не
+     * отправляется: «Сохранить» над автоматическим заголовком закрепил бы его молча.
+     */
+    fun rename(value: String) {
+        val current = _state.value
+        val target = current.renaming ?: return
+        val trimmed = value.trim()
+        if (trimmed.isEmpty() || current.renameBusy) return
+        val agent = knownAgentId
+        if (target == RenameTarget.AGENT && agent == null) return
+        val unchanged = when (target) {
+            RenameTarget.AGENT -> current.agentName
+            RenameTarget.SESSION -> current.sessionTitle
+        }
+        if (trimmed == unchanged) {
+            dismissRename()
             return
         }
         _state.update { it.copy(renameBusy = true, renameError = null) }
         viewModelScope.launch {
-            runCatching { agents.rename(agent, trimmed) }
-                .onSuccess { saved ->
-                    _state.update {
-                        it.copy(
-                            agentName = saved.ifBlank { trimmed },
-                            renamingAgent = false,
-                            renameBusy = false,
-                        )
+            try {
+                val renamed: (ChatUiState) -> ChatUiState = when (target) {
+                    RenameTarget.AGENT -> {
+                        val saved = agents.rename(checkNotNull(agent), trimmed).ifBlank { trimmed }
+                        ({ it.copy(agentName = saved) })
+                    }
+                    RenameTarget.SESSION -> {
+                        val saved = repository.renameSession(sessionId, trimmed).title ?: trimmed
+                        ({ it.copy(sessionTitle = saved) })
                     }
                 }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    _state.update {
-                        it.copy(renameBusy = false, renameError = error.toApiException().text)
-                    }
-                }
+                _state.update { renamed(it).copy(renaming = null, renameBusy = false) }
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                _state.update { it.copy(renameBusy = false, renameError = e.toApiException().text) }
+            }
         }
     }
 
