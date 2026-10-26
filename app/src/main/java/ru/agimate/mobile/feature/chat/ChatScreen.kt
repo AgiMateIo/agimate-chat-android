@@ -287,6 +287,7 @@ fun ChatScreen(
                     state.items.isEmpty() -> EmptyChatHint(
                         agentName = state.agentName,
                         starters = state.visibleStarters,
+                        pending = state.startersPending,
                         startersEnabled = state.canSendStarter,
                         onStarter = onStarter,
                         onHideStarter = onHideStarter,
@@ -485,7 +486,11 @@ private fun ChatHeader(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .clickable { onRename(RenameTarget.SESSION) },
+                // Без подписи TalkBack сказал бы только «кнопка» — непонятно, что она делает.
+                .clickable(
+                    onClickLabel = stringResource(R.string.chat_rename_session_action),
+                    onClick = { onRename(RenameTarget.SESSION) },
+                ),
         ) {
             Text(
                 text = state.agentName,
@@ -1063,6 +1068,8 @@ private fun OlderPageError(message: String, onRetry: () -> Unit) {
 private fun EmptyChatHint(
     agentName: String,
     starters: Starters?,
+    /** Подсказки в пути: только аватар, чтобы общее приглашение не мелькнуло перед приветствием. */
+    pending: Boolean,
     /** Писать нельзя — закрыта переписка или выключен агент: подсказки нажать некуда. */
     startersEnabled: Boolean,
     onStarter: (Starter) -> Unit,
@@ -1080,6 +1087,7 @@ private fun EmptyChatHint(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AgentAvatar(name = agentName, size = 64.dp)
+        if (pending) return@Column
         Spacer(Modifier.height(AgiTheme.spacing.lg))
         if (greeting != null) {
             Text(

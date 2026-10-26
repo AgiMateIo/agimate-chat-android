@@ -39,6 +39,7 @@ import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
 import ru.agimate.mobile.data.agents.Starter
 import ru.agimate.mobile.data.agents.Starters
+import ru.agimate.mobile.data.agents.AgentNames
 import ru.agimate.mobile.data.agents.AgentsRepository
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.files.FilesRepository
@@ -93,6 +94,11 @@ data class ChatUiState(
     val realtime: RealtimeStatus = RealtimeStatus.Idle,
     /** Приветствие и подсказки агента; `null` — не пришли или агенту не положены. */
     val starters: Starters? = null,
+    /**
+     * Подсказки ещё в пути. Пустая переписка приходит раньше них — им нужны два запроса, — и общее
+     * приглашение успевало мелькнуть перед приветствием. Ждём их недолго: см. [ChatViewModel].
+     */
+    val startersPending: Boolean = true,
     /** Агент известен — из маршрута или из самой переписки: без него переименовывать некого. */
     val agentKnown: Boolean = false,
     /** Заголовок переписки; `null`, пока сервер не сгенерировал его по первому сообщению. */
@@ -139,6 +145,7 @@ class ChatViewModel @Inject constructor(
     private val openChats: OpenChatTracker,
     private val notifications: PushNotifier,
     private val agents: AgentsRepository,
+    private val agentNames: AgentNames,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -202,6 +209,12 @@ class ChatViewModel @Inject constructor(
         loadFirstPage()
         loadSessionState()
         agentId?.let(::learnAgent)
+        // Агента может не оказаться вовсе, а подсказки — не прийти: пустой чат не должен ждать их
+        // дольше, чем человек готов смотреть на одну аватарку.
+        viewModelScope.launch {
+            delay(STARTERS_WAIT_MS)
+            _state.update { it.copy(startersPending = false) }
+        }
         // При открытии чата — отметка прочтения без тела: сессия прочитана до конца.
         markReadWholeSession()
     }
@@ -538,6 +551,10 @@ class ChatViewModel @Inject constructor(
         knownAgentId = agentId
         _state.update { it.copy(agentKnown = true) }
         loadStarters(agentId)
+        // Переименовать могли и в другом чате этого агента, лежащем выше в стеке.
+        viewModelScope.launch {
+            agentNames.of(agentId).collect { name -> _state.update { it.copy(agentName = name) } }
+        }
     }
 
     fun startRename(target: RenameTarget) {
@@ -577,7 +594,7 @@ class ChatViewModel @Inject constructor(
             try {
                 val renamed: (ChatUiState) -> ChatUiState = when (target) {
                     RenameTarget.AGENT -> {
-                        val saved = agents.rename(checkNotNull(agent), trimmed).ifBlank { trimmed }
+                        val saved = agents.rename(checkNotNull(agent), trimmed)
                         ({ it.copy(agentName = saved) })
                     }
                     RenameTarget.SESSION -> {
@@ -602,8 +619,8 @@ class ChatViewModel @Inject constructor(
      */
     private fun loadStarters(agentId: String) {
         viewModelScope.launch {
-            runCatching { agents.forChat(agentId) }
-                .onSuccess { starters -> _state.update { it.copy(starters = starters) } }
+            val starters = runCatching { agents.forChat(agentId) }.getOrNull()
+            _state.update { it.copy(starters = starters, startersPending = false) }
         }
     }
 
@@ -1043,6 +1060,9 @@ class ChatViewModel @Inject constructor(
 
         /** Сколько ждать постановки запуска после своего сообщения — с запасом на очередь. */
         const val RUN_GRACE_MS = 15_000L
+
+        /** Сколько пустой чат ждёт подсказок, прежде чем показать общее приглашение. */
+        const val STARTERS_WAIT_MS = 1_500L
 
         /** Сколько висит строка о законченном деле с файлом. */
         const val NOTICE_MILLIS = 4_000L

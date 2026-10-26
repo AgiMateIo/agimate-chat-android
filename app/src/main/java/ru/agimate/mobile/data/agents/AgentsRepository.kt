@@ -30,6 +30,7 @@ data class Starters(val greeting: String?, val items: List<Starter>) {
 @Singleton
 class AgentsRepository @Inject constructor(
     private val api: AgentsApi,
+    private val names: AgentNames,
 ) {
     /**
      * Приветствие и подсказки для пустого чата. `null` — агенту они не положены: у `MCP` и
@@ -68,13 +69,17 @@ class AgentsRepository @Inject constructor(
      * Переименование. `PATCH` пишет только присланные поля — остальное в агенте не трогается.
      * Пустое имя сервер отклоняет: у агента оно обязательно.
      *
-     * Живой строки контакта правка агента не порождает — список узнаёт новое имя, перечитываясь
-     * при возврате на экран.
+     * Живой строки контакта правка агента не порождает: список узнаёт новое имя, перечитываясь
+     * при возврате на экран, а открытые экраны агента — из [AgentNames].
      */
-    suspend fun rename(agentId: String, name: String): String =
-        apiCall { api.patchAgent(agentId, RenameAgentRequest(name)) }
+    suspend fun rename(agentId: String, name: String): String {
+        val saved = apiCall { api.patchAgent(agentId, RenameAgentRequest(name)) }
             .unwrap("переименование агента")
             .name
+            .ifBlank { name }
+        names.put(agentId, saved)
+        return saved
+    }
 
     private companion object {
         val EXTERNAL_TYPES = setOf("MCP", "WEBHOOK")

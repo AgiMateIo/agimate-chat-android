@@ -1,6 +1,7 @@
 package ru.agimate.mobile.data.agents
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -25,6 +26,7 @@ class AgentsRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repository: AgentsRepository
+    private val names = AgentNames()
     private var agentType = "GENERIC"
     private var hideCode = 200
 
@@ -33,8 +35,11 @@ class AgentsRepositoryTest {
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.target) {
-                "/control/manage/agents/a1" ->
+                "/control/manage/agents/a1" -> if (request.method == "PATCH") {
+                    ok("""{"response":{"id":"a1","name":"Луна","type":"$agentType"}}""")
+                } else {
                     ok("""{"response":{"id":"a1","name":"Селена","type":"$agentType"}}""")
+                }
                 "/control/manage/agents/a1/starters/" -> ok(STARTERS)
                 "/control/manage/agents/a1/starters/hidden" ->
                     if (hideCode == 200) ok("""{"response":null}""")
@@ -48,7 +53,8 @@ class AgentsRepositoryTest {
                 .baseUrl(server.url("/"))
                 .addConverterFactory(ApiJson.asConverterFactory("application/json".toMediaType()))
                 .build()
-                .create(AgentsApi::class.java)
+                .create(AgentsApi::class.java),
+            names,
         )
     }
 
@@ -100,6 +106,12 @@ class AgentsRepositoryTest {
         val request = generateSequence { server.takeRequest() }.first { it.method == "PATCH" }
         assertEquals("/control/manage/agents/a1", request.target)
         assertEquals("""{"name":"Луна"}""", request.body?.utf8())
+    }
+
+    @Test
+    fun `a renamed agent reaches the screens that hold its old name`() = runTest {
+        repository.rename("a1", "Луна")
+        assertEquals("Луна", names.of("a1").first())
     }
 
     @Test

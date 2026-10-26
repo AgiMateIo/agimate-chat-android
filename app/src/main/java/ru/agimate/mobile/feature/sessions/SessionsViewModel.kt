@@ -18,6 +18,7 @@ import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.realtime.RealtimeClient
 import ru.agimate.mobile.core.realtime.RealtimeEvent
 import ru.agimate.mobile.core.realtime.upsertByActivity
+import ru.agimate.mobile.data.agents.AgentNames
 import ru.agimate.mobile.data.drafts.Draft
 import ru.agimate.mobile.data.drafts.DraftStore
 import ru.agimate.mobile.data.webchat.ChatSession
@@ -50,6 +51,7 @@ class SessionsViewModel @Inject constructor(
     private val repository: WebchatRepository,
     private val realtime: RealtimeClient,
     drafts: DraftStore,
+    agentNames: AgentNames,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -82,6 +84,10 @@ class SessionsViewModel @Inject constructor(
         // страницами его не восстановить.
         viewModelScope.launch {
             drafts.drafts.collect { map -> _state.update { it.copy(drafts = map) } }
+        }
+        // Имя пришло маршрутом; переименовать агента могли в чате, открытом отсюда.
+        viewModelScope.launch {
+            agentNames.of(agentId).collect { name -> _state.update { it.copy(agentName = name) } }
         }
     }
 

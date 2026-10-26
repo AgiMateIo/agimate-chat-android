@@ -147,6 +147,7 @@
     <string name="chat_menu_files">Файлы</string>
     <string name="chat_menu_rename_agent">Переименовать агента</string>
     <string name="chat_rename_agent_title">Имя агента</string>
+    <string name="chat_rename_session_action">Переименовать переписку</string>
     <string name="chat_message_failed">не отправлено · повторить</string>
     <string name="chat_message_sending">отправляется…</string>
     <string name="chat_attachment_generic">Вложение</string>
