@@ -18,6 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1052,23 +1055,72 @@ private fun EmptyChatHint(
         }
         if (items.isNotEmpty()) {
             Spacer(Modifier.height(AgiTheme.spacing.lg))
-            Column(
-                verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                items.forEach { starter ->
+            StarterPager(items = items, onStarter = onStarter, onHideStarter = onHideStarter)
+        }
+    }
+}
+
+/**
+ * Подсказки — страницами по [STARTERS_PER_PAGE], листаются вбок. Своих у агента до десяти, да ещё
+ * навыков: столбиком они выталкивали приветствие за верх экрана. Край следующей страницы
+ * выглядывает, а точки под ней говорят, сколько их, — кнопка «ещё» при этом не нужна.
+ */
+@Composable
+private fun StarterPager(
+    items: List<Starter>,
+    onStarter: (Starter) -> Unit,
+    onHideStarter: (Starter) -> Unit,
+) {
+    val pages = items.chunked(STARTERS_PER_PAGE)
+    val pagerState = rememberPagerState { pages.size }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        HorizontalPager(
+            state = pagerState,
+            // Одна страница — листать нечего, и выглядывать нечему.
+            contentPadding = PaddingValues(end = if (pages.size > 1) STARTER_PEEK else 0.dp),
+            pageSpacing = AgiTheme.spacing.sm,
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            Column(verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.sm)) {
+                pages.getOrNull(page).orEmpty().forEach { starter ->
                     key(starter.key) {
                         StarterChip(
                             starter = starter,
                             onClick = { onStarter(starter) },
                             onHide = { onHideStarter(starter) },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }
             }
         }
+        if (pages.size > 1) {
+            Spacer(Modifier.height(AgiTheme.spacing.md))
+            PageDots(count = pages.size, current = pagerState.currentPage)
+        }
     }
 }
+
+@Composable
+private fun PageDots(count: Int, current: Int) {
+    val colors = AgiTheme.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(AgiTheme.spacing.xs)) {
+        repeat(count) { index ->
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .background(
+                        if (index == current) colors.textSecondary else colors.hairline,
+                        CircleShape,
+                    )
+            )
+        }
+    }
+}
+
+private const val STARTERS_PER_PAGE = 3
+private val STARTER_PEEK = 32.dp
 
 /**
  * Подсказка показывается целиком, без многоточия: подсказки навыков из каталога пишут чужие люди, а
@@ -1076,18 +1128,23 @@ private fun EmptyChatHint(
  * 150 знаков, так что больше двух-трёх строк чип не займёт.
  */
 @Composable
-private fun StarterChip(starter: Starter, onClick: () -> Unit, onHide: () -> Unit) {
+private fun StarterChip(
+    starter: Starter,
+    onClick: () -> Unit,
+    onHide: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = AgiTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
     val shape = AgiShapes.bubble
-    Box {
+    Box(modifier) {
         Text(
             text = starter.text,
             style = AgiTheme.typography.body,
             color = colors.textPrimary,
             textAlign = TextAlign.Center,
             modifier = Modifier
-                .widthIn(max = 320.dp)
+                .fillMaxWidth()
                 .clip(shape)
                 .background(colors.surface, shape)
                 .border(1.dp, colors.hairline, shape)
