@@ -287,6 +287,9 @@
     <string name="error_file_link_expired">The file link has expired — reopen the chat</string>
     <string name="error_file_gone">The file is no longer on the server</string>
 
+    <!-- Просмотр вью коннектора -->
+    <string name="views_tool_call_failed">The tool call failed</string>
+
     <!--
       Число со словом после него — форма, зависящая от количества. В английском и русском «more» и
       «ещё» не склоняются, и все варианты здесь совпадают; объявлены они всё равно, потому что в

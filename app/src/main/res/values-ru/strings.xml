@@ -272,6 +272,9 @@
     <string name="error_file_link_expired">Ссылка на файл устарела — откройте чат заново</string>
     <string name="error_file_gone">Файла больше нет на сервере</string>
 
+    <!-- Просмотр вью коннектора -->
+    <string name="views_tool_call_failed">Не удалось вызвать инструмент</string>
+
     <plurals name="chat_progress_more">
         <item quantity="one">%1$s · ещё %2$d</item>
         <item quantity="few">%1$s · ещё %2$d</item>
