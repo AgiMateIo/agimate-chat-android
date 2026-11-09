@@ -168,6 +168,8 @@ fun ChatScreen(
     onCloseSession: () -> Unit,
     /** Вложения этой переписки — посмотреть. Прикладывать оттуда нечего: смотрят и убирают. */
     onOpenFiles: () -> Unit,
+    /** Страницы, которые отдают подключения агента, — отдельным экраном. */
+    onOpenViews: (String) -> Unit,
     /** Свои файлы — выбрать вложение. Тот же экран, но без фильтра и с прикреплением по тапу. */
     onPickStored: () -> Unit,
     /** Подсказка пустого чата — отправить её текст обычным сообщением. */
@@ -251,6 +253,7 @@ fun ChatScreen(
                 onNewSession = onNewSession,
                 onCloseSession = onCloseSession,
                 onOpenFiles = onOpenFiles,
+                onOpenViews = onOpenViews,
                 onRename = onRename,
             )
 
@@ -453,6 +456,7 @@ private fun ChatHeader(
     onNewSession: () -> Unit,
     onCloseSession: () -> Unit,
     onOpenFiles: () -> Unit,
+    onOpenViews: (String) -> Unit,
     onRename: (RenameTarget) -> Unit,
 ) {
     val colors = AgiTheme.colors
@@ -562,6 +566,20 @@ private fun ChatHeader(
                     },
                     onClick = { menuOpen = false; onOpenFiles() },
                 )
+                // Только у известного агента: у переписки, открытой по пушу без id, вью
+                // спросить не у кого.
+                val agentId = state.agentId
+                if (agentId != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_menu_views),
+                                style = AgiTheme.typography.body,
+                            )
+                        },
+                        onClick = { menuOpen = false; onOpenViews(agentId) },
+                    )
+                }
                 if (state.agentKnown) {
                     DropdownMenuItem(
                         text = {

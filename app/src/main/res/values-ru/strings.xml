@@ -145,6 +145,7 @@
     <string name="chat_menu_new_session">Новая переписка</string>
     <string name="chat_menu_close_session">Закрыть переписку</string>
     <string name="chat_menu_files">Файлы</string>
+    <string name="chat_menu_views">Вью</string>
     <string name="chat_menu_rename_agent">Переименовать агента</string>
     <string name="chat_rename_agent_title">Имя агента</string>
     <string name="chat_rename_session_action">Переименовать переписку</string>
@@ -273,6 +274,16 @@
     <string name="error_file_gone">Файла больше нет на сервере</string>
 
     <!-- Просмотр вью коннектора -->
+    <string name="views_title">Вью</string>
+    <string name="views_hint">Страницы, которые отдают подключения агента, — панели наших инструментов и приложения MCP-серверов. Страница работает изолированно, а её кнопки зовут инструменты подключения от имени агента — по его привязкам и правилам доступа.</string>
+    <string name="views_empty">Вью нет. Они приходят от привязанного к агенту подключения, которое их отдаёт; MCP-подключение, созданное раньше, покажет свои вью после проверки — она перечитывает его инструменты.</string>
+    <string name="views_open">Открыть</string>
+    <string name="views_reload">Обновить</string>
+    <string name="views_back">Все вью</string>
+    <string name="views_loading">Загружаем страницу…</string>
+    <string name="views_load_error">Не удалось загрузить страницу</string>
+    <string name="views_unsupported">Это устройство не умеет показывать вью</string>
+    <string name="views_no_browser">Не нашли браузер, чтобы открыть ссылку</string>
     <string name="views_tool_call_failed">Не удалось вызвать инструмент</string>
     <string name="views_crashed">Страница вью перестала работать</string>
 

@@ -49,6 +49,8 @@ import ru.agimate.mobile.feature.profile.ProfileViewModel
 import ru.agimate.mobile.feature.settings.SettingsScreen
 import ru.agimate.mobile.feature.sessions.SessionsScreen
 import ru.agimate.mobile.feature.sessions.SessionsViewModel
+import ru.agimate.mobile.feature.views.ViewsScreen
+import ru.agimate.mobile.feature.views.ViewsViewModel
 
 /** Маршруты внутри продукта. Собраны в одном месте, чтобы строки не разъезжались по экранам. */
 object Routes {
@@ -73,6 +75,12 @@ object Routes {
         agentEnabled: Boolean = true,
     ) = "chat/$sessionId?agentId=${agentId.orEmpty()}" +
         "&agentName=${Uri.encode(agentName)}&agentEnabled=${flag(agentEnabled)}"
+
+    /** Вью агента. `agentId` обязателен — без него список не у кого спросить. */
+    const val AGENT_VIEWS = "agent-views/{agentId}?agentName={agentName}"
+
+    fun agentViews(agentId: String, agentName: String) =
+        "agent-views/$agentId?agentName=${Uri.encode(agentName)}"
 
     /** Булев параметр маршрута — строкой: NavType.BoolType не умеет быть nullable. */
     private fun flag(value: Boolean) = if (value) "1" else "0"
@@ -292,12 +300,40 @@ fun MainGraph(
                     viewModel.closeSession { navController.popBackStack() }
                 },
                 onOpenFiles = { files = FilesMode.Browse },
+                onOpenViews = { id ->
+                    navController.navigate(Routes.agentViews(id, state.agentName))
+                },
                 onPickStored = { files = FilesMode.Pick },
                 onStarter = viewModel::sendStarter,
                 onHideStarter = viewModel::hideStarter,
                 onRename = viewModel::startRename,
                 onRenameConfirm = viewModel::rename,
                 onRenameDismiss = viewModel::dismissRename,
+            )
+        }
+
+        // Вью агента открываются из переписки, но живут отдельным маршрутом: страница занимает
+        // весь экран, и её «назад» не должен трогать стек переписки, пока она открыта.
+        composable(
+            route = Routes.AGENT_VIEWS,
+            arguments = listOf(
+                navArgument("agentId") { type = NavType.StringType },
+                optionalArg("agentName"),
+            ),
+        ) {
+            val viewModel: ViewsViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            ViewsScreen(
+                state = state,
+                agentName = viewModel.agentName,
+                onBack = { navController.popBackStack() },
+                onOpen = viewModel::open,
+                onCloseOpened = viewModel::close,
+                onReload = viewModel::reload,
+                onRetry = viewModel::load,
+                onCallTool = viewModel::callTool,
+                onRendererGone = viewModel::onRendererGone,
             )
         }
 

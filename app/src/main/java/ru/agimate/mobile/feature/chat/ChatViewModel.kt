@@ -99,8 +99,8 @@ data class ChatUiState(
      * приглашение успевало мелькнуть перед приветствием. Ждём их недолго: см. [ChatViewModel].
      */
     val startersPending: Boolean = true,
-    /** Агент известен — из маршрута или из самой переписки: без него переименовывать некого. */
-    val agentKnown: Boolean = false,
+    /** Агент переписки; `null`, пока он неизвестен. По нему открываются вью агента. */
+    val agentId: String? = null,
     /** Заголовок переписки; `null`, пока сервер не сгенерировал его по первому сообщению. */
     val sessionTitle: String? = null,
     /** Что сейчас переименовывают; `null` — диалог закрыт. */
@@ -108,6 +108,12 @@ data class ChatUiState(
     val renameBusy: Boolean = false,
     val renameError: UiText? = null,
 ) {
+    /**
+     * Агент известен — из маршрута или из самой переписки. Без него нечего переименовывать
+     * и неоткуда открывать вью.
+     */
+    val agentKnown: Boolean get() = agentId != null
+
     val canSend: Boolean
         get() = agentEnabled && !closed && !sending &&
             (input.isNotBlank() || attachments.any { it.fileId != null }) &&
@@ -150,10 +156,12 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     val sessionId: String = checkNotNull(savedState["sessionId"])
-    private val agentId: String? = savedState["agentId"]
+    private val agentId: String? = savedState.get<String>("agentId")?.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(
         ChatUiState(
+            // Пустой аргумент маршрута — тот же «агент неизвестен»: чат открылся по пушу без id.
+            agentId = savedState.get<String>("agentId")?.takeIf { it.isNotBlank() },
             agentName = savedState.get<String>("agentName").orEmpty(),
             // Выключенный агент: историю показываем, отправку запрещаем. Признак приходит из
             // списка контактов — отдельного запроса за ним делать незачем.
@@ -549,7 +557,7 @@ class ChatViewModel @Inject constructor(
     private fun learnAgent(agentId: String) {
         if (agentId.isBlank() || knownAgentId != null) return
         knownAgentId = agentId
-        _state.update { it.copy(agentKnown = true) }
+        _state.update { it.copy(agentId = agentId) }
         loadStarters(agentId)
         // Переименовать могли и в другом чате этого агента, лежащем выше в стеке.
         viewModelScope.launch {

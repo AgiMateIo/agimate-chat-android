@@ -152,6 +152,7 @@
     <string name="chat_menu_new_session">New conversation</string>
     <string name="chat_menu_close_session">Close conversation</string>
     <string name="chat_menu_files">Files</string>
+    <string name="chat_menu_views">Views</string>
     <string name="chat_menu_rename_agent">Rename agent</string>
     <string name="chat_rename_agent_title">Agent name</string>
     <string name="chat_rename_session_action">Rename conversation</string>
@@ -288,6 +289,16 @@
     <string name="error_file_gone">The file is no longer on the server</string>
 
     <!-- Просмотр вью коннектора -->
+    <string name="views_title">Views</string>
+    <string name="views_hint">Pages the agent\'s connections offer — its own tools\' panels and the apps an MCP server hands out. A page runs isolated and its buttons call the connection\'s tools as the agent — under its bindings and access rules.</string>
+    <string name="views_empty">No views. They come from a connection bound to this agent that offers them; an MCP connection created earlier shows its views after you test it, which re-reads its tools.</string>
+    <string name="views_open">Open</string>
+    <string name="views_reload">Reload</string>
+    <string name="views_back">All views</string>
+    <string name="views_loading">Loading the page…</string>
+    <string name="views_load_error">Could not load the page</string>
+    <string name="views_unsupported">This device cannot show views</string>
+    <string name="views_no_browser">No browser found to open the link</string>
     <string name="views_tool_call_failed">The tool call failed</string>
     <string name="views_crashed">The view page stopped working</string>
 
