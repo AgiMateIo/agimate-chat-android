@@ -41,7 +41,12 @@ sealed class ApiException(
     /** 429 — упёрлись в лимит загрузок. Заголовка `Retry-After` сервер не шлёт. */
     class RateLimited(text: UiText, message: String = "rate limited") : ApiException(text, message)
 
-    class Server(val code: Int, text: UiText) : ApiException(text, "server error $code")
+    /** `message` включает текст сервера: по нему ищут причину в логах, когда экран показывает только «ошибка». */
+    class Server(
+        val code: Int,
+        text: UiText,
+        message: String = "server error $code",
+    ) : ApiException(text, message)
 
     class Malformed(text: UiText, message: String = "malformed") : ApiException(text, message)
 
@@ -64,7 +69,7 @@ sealed class ApiException(
                 403 -> Forbidden(text, forLog)
                 404 -> NotFound(text, forLog)
                 429 -> RateLimited(text, forLog)
-                else -> Server(code, text)
+                else -> Server(code, text, forLog)
             }
         }
 

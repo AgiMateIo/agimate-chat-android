@@ -10,6 +10,7 @@ import ru.agimate.mobile.data.agents.AgentsApi
 import ru.agimate.mobile.data.files.FilesApi
 import ru.agimate.mobile.data.push.PushApi
 import ru.agimate.mobile.data.user.UserApi
+import ru.agimate.mobile.data.views.ViewsApi
 import ru.agimate.mobile.data.webchat.WebchatApi
 import javax.inject.Singleton
 
@@ -38,6 +39,10 @@ object ApiModule {
     @Singleton
     fun agentsApi(@AuthedClient retrofit: Retrofit): AgentsApi =
         retrofit.create(AgentsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun viewsApi(@AuthedClient retrofit: Retrofit): ViewsApi = retrofit.create(ViewsApi::class.java)
 
     @Provides
     @Singleton
