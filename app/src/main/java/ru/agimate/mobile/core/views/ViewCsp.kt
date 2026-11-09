@@ -30,5 +30,7 @@ object ViewCsp {
         return html.substring(0, afterHead) + meta + html.substring(afterHead)
     }
 
-    private val HEAD = Regex("<head[^>]*>", RegexOption.IGNORE_CASE)
+    // Граница после имени обязательна: иначе `<header>` тоже считался бы `<head>`, и мета-тег
+    // попал бы внутрь `<header>`, где браузер политику не применяет.
+    private val HEAD = Regex("""<head(?=[\s>])[^>]*>""", RegexOption.IGNORE_CASE)
 }

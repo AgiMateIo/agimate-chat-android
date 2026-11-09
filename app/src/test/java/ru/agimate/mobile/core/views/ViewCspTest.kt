@@ -44,6 +44,15 @@ class ViewCspTest {
     }
 
     @Test
+    fun `header element does not count as head`() {
+        val html = "<html><body><header>menu</header></body></html>"
+
+        val result = ViewCsp.withCsp(html)
+
+        assertTrue(result, result.startsWith(ourMeta))
+    }
+
+    @Test
     fun `an existing policy stays after ours`() {
         val theirMeta = """<meta http-equiv="Content-Security-Policy" content="default-src 'self'">"""
         val html = "<html><head>$theirMeta</head><body></body></html>"
