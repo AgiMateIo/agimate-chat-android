@@ -274,6 +274,7 @@
 
     <!-- Просмотр вью коннектора -->
     <string name="views_tool_call_failed">Не удалось вызвать инструмент</string>
+    <string name="views_crashed">Страница вью перестала работать</string>
 
     <plurals name="chat_progress_more">
         <item quantity="one">%1$s · ещё %2$d</item>

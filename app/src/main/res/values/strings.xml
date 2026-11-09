@@ -289,6 +289,7 @@
 
     <!-- Просмотр вью коннектора -->
     <string name="views_tool_call_failed">The tool call failed</string>
+    <string name="views_crashed">The view page stopped working</string>
 
     <!--
       Число со словом после него — форма, зависящая от количества. В английском и русском «more» и
