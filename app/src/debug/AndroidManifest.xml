@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Нужна только инструментальным тестам моста; собираются они на debug-варианте,
+             поэтому и активити объявлена здесь, а не в основном манифесте. -->
+        <activity
+            android:name=".core.views.ViewTestActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>

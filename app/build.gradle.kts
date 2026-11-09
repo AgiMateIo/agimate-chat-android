@@ -211,6 +211,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.webkit)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -244,4 +245,8 @@ dependencies {
 
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.espresso)
+    androidTestImplementation(libs.androidx.test.core)
+    // Хост вью проверяется на живом WebView: MockWebServer нужен, чтобы утверждать, что наружу
+    // не ушло ни одного запроса, а не чтобы что-то отдать.
+    androidTestImplementation(libs.okhttp.mockwebserver)
 }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agent view</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: __BACKGROUND__;
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: __BACKGROUND__;
+  }
+</style>
+</head>
+<body>
+<script>
+(function () {
+  "use strict";
+
+  var TOKEN = "__TOKEN__";
+  var VIEW_URL = "__VIEW_URL__";
+  var host = window.AgimateHost;
+  // WebMessageListener кладёт в объект postMessage, JS-интерфейс — только post. По наличию
+  // метода и выбирается канал; второй путь нужен WebView, где слушателя нет.
+  var overMessages = host && typeof host.postMessage === "function";
+  var frame = null;
+
+  function send(envelope) {
+    if (!host) return;
+    var text = JSON.stringify(envelope);
+    if (overMessages) {
+      host.postMessage(text);
+    } else {
+      host.post(text);
+    }
+  }
+
+  function receive(raw) {
+    var envelope;
+    try {
+      envelope = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch (error) {
+      return;
+    }
+    if (!envelope || envelope.type !== "rpc" || envelope.message == null) return;
+    if (frame && frame.contentWindow) {
+      frame.contentWindow.postMessage(envelope.message, "*");
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    // Чужие окна не должны уметь говорить от имени вью: пересылается только свой кадр.
+    if (!frame || event.source !== frame.contentWindow) return;
+    send({ type: "rpc", token: TOKEN, message: event.data });
+  });
+
+  if (overMessages) {
+    host.onmessage = function (event) { receive(event.data); };
+  } else {
+    window.__agimateHostReceive = receive;
+  }
+
+  send({ type: "hello", token: TOKEN });
+
+  frame = document.createElement("iframe");
+  frame.id = "view";
+  frame.setAttribute("sandbox", "allow-scripts");
+  frame.setAttribute("title", "Agent view");
+  frame.src = VIEW_URL;
+  document.body.appendChild(frame);
+})();
+</script>
+</body>
+</html>
