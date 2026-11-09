@@ -417,14 +417,22 @@ private fun OpenedBody(
                             onCallTool = onCallTool,
                             onOpenLink = { uri ->
                                 // Только Custom Tabs и только https: адрес уже проверен
-                                // протоколом, а произвольный Intent сюда не попадает.
-                                val openedInBrowser = CustomTabs.open(
-                                    context = context,
-                                    uri = uri,
-                                    toolbarColor = LightColors.background.toArgb(),
-                                    darkToolbarColor = DarkColors.background.toArgb(),
-                                )
-                                if (openedInBrowser) null else noBrowserMessage
+                                // протоколом, а произвольный Intent сюда не попадает. Схема и хост
+                                // перепроверяются здесь второй линией защиты: дальше — последний
+                                // выход из приложения наружу.
+                                val external = uri.scheme.equals("https", ignoreCase = true) &&
+                                    !uri.host.isNullOrBlank()
+                                if (!external) {
+                                    noBrowserMessage
+                                } else {
+                                    val openedInBrowser = CustomTabs.open(
+                                        context = context,
+                                        uri = uri,
+                                        toolbarColor = LightColors.background.toArgb(),
+                                        darkToolbarColor = DarkColors.background.toArgb(),
+                                    )
+                                    if (openedInBrowser) null else noBrowserMessage
+                                }
                             },
                             onRendererGone = onRendererGone,
                             modifier = Modifier.fillMaxSize(),

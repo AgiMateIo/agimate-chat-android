@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.webkit.WebView
 import androidx.core.content.ContextCompat
 import androidx.core.os.UserManagerCompat
 import dagger.Lazy
@@ -39,6 +40,10 @@ class AgiMateApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Настройка глобальная и на процесс одна: вызов из экрана вью менял бы поведение всех
+        // WebView приложения. В release отладка выключена — иначе инспектор получил бы доступ к
+        // содержимому чужого документа, который вью показывает.
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         registerActivityLifecycleCallbacks(visibility)
         // Пуш на закрытом приложении поднимает процесс и приходит сюда: слушатели должны стоять к
         // этому моменту, а экранов может не быть вовсе.

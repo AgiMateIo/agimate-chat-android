@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
-import ru.agimate.mobile.BuildConfig
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -68,7 +67,6 @@ internal fun configureViewWebView(webView: WebView, background: Color) {
         WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, false)
     }
     webView.setBackgroundColor(background.toArgb())
-    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 }
 
 /**
