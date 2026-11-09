@@ -626,7 +626,7 @@ EN — те же ключи по-английски (копия из `messages/d
 - [ ] **Step 3: Добавить маршрут и экран**
 
 `Routes.AGENT_VIEWS` + `agentViews(...)`; в `MainGraph` — `composable` с `hiltViewModel<ViewsViewModel>()`, аргументы `agentId` и `agentName`. `ViewsScreen`:
-- список: карточка с `title`, `uri` моноширинным, чипами `tools`, нажатие открывает;
+- список: строка — `title` слева, значок `OpenInNew` справа; нажатие открывает; `uri` и `tools` в списке не показываются (правка по запросу пользователя после приёмки);
 - пусто/ошибка — `EmptyState`/`ErrorState`;
 - открытая вью: тулбар (назад к списку, название, `uri`, «Обновить») и `key(opened.revision) { AgentViewHost(...) }`;
 - `BackHandler(enabled = state.opened != null) { onCloseOpened() }`;

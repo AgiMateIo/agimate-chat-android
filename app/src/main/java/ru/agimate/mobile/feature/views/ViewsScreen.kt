@@ -2,14 +2,11 @@ package ru.agimate.mobile.feature.views
 
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,9 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Window
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -46,7 +44,6 @@ import ru.agimate.mobile.R
 import ru.agimate.mobile.core.auth.CustomTabs
 import ru.agimate.mobile.core.ui.components.EmptyState
 import ru.agimate.mobile.core.ui.components.ErrorState
-import ru.agimate.mobile.core.ui.components.SecondaryButton
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
@@ -183,7 +180,7 @@ private fun ViewsList(
                     repeat(3) {
                         Skeleton(
                             modifier = Modifier.fillMaxWidth(),
-                            height = 148.dp,
+                            height = 64.dp,
                             shape = AgiTheme.shapes.card,
                         )
                     }
@@ -221,78 +218,34 @@ private fun ViewsList(
 }
 
 /**
- * Карточка вью. Нажатие — открыть: карточка целиком и есть цель, кнопка лишь называет действие.
+ * Строка вью: название и значок «открыть». Нажатие — открыть: строка целиком и есть цель,
+ * значок лишь называет действие. Значок `OpenInNew` говорит, что откроется новая страница.
  */
 @Composable
 private fun ViewCard(view: AgentView, onOpen: () -> Unit) {
     val colors = AgiTheme.colors
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, colors.hairline, AgiTheme.shapes.card)
             .clickable(onClick = onOpen)
-            .padding(AgiTheme.spacing.md),
+            .padding(start = AgiTheme.spacing.md, end = AgiTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.Window,
-                contentDescription = null,
-                tint = colors.textTertiary,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(AgiTheme.spacing.sm))
-            Text(
-                text = view.title,
-                style = AgiTheme.typography.subtitle,
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Spacer(Modifier.height(AgiTheme.spacing.xs))
-
-        // Адрес вью — идентификатор, а не ссылка: `ui://` не открывает ни один браузер,
-        // поэтому он набран как машинное значение и не кликается.
         Text(
-            text = view.uri,
-            style = AgiTheme.typography.mono,
-            color = colors.textTertiary,
+            text = view.title,
+            style = AgiTheme.typography.subtitle,
+            color = colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
-
-        if (view.tools.isNotEmpty()) {
-            Spacer(Modifier.height(AgiTheme.spacing.sm))
-            ToolChips(view.tools)
-        }
-
-        Spacer(Modifier.height(AgiTheme.spacing.md))
-
-        SecondaryButton(
-            text = stringResource(R.string.views_open),
-            onClick = onOpen,
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ToolChips(tools: List<String>) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(AgiTheme.spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(AgiTheme.spacing.xs),
-    ) {
-        for (tool in tools) {
-            Text(
-                text = tool,
-                style = AgiTheme.typography.caption,
-                color = AgiTheme.colors.textSecondary,
-                maxLines = 1,
-                modifier = Modifier
-                    .background(AgiTheme.colors.surfaceMuted, AgiTheme.shapes.pill)
-                    .padding(horizontal = AgiTheme.spacing.sm, vertical = 2.dp),
+        IconButton(onClick = onOpen) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                contentDescription = stringResource(R.string.views_open),
+                tint = colors.accent,
             )
         }
     }
