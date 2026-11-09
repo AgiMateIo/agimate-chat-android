@@ -783,10 +783,10 @@ GET <origin>/control/manage/agents/{agentId}/views/
 GET <origin>/control/manage/agents/{agentId}/views/content?connectionId=…&uri=…
 ```
 
-→ `{"response": {"uri": "ui://…", "mimeType": "text/html", "html": "<!doctype html>…", "permissions": {…}, "prefersBorder": true}}`
+→ `{"response": {"uri": "ui://…", "mimeType": "text/html;profile=mcp-app", "html": "<!doctype html>…", "permissions": {…}, "prefersBorder": true}}`
 
-`html` — готовый документ; `mimeType` — `text/html` с параметром `profile=mcp-app`, другой тип
-сервер отвергает как не-вью. `uri` должен быть связан с тулом этой привязки, доступным агенту:
+`html` — готовый документ; `mimeType` — `text/html;profile=mcp-app`, другой тип сервер отвергает
+как не-вью. `uri` должен быть связан с тулом этой привязки, доступным агенту:
 эндпойнт не прокси для произвольного чтения ресурсов MCP-сервера. `permissions` и `prefersBorder`
 сервер отдаёт из `_meta.ui`, но приложение их не применяет: политику безопасности задаёт обёртка,
 рамку рисует экран.
@@ -827,11 +827,12 @@ POST <origin>/control/manage/agents/{agentId}/views/tools/call
   обёртки, ни её токен. Разговор — только `postMessage` через обёртку, внутри — JSON-RPC 2.0.
 - **Политика — заголовком.** `Content-Security-Policy` уходит заголовком ответа, а не `<meta>` в
   чужом HTML: вставку в недоверенную разметку можно обойти, заголовок — нельзя. Запрещено всё
-  (`default-src 'none'`), кроме встроенных скриптов и стилей и картинок `data:`/`blob:`;
-  `connect-src` и `frame-src` — `'none'`.
-- **Сеть закрыта перехватом, а не `blockNetworkLoads`.** Любой другой запрос получает `403`, а не
-  «грузи сам»; навигация внутрь запрещена, `https`-ссылки уходят в Custom Tabs. `blockNetworkLoads`
-  выключил бы и загрузку самой обёртки.
+  (`default-src 'none'`), кроме встроенных скриптов и стилей и ресурсов `data:`/`blob:` — картинок,
+  шрифтов и медиа; у самой вью `connect-src` и `frame-src` — `'none'`. Политика обёртки отдельная:
+  ей `frame-src` нужен на адрес кадра.
+- **Сеть закрыта перехватом, а не `blockNetworkLoads`.** Любой другой сетевой запрос получает `403`,
+  а не «грузи сам»; навигация внутрь запрещена, `https`-ссылки уходят в Custom Tabs.
+  `blockNetworkLoads` выключил бы и загрузку самой обёртки.
 - **Токена авторизации в WebView нет.** `Authorization` ставит HTTP-клиент приложения, в WebView он
   не попадает. У обёртки есть только одноразовый токен канала, выданный хосту на экземпляр; вью не
   видит и его.
