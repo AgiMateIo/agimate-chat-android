@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -96,7 +97,13 @@ fun ViewsScreen(
                 onReload = onReload,
                 onCallTool = { name, arguments -> onCallTool(opened.view, name, arguments) },
                 onRendererGone = onRendererGone,
-                modifier = Modifier.weight(1f),
+                // Панель навигации и клавиатура отнимают высоту у страницы, а не у шапки:
+                // так WebView не уезжает под системные элементы, а поле ввода страницы
+                // остаётся видно.
+                modifier = Modifier
+                    .weight(1f)
+                    .navigationBarsPadding()
+                    .imePadding(),
             )
         }
     }
