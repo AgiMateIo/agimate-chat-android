@@ -4,7 +4,7 @@
 
 **Goal:** Показать в приложении вью коннекторов агента — список и открытие HTML-страницы в sandbox-iframe с мостом вызовов тулов.
 
-**Architecture:** Compose-экран содержит WebView с нашей доверенной обёрткой. Обёртка создаёт `<iframe sandbox="allow-scripts" srcdoc=…>` и пересылает JSON-RPC в нативный мост; протокол, проверки и вызовы API живут в Kotlin. HTML вью встроена в обёртку base64, обёртка отдаётся один раз через `shouldInterceptRequest`.
+**Architecture:** Compose-экран содержит WebView с нашей доверенной обёрткой. Обёртка создаёт `<iframe sandbox="allow-scripts" src=…>` и пересылает JSON-RPC в нативный мост; протокол, проверки и вызовы API живут в Kotlin. Обёртка и документ вью отдаются двумя одноразовыми ответами `shouldInterceptRequest`; CSP вью приходит HTTP-заголовком.
 
 **Tech Stack:** Kotlin 2.4.10, Compose (BOM 2026.08.00), AndroidX WebKit 1.18.0, OkHttp 5.4 / Retrofit 2.12, kotlinx.serialization, Hilt, JUnit4 + MockWebServer + Turbine, AndroidX Test.
 
@@ -230,17 +230,14 @@ git commit -m "feat: mcp apps protocol — json-rpc reducer and replies"
   ```kotlin
   object ViewCsp {
       fun build(): String
-      fun withCsp(html: String): String
   }
   ```
+- **Обновление после security review:** `withCsp`/meta-вставка удалены. Политика доставляется заголовком `Content-Security-Policy` в ответе `shouldInterceptRequest` (Task 6); regex-вставка `<meta>` в недоверенный HTML нейтрализуема разметкой и потому не является защитой.
 
 - [ ] **Step 1: Написать падающие тесты**
 
 - `policy is strict and has every directive` — точное сравнение:
   `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; base-uri 'none'; object-src 'none'`.
-- `meta goes right after the opening head tag` — `<head lang="ru" data-x="1">` → `<head …><meta http-equiv="Content-Security-Policy" …>`.
-- `document without head gets the meta first` — строка начинается с `<meta http-equiv="Content-Security-Policy"`.
-- `an existing policy stays after ours` — `indexOf(ourMeta) < indexOf(theirMeta)`.
 
 - [ ] **Step 2: Запустить и убедиться, что тесты падают**
 
@@ -249,7 +246,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Реализовать `ViewCsp`**
 
-Порт `withCsp` из веба: `<meta http-equiv="Content-Security-Policy" content="…">`, кавычки в значении заменяются на `&quot;`; вставка после первого `<head…>` без учёта регистра или перед документом, если `<head>` нет.
+Только `build()` с точной строкой политики. Никакой вставки в HTML.
 
 - [ ] **Step 4: Запустить тесты**
 
@@ -262,6 +259,8 @@ Expected: PASS.
 git add app/src/main/java/ru/agimate/mobile/core/views/ViewCsp.kt app/src/test/java/ru/agimate/mobile/core/views/ViewCspTest.kt
 git commit -m "feat: view csp — strict policy injected into page markup"
 ```
+
+Follow-up (security review, уже в истории): `fix: view csp — header-only policy instead of meta injection` — удаляет `withCsp` и его тесты; итоговое состояние — только `build()`.
 
 ---
 
@@ -329,7 +328,8 @@ git commit -m "feat: view host style — app tokens as mcp apps variables"
   object ViewWrapper {
       const val ORIGIN = "https://appassets.androidplatform.net"
       const val URL = "$ORIGIN/views/host.html"
-      fun build(hostHtml: String, viewHtml: String, token: String, background: String): String
+      const val VIEW_URL = "$ORIGIN/views/page.html"
+      fun build(hostHtml: String, viewUrl: String, token: String, background: String): String
       fun hostHtml(context: Context): String
   }
 
@@ -360,11 +360,11 @@ git commit -m "feat: view host style — app tokens as mcp apps variables"
 - [ ] **Step 1: Написать падающие тесты сборки обёртки**
 
 `ViewWrapperTest`:
-- `build replaces token, background and base64 view` — маркер `<script id="evil"></script>` и кириллица сохраняются после decode; в собранном HTML нет подстроки `<script id="evil">`; токен и `#123456` присутствуют; подстрок `__TOKEN__`, `__BACKGROUND__`, `__VIEW_HTML_B64__` не осталось.
+- `build replaces token, background and view url` — `ViewWrapper.VIEW_URL` и `#123456` присутствуют, токен подставлен; подстрок `__TOKEN__`, `__BACKGROUND__`, `__VIEW_URL__` не осталось.
 
 - [ ] **Step 2: Написать инструментальный тест моста**
 
-`ViewBridgeInstrumentedTest` (AndroidX Test, `ActivityScenario.launch(ViewTestActivity::class.java)`, WebView создаётся на UI-потоке):
+`ViewBridgeInstrumentedTest` (AndroidX Test, `ActivityScenario.launch(ViewTestActivity::class.java)`, WebView создаётся на UI-потоке). Обёртка грузится через `loadDataWithBaseURL`, а тестовый `WebViewClient.shouldInterceptRequest` отдаёт `ViewWrapper.VIEW_URL` с HTML фикстуры (и `403` на всё остальное) — в проде это делает Task 6:
 - `bridge round-trips a request with id zero` — фикстура в iframe шлёт `{"jsonrpc":"2.0","id":0,"method":"ping"}`, натив отвечает `resultReply`, фикстура шлёт `test/reply` с результатом; `CountDownLatch.await(5, SECONDS)`.
 - `bridge round-trips through the javascript interface too` — то же с `forceInterface = true`.
 - `hello carries the token` — обёртка шлёт hello; утвердить, что `onHello` пришёл.
@@ -380,14 +380,14 @@ Expected: FAIL — классов нет.
 
 - [ ] **Step 4: Реализовать обёртку, сборку и мост**
 
-`host.html` — минимальный документ с `__TOKEN__`, `__BACKGROUND__`, `__VIEW_HTML_B64__`:
+`host.html` — минимальный документ с `__TOKEN__`, `__BACKGROUND__`, `__VIEW_URL__`:
 - детект режима: `typeof AgimateHost.postMessage === "function"` → `onmessage` + `postMessage`; иначе `post` + глобальная `__agimateHostReceive`;
 - при старте `send({type:"hello", token: TOKEN})`;
-- декодирует base64 через `TextDecoder`, создаёт `<iframe sandbox="allow-scripts" srcdoc=…>`;
+- создаёт `<iframe sandbox="allow-scripts" src=VIEW_URL>`;
 - слушает `message`, проверяет `event.source === frame.contentWindow`, пересылает `{type:"rpc", token, message: event.data}`;
 - на входящий `{type:"rpc", message}` делает `frame.contentWindow.postMessage(message, "*")`.
 
-`ViewWrapper.build`: заменить токен и цвет, вставить base64 через `java.util.Base64.getEncoder()` (API 26+, поэтому юнит-тест работает без Android).
+`ViewWrapper.build`: заменить токен, цвет и URL вью. HTML вью в обёртку не встраивается — его отдаёт второй ответ `shouldInterceptRequest` в Task 6.
 `ViewBridge`:
 - `create` выбирает `WEB_MESSAGE`, если `WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)`, иначе `JS_INTERFACE`; `forceInterface` — только для теста.
 - `install`: `WebViewCompat.addWebMessageListener(webView, "AgimateHost", setOf(ViewWrapper.ORIGIN), listener)` с проверкой `isMainFrame`; либо `addJavascriptInterface(JsBridge(), "AgimateHost")`, где `JsBridge` — именованный `private inner class` с методом `@JavascriptInterface fun post(envelope: String)`, который вызывает `webView.post { handle(envelope) }`.
@@ -431,6 +431,7 @@ git commit -m "feat: agent view bridge — sandboxed host and json-rpc channel"
 
   internal class ViewWebViewClient(
       private val wrapper: () -> String?,          // одноразовый HTML обёртки
+      private val view: () -> String?,             // одноразовый HTML вью
       private val onExternalLink: (Uri) -> Unit,
       private val onRendererGone: () -> Unit,
   ) : WebViewClient()
@@ -469,7 +470,8 @@ git commit -m "feat: agent view bridge — sandboxed host and json-rpc channel"
 
 `ViewHostSecurityTest`:
 - `settings are locked down` — после `configureViewWebView(webView, background)`: JS включён; `allowFileAccess`, `allowContentAccess`, `domStorageEnabled`, `databaseEnabled`, `javaScriptCanOpenWindowsAutomatically`, `supportMultipleWindows` — false; `mixedContentMode == NEVER_ALLOW`.
-- `the wrapper is served once and then forbidden` — фейковый `WebResourceRequest`; первый `shouldInterceptRequest` возвращает HTML и `200`; второй — `403`.
+- `the wrapper is served once with its own CSP header and then forbidden` — фейковый `WebResourceRequest`; первый `shouldInterceptRequest` возвращает HTML и `200`, заголовок обёртки содержит `frame-src https://appassets.androidplatform.net`; второй — `403`.
+- `the view is served once with the strict CSP header and then forbidden` — запрос на `ViewWrapper.VIEW_URL`; первый ответ — HTML и `200`, заголовок `Content-Security-Policy` ровно `ViewCsp.build()`, `Cache-Control: no-store`; второй — `403`.
 - `local data resources are not blocked` — запрос `data:image/png;base64,…` → `shouldInterceptRequest` возвращает `null`.
 - `navigation is never performed inside` — `shouldOverrideUrlLoading` на `https://example.com` возвращает `true` и зовёт колбэк; на не-https — `true` без колбэка; на `ViewWrapper.URL` — `false` (это загрузка самой обёртки, её обслуживает перехват).
 - `network access from the page sends nothing` — MockWebServer; фикстура с `<img src="${server.url("/img")}">`, `fetch("${server.url("/fetch")}")` и попыткой `new WebSocket(server.url("/ws").toString().replace("http", "ws"))`; после загрузки host — `server.requestCount == 0`.
@@ -488,7 +490,7 @@ Expected: FAIL — классов нет.
 - [ ] **Step 3: Реализовать `configureViewWebView` и `ViewWebViewClient`**
 
 Настройки — из спеки, раздел 7. `blockNetworkLoads` включается только если тест этого же шага подтвердит, что перехваченная загрузка обёртки не ломается; иначе сеть закрыта перехватом и CSP (в том числе для WebSocket — через `connect-src 'none'`). Клиент:
-- `shouldInterceptRequest`: `data:`/`blob:`/`about:` → `null` (это локальные ресурсы страницы, CSP их разрешает); адрес ровно `ViewWrapper.URL`, метод `GET`, wrapper ещё не отдан → `WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), bytes.inputStream())`; иначе `403` с пустым телом.
+- `shouldInterceptRequest`: `data:`/`blob:`/`about:` → `null` (это локальные ресурсы страницы, CSP их разрешает); `ViewWrapper.URL` с `GET`, обёртка ещё не отдана → HTML обёртки и `200` с заголовками `Content-Security-Policy` (обёрточная политика: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src https://appassets.androidplatform.net`) и `Cache-Control: no-store`; `ViewWrapper.VIEW_URL` с `GET`, вью ещё не отдана → HTML вью и `200` с `Content-Security-Policy: ViewCsp.build()` и `Cache-Control: no-store`; иначе `403` с пустым телом. У обоих адресов отдельный одноразовый флаг.
 - `shouldOverrideUrlLoading`: `ViewWrapper.URL` → `false` (загрузку обслуживает перехват); остальное всегда `true`, `https` — `onExternalLink(uri)`, не-https — молча.
 - `onRenderProcessGone`: `onRendererGone()`, вернуть `true`.
 
@@ -498,7 +500,7 @@ Expected: FAIL — классов нет.
 
 - [ ] **Step 4: Реализовать `ViewHostController` и `AgentViewHost`**
 
-`start()`: собрать `ViewWrapper.build(hostHtml, ViewCsp.withCsp(content), token, background.toCssHex())`, создать `ViewBridge`, `install`, выставить клиентов (`ViewWebViewClient` получает `onExternalLink = { uri -> onOpenLink(uri) }`), `loadUrl(ViewWrapper.URL)`.
+`start()`: собрать `ViewWrapper.build(hostHtml, ViewWrapper.VIEW_URL, token, background.toCssHex())`, создать `ViewBridge`, `install`, выставить клиентов (`ViewWebViewClient` получает `wrapper = { wrapperHtml }`, `view = { content }`, `onExternalLink = { uri -> onOpenLink(uri) }`), `loadUrl(ViewWrapper.URL)`.
 `onRpc`: `ViewProtocol.decode(text, hostContext)`; `Reply` → `bridge.send`; `Call` → `scope.launch { runCatching { onCallTool(name, arguments) } … }`, успех — `resultReply(id, result)`, ошибка — `errorReply(id, INTERNAL_ERROR, toolErrorText(error))`; `OpenLink` → `onOpenLink(uri)`: `null` — `resultReply(id, {})`, иначе `errorReply(id, INTERNAL_ERROR, текст)`; `Resize`/`Ready`/`Ignore` — ничего.
 `AgentViewHost` — `AndroidView(factory = { … }, onRelease = { controller.release(); it.destroy() })`, `rememberCoroutineScope()`, `remember { ViewWrapper.hostHtml(context) }`; `toolErrorText` собирается на месте: `{ e -> (e as? ApiException)?.text?.resolve(context) ?: context.getString(R.string.views_tool_call_failed) }`. Токен — `UUID.randomUUID().toString()` на экземпляр; перезагрузка пересоздаёт хост (ключ снаружи).
 
