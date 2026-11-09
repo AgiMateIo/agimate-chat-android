@@ -52,7 +52,7 @@
 ```
 Compose screen
 └── WebView                         (наш host.html, origin appassets)
-    └── iframe srcdoc=view.html     sandbox="allow-scripts"
+    └── iframe src=page.html        sandbox="allow-scripts"
          ↕ window.postMessage        (JSON-RPC 2.0, диалект MCP Apps ui/*)
     host.html  ↔  ViewBridge (Kotlin)  ↔  OkHttp/Retrofit  →  control-api
 ```
@@ -91,8 +91,8 @@ cookie-авторизации, что противоречит решению б
 через `src`. Это нужно ради CSP: политика приходит **заголовком
 `Content-Security-Policy`**, который нельзя нейтрализовать разметкой, в
 отличие от `<meta>` (комментарий или скрипт с `<head>` до настоящего head
-сдвигает вставку и оставляет документ без политики). Meta при этом всё равно
-вставляется — как второй слой.
+сдвигает вставку и оставляет документ без политики). Поэтому `<meta>` в HTML
+вью не вставляется вовсе: заголовок остаётся единственным слоем политики.
 
 Обёртка:
 
@@ -118,8 +118,9 @@ cookie, ни localStorage, ни доступа к обёртке, и `window.par
    обёртки (`https://appassets.androidplatform.net`) и проверкой
    `isMainFrame`. Основной путь.
 2. **`addJavascriptInterface`** — fallback для старых WebView. Объект с одним
-   методом `@JavascriptInterface fun post(token: String, envelope: String)`.
-   Ответы доставляются через `evaluateJavascript` с JSON-экранированием.
+   методом `@JavascriptInterface fun post(envelope: String)`; токен лежит
+   внутри конверта, как и в основном канале. Ответы доставляются через
+   `evaluateJavascript` с JSON-экранированием.
 
 Токен генерируется на каждое открытие, передаётся обёртке в `render` и живёт
 в её замыкании. Натив отклоняет сообщения без токена. Origin-правило и токен
@@ -414,7 +415,8 @@ data class OpenedView(
 
 ## 13. Этапы
 
-1. Спайк WebView: origin, listener, srcdoc, CSP, блокировка сети, fallback.
+1. Спайк WebView: origin, listener, iframe по `src`, CSP, блокировка сети,
+   fallback.
 2. Слой данных: DTO, API, репозиторий, тесты.
 3. Протокол: `ViewProtocol`, `ViewCsp`, `hostContext`, тесты.
 4. Хост: `host.html`, `ViewBridge`, `ViewHost`, инструментальные тесты.
