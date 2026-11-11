@@ -5,6 +5,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import ru.agimate.mobile.core.network.apiCall
 import ru.agimate.mobile.core.network.unwrap
+import ru.agimate.mobile.core.views.ViewExternalDomains
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +21,56 @@ data class AgentView(
     val title: String get() = connectionName?.takeIf { it.isNotBlank() } ?: connectorCode
 }
 
-data class AgentViewContent(val html: String, val mimeType: String)
+data class AgentViewContent(
+    val html: String,
+    val mimeType: String,
+    /** Домены, разрешённые установкой; `null` — строгая политика без внешней сети. */
+    val externalDomains: ViewExternalDomains? = null,
+)
+
+/**
+ * Вызов тула в строке переписки. [viewUri] — подсказка для карточки: `null` значит «вью нет»,
+ * а не «ещё не знаем». [connectionId] может отсутствовать у вызова без коннекции.
+ */
+data class ToolCallDescriptor(
+    val toolCallId: String,
+    val name: String,
+    val connectionId: String?,
+    val viewUri: String?,
+) {
+    companion object {
+        fun from(dto: ToolCallDescriptorDto) = ToolCallDescriptor(
+            toolCallId = dto.toolCallId,
+            name = dto.name,
+            connectionId = dto.connectionId,
+            viewUri = dto.viewUri,
+        )
+    }
+}
+
+/**
+ * Данные вызова для вью. [input] всегда объект: пустые аргументы — тоже аргументы. [result] —
+ * `CallToolResult` как JSON, `null` пока вызов идёт.
+ */
+data class SessionToolCall(
+    val toolCallId: String,
+    val name: String,
+    val connectionId: String?,
+    val viewUri: String?,
+    val input: JsonObject,
+    val result: JsonObject?,
+) {
+    companion object {
+        fun from(dto: SessionToolCallDto) = SessionToolCall(
+            toolCallId = dto.toolCallId,
+            name = dto.name,
+            connectionId = dto.connectionId,
+            viewUri = dto.viewUri,
+            input = dto.input ?: JsonObject(emptyMap()),
+            result = dto.result?.toJson(),
+        )
+    }
+}
 
 @Singleton
 class ViewsRepository @Inject constructor(private val api: ViewsApi) {
@@ -38,8 +88,21 @@ class ViewsRepository @Inject constructor(private val api: ViewsApi) {
 
     suspend fun content(agentId: String, connectionId: String, uri: String): AgentViewContent {
         val dto = apiCall { api.content(agentId, connectionId, uri) }.unwrap("содержимое вью")
-        return AgentViewContent(html = dto.html, mimeType = dto.mimeType)
+        return AgentViewContent(
+            html = dto.html,
+            mimeType = dto.mimeType,
+            externalDomains = dto.csp.toDomains(),
+        )
     }
+
+    /**
+     * Разрешить вызов в его вью. `404`/`403` — нормальный ответ «вью нет», а не поломка: их
+     * разбирает загрузчик, а не репозиторий.
+     */
+    suspend fun toolCall(sessionId: String, toolCallId: String): SessionToolCall =
+        apiCall { api.toolCall(sessionId, toolCallId) }
+            .unwrap("вызов тула")
+            .let(SessionToolCall::from)
 
     /**
      * Вызов тула из открытой вью. Возвращает ровно JSON-RPC `result`: страница ждёт его полем
@@ -55,10 +118,29 @@ class ViewsRepository @Inject constructor(private val api: ViewsApi) {
         val dto = apiCall {
             api.callTool(agentId, ViewToolCallRequest(connectionId, name, arguments))
         }.unwrap("вызов тула вью")
-        return buildJsonObject {
-            dto.content?.let { put("content", it) }
-            dto.structuredContent?.let { put("structuredContent", it) }
-            put("isError", dto.isError)
-        }
+        return dto.toJson()
+    }
+}
+
+/**
+ * `CallToolResult` без обёрток. Ключ `isError` есть всегда: страница отличает ошибку тула от
+ * успешного пустого результата, а `content`/`structuredContent` не появляются, если сервер их не
+ * прислал.
+ */
+private fun ViewToolCallResultDto.toJson(): JsonObject = buildJsonObject {
+    content?.let { put("content", it) }
+    structuredContent?.let { put("structuredContent", it) }
+    put("isError", isError)
+}
+
+/** Домены из ответа; пустая пара списков — тот же строгий случай, что и отсутствие поля. */
+private fun AgentViewCspDto?.toDomains(): ViewExternalDomains? {
+    if (this == null) return null
+    val domains = ViewExternalDomains(
+        resourceDomains = resourceDomains.orEmpty(),
+        connectDomains = connectDomains.orEmpty(),
+    )
+    return domains.takeIf {
+        it.resourceDomains.isNotEmpty() || it.connectDomains.isNotEmpty()
     }
 }

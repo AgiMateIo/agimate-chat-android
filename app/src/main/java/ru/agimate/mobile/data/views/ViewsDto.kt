@@ -22,6 +22,16 @@ data class AgentViewDto(
  * Страница вью. `permissions` и `prefersBorder` сервер отдаёт из `_meta.ui`, но приложению они не
  * нужны: политику безопасности задаёт обёртка, рамку рисует экран.
  */
+/**
+ * Внешние домены, разрешённые установкой для этой страницы. `null` у обоих списков — доменов нет;
+ * пустые списки бэкенд не присылает.
+ */
+@Serializable
+data class AgentViewCspDto(
+    val resourceDomains: List<String>? = null,
+    val connectDomains: List<String>? = null,
+)
+
 @Serializable
 data class AgentViewContentDto(
     val uri: String,
@@ -29,6 +39,33 @@ data class AgentViewContentDto(
     val html: String,
     val permissions: JsonObject? = null,
     val prefersBorder: Boolean? = null,
+    val csp: AgentViewCspDto? = null,
+)
+
+/**
+ * Вызов тула в строке переписки: кто его сделал и в какую вью он рисуется. Это дешёвая подсказка
+ * для карточки, а не данные вызова: `input`/`result` живут в отдельном эндпойнте.
+ */
+@Serializable
+data class ToolCallDescriptorDto(
+    val toolCallId: String,
+    val name: String,
+    val connectionId: String? = null,
+    val viewUri: String? = null,
+)
+
+/**
+ * Вызов тула глазами вью: адрес страницы, аргументы модели и `CallToolResult`, когда вызов осел.
+ * `null`-поля в ответе опускаются, поэтому отсутствие ключа значит «нет вью» или «ещё идёт».
+ */
+@Serializable
+data class SessionToolCallDto(
+    val toolCallId: String,
+    val name: String,
+    val connectionId: String? = null,
+    val viewUri: String? = null,
+    val input: JsonObject? = null,
+    val result: ViewToolCallResultDto? = null,
 )
 
 /**

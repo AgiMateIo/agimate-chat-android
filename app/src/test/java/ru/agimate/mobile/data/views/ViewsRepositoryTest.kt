@@ -12,6 +12,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -161,5 +162,70 @@ class ViewsRepositoryTest {
         error as ApiException.Server
         assertEquals(502, error.code)
         assertTrue(error.message.orEmpty().contains("server did not answer"))
+    }
+
+    @Test
+    fun `toolCall parses the view, input and result`() = runTest {
+        server.enqueue(
+            ok(
+                """{"response":{
+                    "toolCallId":"c2","name":"show_memory","connectionId":"k1",
+                    "viewUri":"ui://persist-memory/memory",
+                    "input":{"query":"all"},
+                    "result":{"content":[{"type":"text","text":"ok"}],"isError":false}}}""",
+            ),
+        )
+
+        val call = repository.toolCall("s1", "c2")
+
+        assertEquals("/control/manage/sessions/s1/tool-calls/c2", server.takeRequest().target)
+        assertEquals("c2", call.toolCallId)
+        assertEquals("show_memory", call.name)
+        assertEquals("k1", call.connectionId)
+        assertEquals("ui://persist-memory/memory", call.viewUri)
+        assertEquals(buildJsonObject { put("query", "all") }, call.input)
+        assertEquals(JsonPrimitive(false), call.result?.get("isError"))
+        assertNotNull(call.result?.get("content"))
+    }
+
+    /**
+     * У вызова без вью и без результата отсутствующие поля — это отсутствие ключа, а не `null`:
+     * страница получает `input` всегда, хотя бы пустым объектом.
+     */
+    @Test
+    fun `toolCall without input gives an empty object and a null result`() = runTest {
+        server.enqueue(ok("""{"response":{"toolCallId":"c1","name":"get_memory"}}"""))
+
+        val call = repository.toolCall("s1", "c1")
+
+        assertEquals(buildJsonObject { }, call.input)
+        assertNull(call.viewUri)
+        assertNull(call.connectionId)
+        assertNull(call.result)
+    }
+
+    @Test
+    fun `content carries the granted csp`() = runTest {
+        server.enqueue(
+            ok(
+                """{"response":{"uri":"ui://x","mimeType":"text/html","html":"<html></html>",
+                    "csp":{"resourceDomains":["https://esm.sh"],
+                           "connectDomains":["https://api.example.com"]}}}""",
+            ),
+        )
+
+        val content = repository.content("a1", "c1", "ui://x")
+
+        assertEquals(listOf("https://esm.sh"), content.externalDomains?.resourceDomains)
+        assertEquals(listOf("https://api.example.com"), content.externalDomains?.connectDomains)
+    }
+
+    @Test
+    fun `content without csp has no external domains`() = runTest {
+        server.enqueue(
+            ok("""{"response":{"uri":"ui://x","mimeType":"text/html","html":"<html></html>"}}"""),
+        )
+
+        assertNull(repository.content("a1", "c1", "ui://x").externalDomains)
     }
 }

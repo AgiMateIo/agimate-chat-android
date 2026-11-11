@@ -30,4 +30,14 @@ interface ViewsApi {
         @Path("agentId") agentId: String,
         @Body body: ViewToolCallRequest,
     ): ApiEnvelope<ViewToolCallResultDto>
+
+    /**
+     * Разрешение вызова в его вью. Путь принадлежит сессии, но потребитель — вью: страница, вход и
+     * результат нужны только ей. Держим здесь, чтобы `ViewsRepository` не зависел от `WebchatApi`.
+     */
+    @GET("control/manage/sessions/{sessionId}/tool-calls/{toolCallId}")
+    suspend fun toolCall(
+        @Path("sessionId") sessionId: String,
+        @Path("toolCallId") toolCallId: String,
+    ): ApiEnvelope<SessionToolCallDto>
 }
