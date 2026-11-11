@@ -317,6 +317,18 @@ fun MainGraph(
                 onRename = viewModel::startRename,
                 onRenameConfirm = viewModel::rename,
                 onRenameDismiss = viewModel::dismissRename,
+                onExpandView = viewModel::expandView,
+                onCollapseView = viewModel::collapseView,
+                onRetryView = viewModel::retryView,
+                onOpenFullScreenView = { toolCallId ->
+                    state.agentId?.let { agent ->
+                        navController.navigate(
+                            Routes.agentView(agent, viewModel.sessionId, toolCallId),
+                        )
+                    }
+                },
+                onCallViewTool = viewModel::callViewTool,
+                onViewRendererGone = viewModel::onViewRendererGone,
             )
         }
 

@@ -286,6 +286,11 @@
     <string name="views_no_browser">Не нашли браузер, чтобы открыть ссылку</string>
     <string name="views_tool_call_failed">Не удалось вызвать инструмент</string>
     <string name="views_crashed">Страница вью перестала работать</string>
+    <string name="chat_view_show">Открыть</string>
+    <string name="chat_view_hide">Скрыть</string>
+    <string name="chat_view_full_screen">На весь экран</string>
+    <string name="chat_view_waiting">Ждём результат…</string>
+    <string name="chat_view_unavailable">Вью больше недоступна</string>
 
     <plurals name="chat_progress_more">
         <item quantity="one">%1$s · ещё %2$d</item>

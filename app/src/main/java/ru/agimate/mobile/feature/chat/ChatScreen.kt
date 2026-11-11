@@ -1,5 +1,6 @@
 package ru.agimate.mobile.feature.chat
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
@@ -47,16 +48,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Window
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -77,6 +83,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
@@ -87,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
+import kotlinx.serialization.json.JsonObject
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.realtime.RealtimeStatus
 import ru.agimate.mobile.core.ui.components.AgentAvatar
@@ -105,13 +113,20 @@ import ru.agimate.mobile.core.ui.theme.AgiMotion
 import ru.agimate.mobile.core.ui.theme.AgiShapes
 import ru.agimate.mobile.core.ui.theme.AgiTheme
 import ru.agimate.mobile.core.ui.theme.backdrop
+import ru.agimate.mobile.core.views.AgentViewHost
+import ru.agimate.mobile.core.views.ViewCallData
+import ru.agimate.mobile.core.views.ViewCsp
+import ru.agimate.mobile.core.views.ViewHostContext
+import ru.agimate.mobile.core.views.viewHostContext
 import ru.agimate.mobile.data.agents.Starter
 import ru.agimate.mobile.data.agents.Starters
+import ru.agimate.mobile.data.views.ToolCallDescriptor
 import ru.agimate.mobile.data.webchat.Attachment
 import ru.agimate.mobile.data.webchat.ChatMessage
 import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import ru.agimate.mobile.data.files.PendingAttachment
+import ru.agimate.mobile.feature.views.rememberViewLinkOpener
 
 /**
  * Что можно сделать с сообщением и его файлами.
@@ -178,11 +193,25 @@ fun ChatScreen(
     onRename: (RenameTarget) -> Unit,
     onRenameConfirm: (String) -> Unit,
     onRenameDismiss: () -> Unit,
+    onExpandView: (ToolCallDescriptor) -> Unit,
+    onCollapseView: (String) -> Unit,
+    onRetryView: (ToolCallDescriptor) -> Unit,
+    onOpenFullScreenView: (String) -> Unit,
+    onCallViewTool: suspend (connectionId: String, name: String, arguments: JsonObject) -> JsonObject,
+    onViewRendererGone: (String) -> Unit,
 ) {
     val colors = AgiTheme.colors
     val listState = rememberLazyListState()
 
-    val itemCount = state.items.size
+    // Группы разворачиваются в карточки: карточка — отдельный элемент перевёрнутого списка.
+    val rows = remember(state.items, state.inlineViews, state.agentId) {
+        buildChatRows(state.items, state.inlineViews, state.agentId)
+    }
+    val openLink = rememberViewLinkOpener()
+    val locale = LocalConfiguration.current.locales[0].toLanguageTag()
+    val hostContext = viewHostContext(colors, locale)
+
+    val itemCount = rows.size
 
     // Список перевёрнут: индекс 0 — самое свежее сообщение внизу, конец списка — самое старое сверху.
     //
@@ -213,7 +242,7 @@ fun ChatScreen(
     //
     // Заготовка ответа — такой же новый низ ленты, как сообщение, поэтому она тоже в ключах: без
     // этого она появлялась бы за краем экрана и весь смысл заготовки терялся.
-    val newestKey = state.items.firstOrNull()?.key
+    val newestKey = rows.firstOrNull()?.key
     LaunchedEffect(newestKey, state.isRunning) {
         val hasBottom = newestKey != null || state.isRunning
         if (hasBottom && listState.firstVisibleItemIndex <= 2) {
@@ -331,11 +360,20 @@ fun ChatScreen(
                         }
 
                         chatItems(
-                            items = state.items,
+                            rows = rows,
+                            state = state,
                             fileUrl = fileUrl,
                             actions = actions,
                             onRetryMessage = onRetryMessage,
                             onOpenImage = { viewer = it },
+                            hostContext = hostContext,
+                            openLink = openLink,
+                            onExpandView = onExpandView,
+                            onCollapseView = onCollapseView,
+                            onRetryView = onRetryView,
+                            onOpenFullScreenView = onOpenFullScreenView,
+                            onCallViewTool = onCallViewTool,
+                            onViewRendererGone = onViewRendererGone,
                         )
 
                         if (state.loadingOlder) {
@@ -416,13 +454,22 @@ fun ChatScreen(
 }
 
 private fun LazyListScope.chatItems(
-    items: List<ChatItem>,
+    rows: List<ChatRow>,
+    state: ChatUiState,
     fileUrl: (String) -> String,
     actions: MessageActions,
     onRetryMessage: (ChatMessage) -> Unit,
     onOpenImage: (OpenImage) -> Unit,
+    hostContext: ViewHostContext,
+    openLink: (Uri) -> String?,
+    onExpandView: (ToolCallDescriptor) -> Unit,
+    onCollapseView: (String) -> Unit,
+    onRetryView: (ToolCallDescriptor) -> Unit,
+    onOpenFullScreenView: (String) -> Unit,
+    onCallViewTool: suspend (connectionId: String, name: String, arguments: JsonObject) -> JsonObject,
+    onViewRendererGone: (String) -> Unit,
 ) {
-    items(count = items.size, key = { items[it].key }) { index ->
+    items(count = rows.size, key = { rows[it].key }) { index ->
         // Соседи уезжают на новые места пружиной, а не телепортом. Проявление — только самому
         // нижнему элементу: это и есть только что пришедшее сообщение. Подгруженная страница
         // истории для списка такая же вставка, и с проявлением у всех лента мигала бы на каждом
@@ -431,19 +478,226 @@ private fun LazyListScope.chatItems(
             fadeInSpec = if (index == 0) tween(APPEAR_MS, easing = AgiMotion.arriveEasing) else null,
         )
 
-        when (val item = items[index]) {
-            is ChatItem.Bubble -> MessageBubble(
-                message = item.message,
-                fileUrl = fileUrl,
-                actions = actions,
-                onRetry = { onRetryMessage(item.message) },
-                onOpenImage = onOpenImage,
-                modifier = appear,
+        when (val row = rows[index]) {
+            is ChatRow.Message -> when (val item = row.item) {
+                is ChatItem.Bubble -> MessageBubble(
+                    message = item.message,
+                    fileUrl = fileUrl,
+                    actions = actions,
+                    onRetry = { onRetryMessage(item.message) },
+                    onOpenImage = onOpenImage,
+                    modifier = appear,
+                )
+
+                is ChatItem.ProgressGroup -> ProgressGroupRow(item, modifier = appear)
+
+                is ChatItem.DaySeparator -> DaySeparatorRow(item.label, modifier = appear)
+            }
+
+            is ChatRow.Card -> {
+                val agentId = state.agentId ?: return@items
+                val card = state.inlineViews.cards[row.ref.toolCallId]
+                val phase = card?.phase ?: InlineViewPhase.Collapsed
+                InlineViewCard(
+                    ref = row.ref,
+                    state = card,
+                    hostContext = hostContext,
+                    background = AgiTheme.colors.background,
+                    onToggle = {
+                        if (phase == InlineViewPhase.Collapsed) {
+                            onExpandView(row.ref.descriptor)
+                        } else {
+                            onCollapseView(row.ref.toolCallId)
+                        }
+                    },
+                    onFullScreen = { onOpenFullScreenView(row.ref.toolCallId) },
+                    onRetry = { onRetryView(row.ref.descriptor) },
+                    onCallTool = { name, arguments ->
+                        onCallViewTool(
+                            checkNotNull(row.ref.descriptor.connectionId),
+                            name,
+                            arguments,
+                        )
+                    },
+                    onOpenLink = openLink,
+                    onRendererGone = { onViewRendererGone(row.ref.toolCallId) },
+                    modifier = appear,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Свёрнутая карточка-триггер и её раскрытый кадр.
+ *
+ * До тапа здесь нет ни данных вызова, ни страницы. Раскрытие — два параллельных запроса в
+ * контроллере; пока они едут, место держит заглушка не ниже 320 dp, чтобы лента не прыгала.
+ * Свёрнутая карточка остаётся на месте и стоит одну строку.
+ */
+@Composable
+private fun InlineViewCard(
+    ref: InlineCardRef,
+    state: InlineCardState?,
+    hostContext: ViewHostContext,
+    background: Color,
+    onToggle: () -> Unit,
+    onFullScreen: () -> Unit,
+    onRetry: () -> Unit,
+    onCallTool: suspend (String, JsonObject) -> JsonObject,
+    onOpenLink: (Uri) -> String?,
+    onRendererGone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AgiTheme.colors
+    val phase = state?.phase ?: InlineViewPhase.Collapsed
+    val expanded = phase != InlineViewPhase.Collapsed
+    val screenHeight = LocalConfiguration.current.screenHeightDp
+    var height by remember(ref.toolCallId, state?.revision) {
+        mutableIntStateOf(INLINE_VIEW_MIN_DP)
+    }
+    val shape = AgiTheme.shapes.card
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, colors.hairline, shape)
+            .background(colors.surface),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = AgiTheme.spacing.md, vertical = AgiTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Window,
+                contentDescription = null,
+                tint = colors.textTertiary,
+                modifier = Modifier.size(18.dp),
             )
+            Spacer(Modifier.width(AgiTheme.spacing.sm))
+            Text(
+                text = ref.descriptor.name,
+                style = AgiTheme.typography.action,
+                color = colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(
+                    if (expanded) R.string.chat_view_hide else R.string.chat_view_show,
+                ),
+                style = AgiTheme.typography.caption,
+                color = colors.textTertiary,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = colors.textTertiary,
+                modifier = Modifier.size(18.dp),
+            )
+            // Полный экран доступен и из свёрнутой карточки: он сам загружает вызов и страницу,
+            // а карточка под ним остаётся свёрнутой.
+            IconButton(onClick = onFullScreen) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = stringResource(R.string.chat_view_full_screen),
+                    tint = colors.textTertiary,
+                )
+            }
+        }
 
-            is ChatItem.ProgressGroup -> ProgressGroupRow(item, modifier = appear)
+        if (expanded) {
+            when (phase) {
+                InlineViewPhase.Loading -> ViewCardPlaceholder(stringResource(R.string.views_loading))
+                is InlineViewPhase.AwaitingResult ->
+                    ViewCardPlaceholder(stringResource(R.string.chat_view_waiting))
+                is InlineViewPhase.Ready -> key(state?.revision ?: 0) {
+                    AgentViewHost(
+                        content = phase.content.html,
+                        policy = ViewCsp.policy(phase.content.externalDomains),
+                        hostContext = hostContext,
+                        background = background,
+                        onCallTool = onCallTool,
+                        onOpenLink = onOpenLink,
+                        onRendererGone = onRendererGone,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(height.dp),
+                        toolCall = ViewCallData(phase.call.input, phase.call.result),
+                        onResize = { requested ->
+                            height = clampInlineViewHeight(requested, screenHeight)
+                        },
+                    )
+                }
+                is InlineViewPhase.Failed -> ViewCardMessage(
+                    message = phase.message.resolve(),
+                    retry = stringResource(R.string.action_retry),
+                    onRetry = onRetry,
+                )
+                InlineViewPhase.Unavailable -> ViewCardMessage(
+                    message = stringResource(R.string.chat_view_unavailable),
+                    retry = null,
+                    onRetry = null,
+                )
+                InlineViewPhase.Collapsed -> Unit
+            }
+        }
+    }
+}
 
-            is ChatItem.DaySeparator -> DaySeparatorRow(item.label, modifier = appear)
+@Composable
+private fun ViewCardPlaceholder(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = INLINE_VIEW_MIN_DP.dp)
+            .padding(AgiTheme.spacing.md),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = AgiTheme.colors.textTertiary,
+            )
+            Spacer(Modifier.height(AgiTheme.spacing.sm))
+            Text(
+                text = text,
+                style = AgiTheme.typography.caption,
+                color = AgiTheme.colors.textTertiary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewCardMessage(message: String, retry: String?, onRetry: (() -> Unit)?) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = INLINE_VIEW_MIN_DP.dp)
+            .padding(AgiTheme.spacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = message,
+            style = AgiTheme.typography.caption,
+            color = AgiTheme.colors.textSecondary,
+            textAlign = TextAlign.Center,
+        )
+        if (retry != null && onRetry != null) {
+            Spacer(Modifier.height(AgiTheme.spacing.sm))
+            SecondaryButton(
+                text = retry,
+                onClick = onRetry,
+                modifier = Modifier.widthIn(max = 200.dp),
+            )
         }
     }
 }

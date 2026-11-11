@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import ru.agimate.mobile.core.network.ApiException
 import ru.agimate.mobile.core.network.OriginProvider
 import ru.agimate.mobile.core.network.toApiException
@@ -51,6 +52,9 @@ import ru.agimate.mobile.data.webchat.ChatSession
 import ru.agimate.mobile.data.webchat.MessageDirection
 import ru.agimate.mobile.data.webchat.MessageStream
 import ru.agimate.mobile.data.files.PendingAttachment
+import ru.agimate.mobile.data.views.ToolCallDescriptor
+import ru.agimate.mobile.data.views.ToolCallViewSource
+import ru.agimate.mobile.data.views.ViewsRepository
 import ru.agimate.mobile.data.webchat.WebchatRepository
 import java.time.Instant
 import java.util.UUID
@@ -107,6 +111,11 @@ data class ChatUiState(
     val renaming: RenameTarget? = null,
     val renameBusy: Boolean = false,
     val renameError: UiText? = null,
+    /**
+     * Карточки inline-вью: дескрипторы сигналов и состояние раскрытых карточек. Живут рядом с
+     * лентой, потому что рисуются из её строк и читаются одним состоянием экрана.
+     */
+    val inlineViews: InlineViewsState = InlineViewsState(),
 ) {
     /**
      * Агент известен — из маршрута или из самой переписки. Без него нечего переименовывать
@@ -152,10 +161,18 @@ class ChatViewModel @Inject constructor(
     private val notifications: PushNotifier,
     private val agents: AgentsRepository,
     private val agentNames: AgentNames,
+    private val views: ViewsRepository,
+    private val viewSource: ToolCallViewSource,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
     val sessionId: String = checkNotNull(savedState["sessionId"])
+
+    /**
+     * Состояние inline-карточек. Отдельный класс, а не поля ViewModel: гонки и `404`-политика
+     * проверяются без Android, а сам ViewModel остаётся оркестратором.
+     */
+    private val inlineViews = InlineViewsController(sessionId, viewSource, viewModelScope)
     private val agentId: String? = savedState.get<String>("agentId")?.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(
@@ -214,6 +231,7 @@ class ChatViewModel @Inject constructor(
         observeDraftAttachments()
         observeRealtimeStatus()
         observeLiveEvents()
+        observeInlineViews()
         loadFirstPage()
         loadSessionState()
         agentId?.let(::learnAgent)
@@ -341,6 +359,9 @@ class ChatViewModel @Inject constructor(
             if (!resync) _state.update { it.copy(loading = true, error = null) }
             try {
                 val page = repository.messages(sessionId, 0)
+                // Совместимый путь: если бэкенд не резолвил дескрипторы, id разрешаются
+                // эндпойнтом вызова — по одному запросу, и только в этом случае.
+                inlineViews.onHistory(page.items)
                 messages = if (resync) {
                     resyncNewestPage(messages, page.items)
                 } else {
@@ -375,6 +396,7 @@ class ChatViewModel @Inject constructor(
             _state.update { it.copy(loadingOlder = true, olderError = null) }
             try {
                 val page = repository.messages(sessionId, nextPage)
+                inlineViews.onHistory(page.items)
                 messages = appendOlderPage(messages, page.items)
                 nextPage++
                 _state.update {
@@ -424,8 +446,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             realtime.events.collect { event ->
                 when (event) {
-                    is RealtimeEvent.Message ->
-                        if (event.payload.sessionId == sessionId) applyLiveMessage(event.payload)
+                    is RealtimeEvent.Message -> if (event.payload.sessionId == sessionId) {
+                        applyLiveMessage(event.payload)
+                        // Любое следующее сообщение открытой сессии — повод дочитать detached-
+                        // результат у раскрытых карточек: сигнала на него могло не быть.
+                        inlineViews.onSessionMessage()
+                    }
                     is RealtimeEvent.Session -> if (event.row.id == sessionId) {
                         liveSessionRows++
                         applySessionRow(ChatSession.from(event.row))
@@ -438,9 +464,21 @@ class ChatViewModel @Inject constructor(
                         loadSessionState()
                     }
                     is RealtimeEvent.Contact -> Unit
-                    // Сигнал подключается вместе с inline-карточками.
-                    is RealtimeEvent.ToolCall -> Unit
+                    // Канал общий на все сессии; чужие сигналы открытому чату не нужны.
+                    is RealtimeEvent.ToolCall ->
+                        if (event.payload.sessionId == sessionId) {
+                            inlineViews.onSignal(event.payload)
+                        }
                 }
+            }
+        }
+    }
+
+    /** Состояние карточек живёт в контроллере, а экран читает его из общего `ChatUiState`. */
+    private fun observeInlineViews() {
+        viewModelScope.launch {
+            inlineViews.state.collect { inline ->
+                _state.update { it.copy(inlineViews = inline) }
             }
         }
     }
@@ -513,15 +551,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun applyLiveMessage(payload: WebchatMessagePayload) {
-        val incoming = ChatMessage(
-            rowId = null,
-            messageId = payload.messageId,
-            direction = MessageDirection.parse(payload.direction),
-            stream = MessageStream.parse(payload.stream),
-            text = payload.text,
-            attachments = payload.parts.orEmpty().map(Attachment::from),
-            createdAt = payload.createdAt ?: Instant.now(),
-        )
+        val incoming = liveMessage(payload)
 
         val merge = mergeLiveMessage(messages, incoming)
         messages = merge.messages
@@ -559,6 +589,8 @@ class ChatViewModel @Inject constructor(
     private fun learnAgent(agentId: String) {
         if (agentId.isBlank() || knownAgentId != null) return
         knownAgentId = agentId
+        // Без агента страницу нечем адресовать; карточки появляются вместе с ним.
+        inlineViews.setAgentId(agentId)
         _state.update { it.copy(agentId = agentId) }
         loadStarters(agentId)
         // Переименовать могли и в другом чате этого агента, лежащем выше в стеке.
@@ -1059,7 +1091,32 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { runCatching { repository.markRead(sessionId, null) } }
     }
 
+    // ---------------------------------------------------------------- inline-вью
+
+    fun expandView(descriptor: ToolCallDescriptor) = inlineViews.expand(descriptor)
+
+    /** Свернуть: WebView уничтожается, HTML и данные вызова освобождаются. */
+    fun collapseView(toolCallId: String) = inlineViews.collapse(toolCallId)
+
+    fun retryView(descriptor: ToolCallDescriptor) = inlineViews.retry(descriptor)
+
+    fun onViewRendererGone(toolCallId: String) = inlineViews.onRendererGone(toolCallId)
+
+    /**
+     * Вызов тула из открытой вью. Связка — из нативного состояния карточки, а не из сообщения
+     * страницы; агент — из переписки.
+     */
+    suspend fun callViewTool(
+        connectionId: String,
+        name: String,
+        arguments: JsonObject,
+    ): JsonObject {
+        val agent = knownAgentId ?: error("agent is unknown for session $sessionId")
+        return views.callTool(agent, connectionId, name, arguments)
+    }
+
     override fun onCleared() {
+        inlineViews.clear()
         openChats.close(sessionId)
         super.onCleared()
     }

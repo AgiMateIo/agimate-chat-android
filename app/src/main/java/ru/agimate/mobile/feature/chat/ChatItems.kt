@@ -87,6 +87,53 @@ fun buildChatItems(
 }
 
 /**
+ * Строка ленты после разворачивания групп в карточки.
+ *
+ * `ChatItem` остаётся про сообщения; карточка — не сообщение, а поверхность, привязанная к строке
+ * вызова. Держать её отдельным типом дешевле, чем учить `buildChatItems` знать про дескрипторы.
+ */
+sealed interface ChatRow {
+    val key: String
+
+    data class Message(val item: ChatItem) : ChatRow {
+        override val key: String get() = item.key
+    }
+
+    data class Card(val ref: InlineCardRef) : ChatRow {
+        override val key: String get() = "v:${ref.toolCallId}"
+    }
+}
+
+/**
+ * Разворачивает ленту в строки для `LazyColumn`.
+ *
+ * Список перевёрнут: меньший индекс — ниже на экране. Карточка «под группой» обязана стоять
+ * **перед** ней в списке, а внутри блока — в обратном порядке, чтобы сверху вниз они читались как
+ * `toolCallIds` строки. Без агента карточек нет: страницу нечем адресовать.
+ */
+fun buildChatRows(
+    items: List<ChatItem>,
+    inline: InlineViewsState,
+    agentId: String?,
+): List<ChatRow> {
+    if (agentId == null) return items.map(ChatRow::Message)
+
+    // Ключ карточки — `toolCallId`, общий на всю ленту: повтор в двух группах уронил бы
+    // LazyColumn, поэтому карточка показывается один раз.
+    val seenCards = HashSet<String>()
+    return items.flatMap { item ->
+        if (item is ChatItem.ProgressGroup) {
+            val cards = inline.cardsFor(item).asReversed().mapNotNull { ref ->
+                if (seenCards.add(ref.toolCallId)) ChatRow.Card(ref) else null
+            }
+            cards + ChatRow.Message(item)
+        } else {
+            listOf(ChatRow.Message(item))
+        }
+    }
+}
+
+/**
  * Первое вхождение каждого ключа. Дешёвый путь — когда дублей нет — не создаёт нового списка.
  */
 private fun List<ChatMessage>.distinctByKey(): List<ChatMessage> {

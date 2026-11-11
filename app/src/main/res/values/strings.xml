@@ -301,6 +301,11 @@
     <string name="views_no_browser">No browser found to open the link</string>
     <string name="views_tool_call_failed">The tool call failed</string>
     <string name="views_crashed">The view page stopped working</string>
+    <string name="chat_view_show">Show</string>
+    <string name="chat_view_hide">Hide</string>
+    <string name="chat_view_full_screen">Full screen</string>
+    <string name="chat_view_waiting">Waiting for the result…</string>
+    <string name="chat_view_unavailable">This view is no longer available</string>
 
     <!--
       Число со словом после него — форма, зависящая от количества. В английском и русском «more» и
