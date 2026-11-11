@@ -49,6 +49,8 @@ import ru.agimate.mobile.feature.profile.ProfileViewModel
 import ru.agimate.mobile.feature.settings.SettingsScreen
 import ru.agimate.mobile.feature.sessions.SessionsScreen
 import ru.agimate.mobile.feature.sessions.SessionsViewModel
+import ru.agimate.mobile.feature.views.AgentViewScreen
+import ru.agimate.mobile.feature.views.AgentViewViewModel
 import ru.agimate.mobile.feature.views.ViewsScreen
 import ru.agimate.mobile.feature.views.ViewsViewModel
 
@@ -81,6 +83,12 @@ object Routes {
 
     fun agentViews(agentId: String, agentName: String) =
         "agent-views/$agentId?agentName=${Uri.encode(agentName)}"
+
+    /** Одна вью на весь экран. Сегменты кодируются: id приходят с сервера, а не из констант. */
+    const val AGENT_VIEW = "agent-view/{agentId}/{sessionId}/{toolCallId}"
+
+    fun agentView(agentId: String, sessionId: String, toolCallId: String) =
+        "agent-view/${Uri.encode(agentId)}/${Uri.encode(sessionId)}/${Uri.encode(toolCallId)}"
 
     /** Булев параметр маршрута — строкой: NavType.BoolType не умеет быть nullable. */
     private fun flag(value: Boolean) = if (value) "1" else "0"
@@ -332,6 +340,28 @@ fun MainGraph(
                 onCloseOpened = viewModel::close,
                 onReload = viewModel::reload,
                 onRetry = viewModel::load,
+                onCallTool = viewModel::callTool,
+                onRendererGone = viewModel::onRendererGone,
+            )
+        }
+
+        // Развёрнутая карточка: тот же хост и те же данные, но на весь экран. Свой экран, а не
+        // оверлей: «назад» из него не должно трогать стек переписки.
+        composable(
+            route = Routes.AGENT_VIEW,
+            arguments = listOf(
+                navArgument("agentId") { type = NavType.StringType },
+                navArgument("sessionId") { type = NavType.StringType },
+                navArgument("toolCallId") { type = NavType.StringType },
+            ),
+        ) {
+            val viewModel: AgentViewViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            AgentViewScreen(
+                state = state,
+                onBack = { navController.popBackStack() },
+                onRetry = viewModel::retry,
                 onCallTool = viewModel::callTool,
                 onRendererGone = viewModel::onRendererGone,
             )
