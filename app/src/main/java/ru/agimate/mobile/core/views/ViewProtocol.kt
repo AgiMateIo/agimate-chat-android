@@ -160,6 +160,27 @@ object ViewProtocol {
         }
     }
 
+    /**
+     * Аргументы вызова для inline-вью. Нотификация, а не запрос: `id` нет.
+     *
+     * Хост шлёт её после `ui/notifications/initialized` и ровно один раз на экземпляр WebView.
+     */
+    fun toolInputNotification(arguments: JsonObject): JsonObject = buildJsonObject {
+        put("jsonrpc", "2.0")
+        put("method", "ui/notifications/tool-input")
+        putJsonObject("params") { put("arguments", arguments) }
+    }
+
+    /**
+     * Результат вызова для inline-вью. `params` — `CallToolResult` как есть, без обёрток: страница
+     * сама решает, как рисовать `isError`.
+     */
+    fun toolResultNotification(result: JsonObject): JsonObject = buildJsonObject {
+        put("jsonrpc", "2.0")
+        put("method", "ui/notifications/tool-result")
+        put("params", result)
+    }
+
     private fun decodeNotification(method: String, params: JsonObject): ViewAction =
         when (method) {
             "ui/notifications/initialized" -> ViewAction.Ready

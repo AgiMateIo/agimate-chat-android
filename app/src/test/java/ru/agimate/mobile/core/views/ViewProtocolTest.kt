@@ -216,6 +216,37 @@ class ViewProtocolTest {
         )
     }
 
+    @Test
+    fun `tool-input names the method and wraps arguments in params`() {
+        assertEquals(
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "ui/notifications/tool-input")
+                putJsonObject("params") {
+                    putJsonObject("arguments") { put("city", "Moscow") }
+                }
+            },
+            ViewProtocol.toolInputNotification(buildJsonObject { put("city", "Moscow") }),
+        )
+    }
+
+    @Test
+    fun `tool-result puts the call result itself into params`() {
+        val result = buildJsonObject {
+            putJsonObject("structuredContent") { put("temp", 21) }
+            put("isError", false)
+        }
+
+        assertEquals(
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "ui/notifications/tool-result")
+                put("params", result)
+            },
+            ViewProtocol.toolResultNotification(result),
+        )
+    }
+
     private fun replyOf(action: ViewAction): JsonObject {
         assertTrue("expected Reply, got $action", action is ViewAction.Reply)
         return (action as ViewAction.Reply).reply

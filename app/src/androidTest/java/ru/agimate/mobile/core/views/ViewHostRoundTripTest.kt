@@ -9,12 +9,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.addJsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -152,6 +154,7 @@ class ViewHostRoundTripTest {
         onCallTool: suspend (String, JsonObject) -> JsonObject,
         onOpenLink: (Uri) -> String? = { null },
         toolErrorText: (Throwable) -> String = { TOOL_ERROR },
+        toolCall: ViewCallData? = null,
     ) {
         scenario.onActivity { activity ->
             val view = WebView(activity).also(webViews::add)
@@ -166,6 +169,7 @@ class ViewHostRoundTripTest {
                 onOpenLink = onOpenLink,
                 onRendererGone = {},
                 scope = scope,
+                toolCall = toolCall,
             )
             controller = host
             activity.setContentView(view)
@@ -173,8 +177,73 @@ class ViewHostRoundTripTest {
         }
     }
 
+    /**
+     * Inline-данные: страница присылает `initialized`, хост выдерживает паузу и шлёт `tool-input`,
+     * затем `tool-result`. Обновление результата досылает только второй, без повторного входа.
+     */
+    @Test
+    fun inlineDataGoesAfterInitializedAndResultUpdatesAlone() {
+        val reports = CopyOnWriteArrayList<List<String>>()
+        val first = CountDownLatch(1)
+        val second = CountDownLatch(1)
+        val input = buildJsonObject { put("city", "Paris") }
+        val result = buildJsonObject {
+            putJsonObject("structuredContent") { put("temp", 21) }
+            put("isError", false)
+        }
+
+        startHost(
+            content = INLINE_FIXTURE,
+            onCallTool = { name, arguments ->
+                if (name == INLINE_REPORT) {
+                    val seen = (arguments["seen"] as JsonArray)
+                        .map { (it as JsonPrimitive).content }
+                    reports += seen
+                    if (seen.count { it.startsWith("input:") } == 1 &&
+                        seen.count { it.startsWith("result:") } == 1
+                    ) {
+                        first.countDown()
+                    }
+                    if (seen.count { it.startsWith("result:") } == 2) second.countDown()
+                }
+                buildJsonObject {}
+            },
+            toolCall = ViewCallData(input = input, result = result),
+        )
+
+        assertTrue("tool-input и tool-result не дошли", first.await(15, TimeUnit.SECONDS))
+        // Фикстура отчитывается после каждой нотификации: первый отчёт — только вход, второй —
+        // вход и результат. Порядок проверяется по отчёту, где есть оба.
+        val firstReport = reports.first {
+            it.count { seen -> seen.startsWith("input:") } == 1 &&
+                it.count { seen -> seen.startsWith("result:") } == 1
+        }
+        assertEquals("ожидались ровно вход и результат", 2, firstReport.size)
+        assertTrue(
+            "tool-input должен идти первым: $firstReport",
+            firstReport[0].startsWith("input:") && firstReport[0].contains("\"city\":\"Paris\""),
+        )
+        assertTrue(
+            "tool-result должен идти вторым: $firstReport",
+            firstReport[1].startsWith("result:") && firstReport[1].contains("\"temp\":21"),
+        )
+
+        val updated = buildJsonObject {
+            putJsonObject("structuredContent") { put("temp", 22) }
+            put("isError", false)
+        }
+        scenario.onActivity { controller?.updateToolCall(ViewCallData(input, updated)) }
+
+        assertTrue("обновление результата не дошло", second.await(15, TimeUnit.SECONDS))
+        val latest = reports.last()
+        assertEquals("tool-input повторился", 1, latest.count { it.startsWith("input:") })
+        assertEquals("tool-result не обновился", 2, latest.count { it.startsWith("result:") })
+        assertTrue(latest.last().contains("22"))
+    }
+
     private companion object {
         const val TOOL_ERROR = "tool failed"
+        const val INLINE_REPORT = "test/inline"
         val TEST_HOST = ViewHostContext(theme = "light", locale = "en", variables = emptyMap())
 
         /**
@@ -229,6 +298,36 @@ class ViewHostRoundTripTest {
                 method: "ui/open-link",
                 params: { url: "https://example.com/page" }
               }, "*");
+            </script></body></html>
+        """.trimIndent()
+
+        /** Слушает inline-данные хоста и пересылает их копилку обратно через `report`. */
+        val INLINE_FIXTURE = """
+            <!doctype html>
+            <html><body><script>
+              var seen = [];
+              function report() {
+                parent.postMessage({
+                  jsonrpc: "2.0", id: 1, method: "tools/call",
+                  params: { name: "$INLINE_REPORT", arguments: { seen: seen.slice() } }
+                }, "*");
+              }
+              window.addEventListener("message", function (event) {
+                var data = event.data;
+                if (!data || data.jsonrpc !== "2.0") return;
+                if (data.method === "ui/notifications/tool-input") {
+                  seen.push("input:" + JSON.stringify(data.params.arguments));
+                  report();
+                } else if (data.method === "ui/notifications/tool-result") {
+                  seen.push("result:" + JSON.stringify(data.params));
+                  report();
+                }
+              });
+              setTimeout(function () {
+                parent.postMessage({
+                  jsonrpc: "2.0", method: "ui/notifications/initialized", params: {}
+                }, "*");
+              }, 50);
             </script></body></html>
         """.trimIndent()
 
