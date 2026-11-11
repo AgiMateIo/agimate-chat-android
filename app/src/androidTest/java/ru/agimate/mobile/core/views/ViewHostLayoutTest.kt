@@ -92,8 +92,23 @@ class ViewHostLayoutTest {
     /**
      * Меряет кадр изнутри обёртки. `evaluateJavascript` вызывается с UI-потока, а его ответ
      * приходит туда же — поэтому ожидание остаётся на тестовом потоке.
+     *
+     * Страница сообщает о загрузке раньше, чем WebView успевает разложиться: на медленном
+     * устройстве `getBoundingClientRect` ещё нулевой. Поэтому не один замер, а опрос до срока:
+     * проверяется раскладка, а не гонка с ней.
      */
     private fun iframeHeight(): Float {
+        val deadline = System.currentTimeMillis() + LAYOUT_TIMEOUT_MS
+        var last = -1f
+        while (System.currentTimeMillis() < deadline) {
+            last = measureIframeOnce()
+            if (last > 100f) return last
+            Thread.sleep(LAYOUT_POLL_MS)
+        }
+        return last
+    }
+
+    private fun measureIframeOnce(): Float {
         val measured = AtomicReference(-1f)
         val latch = CountDownLatch(1)
 
@@ -113,6 +128,8 @@ class ViewHostLayoutTest {
     private companion object {
         const val LOADED_REPORT = "test/loaded"
         const val TOOL_ERROR = "tool failed"
+        const val LAYOUT_TIMEOUT_MS = 15_000L
+        const val LAYOUT_POLL_MS = 100L
 
         val TEST_HOST = ViewHostContext(theme = "light", locale = "en", variables = emptyMap())
 
