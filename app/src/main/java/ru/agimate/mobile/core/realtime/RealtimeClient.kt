@@ -69,7 +69,7 @@ class RealtimeClient @Inject constructor(
     private val urls: RealtimeUrl,
     private val network: NetworkMonitor,
     @param:ApplicationScope private val scope: CoroutineScope,
-) {
+) : RealtimeEventsSource {
     private val connectionStatus = MutableStateFlow(RealtimeStatus.Idle)
     private val subscriptionStatus = MutableStateFlow(RealtimeStatus.Idle)
 
@@ -90,7 +90,7 @@ class RealtimeClient @Inject constructor(
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val events: SharedFlow<RealtimeEvent> = _events.asSharedFlow()
+    override val events: SharedFlow<RealtimeEvent> = _events.asSharedFlow()
 
     private val lock = Mutex()
 
@@ -344,24 +344,12 @@ class RealtimeClient @Inject constructor(
         val type = envelope?.type
         val payload = envelope?.payload
 
-        val parsed: RealtimeEvent? = runCatching {
-            when (type) {
-                RealtimeEventType.SESSION_CREATED, RealtimeEventType.SESSION_UPDATED ->
-                    RealtimeEvent.Session(
-                        created = type == RealtimeEventType.SESSION_CREATED,
-                        row = ApiJson.decodeFromJsonElement<WebchatSessionDto>(payload!!),
-                    )
-                RealtimeEventType.WEBCHAT_AGENT_UPDATED ->
-                    RealtimeEvent.Contact(ApiJson.decodeFromJsonElement<WebchatContactDto>(payload!!))
-                RealtimeEventType.WEBCHAT_MESSAGE ->
-                    RealtimeEvent.Message(ApiJson.decodeFromJsonElement<WebchatMessagePayload>(payload!!))
-                else -> {
-                    trace { "$channel: пропускаю $type" }
-                    return
-                }
-            }
-        }.getOrNull()
+        if (!RealtimeEventParser.isKnown(type)) {
+            trace { "$channel: пропускаю $type" }
+            return
+        }
 
+        val parsed = RealtimeEventParser.parse(type, payload)
         if (parsed == null) {
             // Свой тип, а форма разошлась — иначе событие пропадёт молча.
             warn { "$channel: публикация не разобрана — ${describe(event)}" }
@@ -375,6 +363,8 @@ class RealtimeClient @Inject constructor(
         is RealtimeEvent.Session -> "${if (created) "новая" else "строка"} сессии ${row.id}"
         is RealtimeEvent.Contact -> "контакт ${row.agentId}, непрочитанных ${row.unreadCount}"
         is RealtimeEvent.Message -> "${payload.sessionId}: ${payload.stream} ${payload.messageId}"
+        is RealtimeEvent.ToolCall ->
+            "session.tool_call ${payload.sessionId}: ids ${payload.toolCallIds}"
         RealtimeEvent.Resync -> "перечитать"
     }
 

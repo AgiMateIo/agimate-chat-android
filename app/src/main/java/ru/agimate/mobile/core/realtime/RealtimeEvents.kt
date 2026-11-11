@@ -1,8 +1,12 @@
 package ru.agimate.mobile.core.realtime
 
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import ru.agimate.mobile.core.network.ApiJson
 import ru.agimate.mobile.core.network.InstantSerializer
+import ru.agimate.mobile.data.views.ToolCallDescriptorDto
 import ru.agimate.mobile.data.webchat.WebchatAttachmentDto
 import ru.agimate.mobile.data.webchat.WebchatContactDto
 import ru.agimate.mobile.data.webchat.WebchatSessionDto
@@ -25,8 +29,23 @@ data class WebchatMessagePayload(
     val stream: String? = null,
     val text: String? = null,
     val parts: List<WebchatAttachmentDto>? = null,
+    /** Идентификаторы вызовов строки `TOOL_CALL`; дескрипторы приходят отдельным сигналом. */
+    val toolCallIds: List<String>? = null,
     @Serializable(with = InstantSerializer::class)
     val createdAt: Instant? = null,
+)
+
+/**
+ * Сигнал `session.tool_call`: вызовы хода осели, и у них появились дескрипторы вью.
+ *
+ * Это именно сигнал, а не данные: `input`/`result` живут в эндпойнте вызова, страница — в
+ * `views/content`. `toolCalls == null` значит «резолв не удался» — старый путь по `toolCallIds`.
+ */
+@Serializable
+data class SessionToolCallPayloadDto(
+    val sessionId: String? = null,
+    val toolCallIds: List<String>? = null,
+    val toolCalls: List<ToolCallDescriptorDto>? = null,
 )
 
 object RealtimeEventType {
@@ -34,6 +53,7 @@ object RealtimeEventType {
     const val SESSION_UPDATED = "session.updated"
     const val WEBCHAT_AGENT_UPDATED = "webchat.agent.updated"
     const val WEBCHAT_MESSAGE = "webchat.message"
+    const val SESSION_TOOL_CALL = "session.tool_call"
 }
 
 /**
@@ -52,11 +72,66 @@ sealed interface RealtimeEvent {
 
     data class Message(val payload: WebchatMessagePayload) : RealtimeEvent
 
+    /** Вызовы хода осели: у них появились дескрипторы вью. Событие приходит по всем сессиям. */
+    data class ToolCall(val payload: SessionToolCallPayloadDto) : RealtimeEvent
+
     /**
      * Пропущенное восстановить не удалось — долгий офлайн или подписка, заведённая заново. Открытые
      * экраны перечитывают себя через REST: события за разрыв уже не придут.
      */
     data object Resync : RealtimeEvent
+}
+
+/**
+ * Разбор публикации личного канала в событие. Чистые функции без Centrifugo — поэтому таблица
+ * событий проверяется обычными JVM-тестами.
+ *
+ * Незнакомый тип — не поломка: в канал идут события экранов, которых в приложении нет, и
+ * устаревшие типы. Настоящая поломка — знакомый тип с разошедшейся формой; её видно по `null`.
+ */
+internal object RealtimeEventParser {
+
+    fun isKnown(type: String?): Boolean = type != null && type in KNOWN
+
+    fun parse(type: String?, payload: JsonElement?): RealtimeEvent? {
+        if (type == null || payload == null) return null
+        return runCatching {
+            when (type) {
+                RealtimeEventType.SESSION_CREATED, RealtimeEventType.SESSION_UPDATED ->
+                    RealtimeEvent.Session(
+                        created = type == RealtimeEventType.SESSION_CREATED,
+                        row = ApiJson.decodeFromJsonElement<WebchatSessionDto>(payload),
+                    )
+                RealtimeEventType.WEBCHAT_AGENT_UPDATED ->
+                    RealtimeEvent.Contact(ApiJson.decodeFromJsonElement<WebchatContactDto>(payload))
+                RealtimeEventType.WEBCHAT_MESSAGE ->
+                    RealtimeEvent.Message(ApiJson.decodeFromJsonElement<WebchatMessagePayload>(payload))
+                RealtimeEventType.SESSION_TOOL_CALL ->
+                    RealtimeEvent.ToolCall(
+                        ApiJson.decodeFromJsonElement<SessionToolCallPayloadDto>(payload),
+                    )
+                else -> null
+            }
+        }.getOrNull()
+    }
+
+    private val KNOWN = setOf(
+        RealtimeEventType.SESSION_CREATED,
+        RealtimeEventType.SESSION_UPDATED,
+        RealtimeEventType.WEBCHAT_AGENT_UPDATED,
+        RealtimeEventType.WEBCHAT_MESSAGE,
+        RealtimeEventType.SESSION_TOOL_CALL,
+    )
+}
+
+/**
+ * Поток событий личного канала — узкий вход для экранов, которым нужен только он.
+ *
+ * Экрану вроде полного просмотра вью не нужны ни статус соединения, ни токены; зависимость от
+ * конкретного [RealtimeClient] протащила бы в тест весь Centrifugo.
+ */
+interface RealtimeEventsSource {
+    val events: SharedFlow<RealtimeEvent>
 }
 
 /** Состояние живого соединения — для полоски «связь потеряна / восстановлена». */

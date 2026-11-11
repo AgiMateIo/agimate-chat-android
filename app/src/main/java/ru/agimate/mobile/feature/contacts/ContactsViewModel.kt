@@ -202,7 +202,8 @@ class ContactsViewModel @Inject constructor(
                         }
                     }
                     RealtimeEvent.Resync -> load(refresh = false)
-                    is RealtimeEvent.Session, is RealtimeEvent.Message -> Unit
+                    is RealtimeEvent.Session, is RealtimeEvent.Message,
+                    is RealtimeEvent.ToolCall -> Unit
                 }
             }
         }

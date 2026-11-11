@@ -438,6 +438,8 @@ class ChatViewModel @Inject constructor(
                         loadSessionState()
                     }
                     is RealtimeEvent.Contact -> Unit
+                    // Сигнал подключается вместе с inline-карточками.
+                    is RealtimeEvent.ToolCall -> Unit
                 }
             }
         }

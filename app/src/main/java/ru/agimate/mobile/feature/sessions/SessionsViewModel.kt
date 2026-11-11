@@ -106,7 +106,8 @@ class SessionsViewModel @Inject constructor(
                         _state.update { it.withLiveRow(event) }
                     }
                     RealtimeEvent.Resync -> load()
-                    is RealtimeEvent.Contact, is RealtimeEvent.Message -> Unit
+                    is RealtimeEvent.Contact, is RealtimeEvent.Message,
+                    is RealtimeEvent.ToolCall -> Unit
                 }
             }
         }
