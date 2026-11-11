@@ -3,6 +3,7 @@ package ru.agimate.mobile.data.webchat
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.data.views.ToolCallDescriptor
 import java.time.Instant
 import java.util.UUID
 
@@ -139,6 +140,10 @@ data class ChatMessage(
     val text: String?,
     val attachments: List<Attachment>,
     val createdAt: Instant?,
+    /** Идентификаторы вызовов строки `TOOL_CALL`; у остальных строк — `null`. */
+    val toolCallIds: List<String>? = null,
+    /** Дескрипторы вызовов; `null` — не резолвили, `[]` — резолвили, вью нет. */
+    val toolCalls: List<ToolCallDescriptor>? = null,
     /** Оптимистично показанное своё сообщение, ещё не подтверждённое сервером. */
     val pending: Boolean = false,
     /** Отправка не удалась — показать повтор. */
@@ -171,6 +176,8 @@ data class ChatMessage(
             text = dto.text,
             attachments = dto.parts.orEmpty().map(Attachment::from),
             createdAt = dto.createdAt,
+            toolCallIds = dto.toolCallIds,
+            toolCalls = dto.toolCalls?.map(ToolCallDescriptor::from),
         )
     }
 }

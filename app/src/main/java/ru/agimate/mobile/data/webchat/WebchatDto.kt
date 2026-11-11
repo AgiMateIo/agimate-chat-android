@@ -2,6 +2,7 @@ package ru.agimate.mobile.data.webchat
 
 import kotlinx.serialization.Serializable
 import ru.agimate.mobile.core.network.InstantSerializer
+import ru.agimate.mobile.data.views.ToolCallDescriptorDto
 import java.time.Instant
 
 /** Поток ответа агента. У своих сообщений `stream` = null. */
@@ -125,6 +126,17 @@ data class WebchatMessageDto(
     val stream: String? = null,
     val text: String? = null,
     val parts: List<WebchatAttachmentDto>? = null,
+    /**
+     * Идентификаторы вызовов строки `TOOL_CALL`; у остальных строк отсутствуют. По ним строка
+     * находит карточки вью, а не по тексту «🔧 …».
+     */
+    val toolCallIds: List<String>? = null,
+    /**
+     * Резолвнутые дескрипторы вызовов этой строки. `null` — не резолвили (старый бэкенд, сбой,
+     * не TOOL_CALL); `[]` — резолвили, ни одного id строки нет в журнале. Массив может быть короче
+     * `toolCallIds`: склейка только по `toolCallId`.
+     */
+    val toolCalls: List<ToolCallDescriptorDto>? = null,
     @Serializable(with = InstantSerializer::class)
     val createdAt: Instant? = null,
 )
