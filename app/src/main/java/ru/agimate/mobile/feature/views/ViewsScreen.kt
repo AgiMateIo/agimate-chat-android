@@ -33,7 +33,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -41,15 +40,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.JsonObject
 import ru.agimate.mobile.R
-import ru.agimate.mobile.core.auth.CustomTabs
 import ru.agimate.mobile.core.ui.components.EmptyState
 import ru.agimate.mobile.core.ui.components.ErrorState
 import ru.agimate.mobile.core.ui.components.Skeleton
 import ru.agimate.mobile.core.ui.text.resolve
 import ru.agimate.mobile.core.ui.theme.AgiTheme
-import ru.agimate.mobile.core.ui.theme.DarkColors
-import ru.agimate.mobile.core.ui.theme.LightColors
 import ru.agimate.mobile.core.ui.theme.backdrop
+import ru.agimate.mobile.core.views.ViewCsp
 import ru.agimate.mobile.core.views.AgentViewHost
 import ru.agimate.mobile.core.views.viewHostContext
 import ru.agimate.mobile.data.views.AgentView
@@ -335,7 +332,7 @@ private fun OpenedBody(
     // Локаль страницы берётся из конфигурации, которую Compose сам перечитывает при смене:
     // неявное чтение из контекста вернуло бы устаревшее значение.
     val locale = LocalConfiguration.current.locales[0].toLanguageTag()
-    val noBrowserMessage = stringResource(R.string.views_no_browser)
+    val openLink = rememberViewLinkOpener()
     val colors = AgiTheme.colors
     val hostContext = viewHostContext(
         colors = colors,
@@ -372,28 +369,11 @@ private fun OpenedBody(
                     else -> key(opened.revision) {
                         AgentViewHost(
                             content = content,
+                            policy = ViewCsp.policy(opened.csp),
                             hostContext = hostContext,
                             background = colors.background,
                             onCallTool = onCallTool,
-                            onOpenLink = { uri ->
-                                // Только Custom Tabs и только https: адрес уже проверен
-                                // протоколом, а произвольный Intent сюда не попадает. Схема и хост
-                                // перепроверяются здесь второй линией защиты: дальше — последний
-                                // выход из приложения наружу.
-                                val external = uri.scheme.equals("https", ignoreCase = true) &&
-                                    !uri.host.isNullOrBlank()
-                                if (!external) {
-                                    noBrowserMessage
-                                } else {
-                                    val openedInBrowser = CustomTabs.open(
-                                        context = context,
-                                        uri = uri,
-                                        toolbarColor = LightColors.background.toArgb(),
-                                        darkToolbarColor = DarkColors.background.toArgb(),
-                                    )
-                                    if (openedInBrowser) null else noBrowserMessage
-                                }
-                            },
+                            onOpenLink = openLink,
                             onRendererGone = onRendererGone,
                             modifier = Modifier.fillMaxSize(),
                         )

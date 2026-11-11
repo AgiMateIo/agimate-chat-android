@@ -27,6 +27,7 @@ import retrofit2.Retrofit
 import ru.agimate.mobile.R
 import ru.agimate.mobile.core.network.ApiJson
 import ru.agimate.mobile.core.ui.text.uiText
+import ru.agimate.mobile.core.views.ViewExternalDomains
 import ru.agimate.mobile.data.views.AgentView
 import ru.agimate.mobile.data.views.ViewsApi
 import ru.agimate.mobile.data.views.ViewsRepository
@@ -48,6 +49,7 @@ class ViewsViewModelTest {
 
     private var listFails = false
     private var contentStatus = 200
+    private var contentBody = CONTENT
 
     @Before
     fun setUp() {
@@ -59,7 +61,7 @@ class ViewsViewModelTest {
                     path.endsWith("/views/") ->
                         if (listFails) MockResponse(code = 500) else ok(VIEWS)
                     path.endsWith("/views/content") ->
-                        if (contentStatus == 200) ok(CONTENT) else MockResponse(code = contentStatus)
+                        if (contentStatus == 200) ok(contentBody) else MockResponse(code = contentStatus)
                     path.endsWith("/views/tools/call") -> ok(TOOL_RESULT)
                     else -> MockResponse(code = 404)
                 }
@@ -137,10 +139,29 @@ class ViewsViewModelTest {
         assertEquals(0, opened.revision)
         assertFalse(opened.loading)
         assertNull(opened.error)
+        assertNull(opened.csp)
 
         val request = requests().first { it.url.encodedPath.endsWith("/views/content") }
         assertEquals("c1", request.url.queryParameter("connectionId"))
         assertEquals("ui://s/weather", request.url.queryParameter("uri"))
+    }
+
+    @Test
+    fun `open carries the granted csp`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        contentBody = CONTENT_WITH_CSP
+        val vm = loadedViewModel()
+
+        vm.open(VIEW)
+
+        val opened = vm.state.first { it.opened?.content != null }.opened!!
+        assertEquals(
+            ViewExternalDomains(
+                resourceDomains = listOf("https://esm.sh"),
+                connectDomains = listOf("https://api.example.com"),
+            ),
+            opened.csp,
+        )
     }
 
     @Test
@@ -256,6 +277,13 @@ class ViewsViewModelTest {
         const val CONTENT = """
             {"response":{"uri":"ui://s/weather","mimeType":"text/html",
              "html":"<html><body>sun</body></html>"}}
+        """
+
+        const val CONTENT_WITH_CSP = """
+            {"response":{"uri":"ui://s/weather","mimeType":"text/html",
+             "html":"<html><body>sun</body></html>",
+             "csp":{"resourceDomains":["https://esm.sh"],
+                    "connectDomains":["https://api.example.com"]}}}
         """
 
         const val TOOL_RESULT = """

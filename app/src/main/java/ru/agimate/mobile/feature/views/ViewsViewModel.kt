@@ -17,16 +17,21 @@ import ru.agimate.mobile.core.network.toApiException
 import ru.agimate.mobile.core.ui.text.UiText
 import ru.agimate.mobile.core.ui.text.uiText
 import ru.agimate.mobile.data.views.AgentView
+import ru.agimate.mobile.core.views.ViewExternalDomains
 import ru.agimate.mobile.data.views.ViewsRepository
 import javax.inject.Inject
 
-/** Открытая страница вью. [revision] — ключ, по которому хост пересоздаёт WebView при перезагрузке. */
+/**
+ * Открытая страница вью. [revision] — ключ, по которому хост пересоздаёт WebView при перезагрузке;
+ * [csp] — домены, которые установка разрешила этой странице.
+ */
 data class OpenedView(
     val view: AgentView,
     val loading: Boolean = true,
     val content: String? = null,
     val error: UiText? = null,
     val revision: Int = 0,
+    val csp: ViewExternalDomains? = null,
 )
 
 data class ViewsUiState(
@@ -143,6 +148,7 @@ class ViewsViewModel @Inject constructor(
                             loading = false,
                             content = content.html,
                             revision = revision,
+                            csp = content.externalDomains,
                         ),
                     )
                 }
