@@ -146,6 +146,8 @@ internal class ViewChromeClient : WebChromeClient() {
 internal class ViewWebViewClient(
     private val wrapper: () -> String?,
     private val view: () -> String?,
+    /** Политика страницы; по умолчанию строгая — внешней сети нет. */
+    private val policy: () -> ViewPolicy = { ViewCsp.policy(null) },
     private val onExternalLink: (Uri) -> Unit,
     private val onRendererGone: () -> Unit,
 ) : WebViewClient() {
@@ -153,17 +155,30 @@ internal class ViewWebViewClient(
     private val wrapperServed = AtomicBoolean(false)
     private val viewServed = AtomicBoolean(false)
 
+    /*
+     * Внешние домены из `csp` разрешены только здесь и только точным origin: CSP-заголовок говорит
+     * браузеру, что можно, а перехватчик — что можно этому WebView. Разъехаться они не могут:
+     * обе половины собраны в одном `ViewPolicy`. Всё, что не попало в allow-list, по-прежнему
+     * получает пустой `403`, а не `null` («грузи сам» = сеть).
+     *
+     * WebSocket перехватчик не видит — его держит только `connect-src`. Редиректы после первого
+     * URL тоже не перехватываются: их проверяет CSP.
+     */
     override fun shouldInterceptRequest(
         webView: WebView,
         request: WebResourceRequest,
     ): WebResourceResponse? {
-        val scheme = request.url.scheme ?: return forbidden()
+        val url = request.url
+        val scheme = url.scheme ?: return forbidden()
         if (scheme in LOCAL_SCHEMES) return null
-        if (!request.method.equals("GET", ignoreCase = true)) return forbidden()
-        return when (request.url.toString()) {
-            ViewWrapper.URL -> oneShot(wrapperServed, wrapper, WRAPPER_CSP)
-            ViewWrapper.VIEW_URL -> oneShot(viewServed, view, ViewCsp.build())
-            else -> forbidden()
+        val isGet = request.method.equals("GET", ignoreCase = true)
+        return when (url.toString()) {
+            ViewWrapper.URL ->
+                if (isGet) oneShot(wrapperServed, wrapper, WRAPPER_CSP) else forbidden()
+            ViewWrapper.VIEW_URL ->
+                if (isGet) oneShot(viewServed, view, policy().header) else forbidden()
+            else ->
+                if (policy().allows(scheme, url.host, url.port)) null else forbidden()
         }
     }
 

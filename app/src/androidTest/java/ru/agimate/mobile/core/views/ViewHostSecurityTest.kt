@@ -129,7 +129,11 @@ class ViewHostSecurityTest {
         assertNotNull("вью не отдана", first)
         assertEquals(200, first!!.statusCode)
         assertEquals(VIEW_HTML, first.bodyText())
-        assertEquals("политика вью отличается от ViewCsp", ViewCsp.build(), first.header(CONTENT_SECURITY_POLICY))
+        assertEquals(
+            "политика вью отличается от ViewCsp",
+            ViewCsp.policy(null).header,
+            first.header(CONTENT_SECURITY_POLICY),
+        )
         assertEquals("кэширование вью не выключено", "no-store", first.header(CACHE_CONTROL))
 
         val second = client.shouldInterceptRequest(view, FakeRequest(ViewWrapper.VIEW_URL))
@@ -139,6 +143,64 @@ class ViewHostSecurityTest {
         // Флаги независимы: расход вью не расходует обёртку.
         val wrapper = client.shouldInterceptRequest(view, FakeRequest(ViewWrapper.URL))
         assertEquals("обёртка сломана повторной выдачей вью", 200, wrapper?.statusCode)
+    }
+
+    /**
+     * Разрешённый домен — это точный origin, а не суффикс: `https://esm.sh` пускает только себя,
+     * `http` и чужой порт остаются за воротами. WebSocket перехватчик не видит — его держит CSP.
+     */
+    @Test
+    fun grantedOriginsPassAndEverythingElseStaysForbidden() {
+        val policy = ViewCsp.policy(
+            ViewExternalDomains(
+                resourceDomains = listOf("https://esm.sh"),
+                connectDomains = listOf("https://api.example.com"),
+            ),
+        )
+        val client = newClient(policy = { policy })
+        val view = newWebView()
+
+        assertNull(
+            "разрешённый resource-origin заблокирован",
+            client.shouldInterceptRequest(view, FakeRequest("https://esm.sh/mod.js")),
+        )
+        assertNull(
+            "разрешённый connect-origin заблокирован",
+            client.shouldInterceptRequest(view, FakeRequest("https://api.example.com/data")),
+        )
+        assertEquals(
+            "чужой домен пропущен",
+            403,
+            client.shouldInterceptRequest(view, FakeRequest("https://evil.example/mod.js"))?.statusCode,
+        )
+        assertEquals(
+            "http пропущен",
+            403,
+            client.shouldInterceptRequest(view, FakeRequest("http://esm.sh/mod.js"))?.statusCode,
+        )
+        assertEquals(
+            "чужой порт пропущен",
+            403,
+            client.shouldInterceptRequest(view, FakeRequest("https://esm.sh:8443/mod.js"))?.statusCode,
+        )
+    }
+
+    @Test
+    fun theViewPageCarriesTheGrantedPolicy() {
+        val policy = ViewCsp.policy(
+            ViewExternalDomains(resourceDomains = listOf("https://esm.sh")),
+        )
+        val client = newClient(policy = { policy })
+        val view = newWebView()
+
+        val response = client.shouldInterceptRequest(view, FakeRequest(ViewWrapper.VIEW_URL))
+
+        val csp = response?.header(CONTENT_SECURITY_POLICY)
+        assertNotNull("у вью нет CSP-заголовка", csp)
+        assertTrue(
+            "в политике вью нет разрешённого домена: $csp",
+            csp!!.contains("script-src 'unsafe-inline' https://esm.sh"),
+        )
     }
 
     @Test
@@ -238,11 +300,13 @@ class ViewHostSecurityTest {
     }
 
     private fun newClient(
+        policy: () -> ViewPolicy = { ViewCsp.policy(null) },
         onExternalLink: (Uri) -> Unit = {},
         onRendererGone: () -> Unit = {},
     ): ViewWebViewClient = ViewWebViewClient(
         wrapper = { WRAPPER_HTML },
         view = { VIEW_HTML },
+        policy = policy,
         onExternalLink = onExternalLink,
         onRendererGone = onRendererGone,
     )
